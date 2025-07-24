@@ -5,6 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- Prevent caching issues -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <title>@yield('title', 'Admin Panel') - Quản lý tài khoản số</title>
 
     <!-- Google Fonts -->
@@ -18,6 +24,9 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <!-- Optimized Admin CSS -->
     <link href="{{ asset('css/admin-optimized.css') }}" rel="stylesheet">
+
+    <!-- Navigation Fix CSS -->
+    <link href="{{ asset('css/navigation-fix.css') }}" rel="stylesheet">
 
     <style>
         /* Minimal inline styles for critical rendering */
@@ -38,6 +47,20 @@
             font-size: 14px;
             line-height: 1.5;
             color: #374151;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Prevent white screen issues */
+        html, body {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+
+        .main-content {
+            min-height: calc(100vh - 60px);
+            flex: 1;
         }
 
         /* Critical layout styles */
@@ -95,46 +118,20 @@
                 </div>
 
                 <nav class="nav flex-column px-2 py-3">
+                    <!-- Core Dashboard -->
                     <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}"
                         href="{{ route('admin.dashboard') }}">
-                        <i class="fas fa-tachometer-alt me-3"></i>
+                        <i class="fas fa-home me-3"></i>
                         Dashboard
                     </a>
 
-                    <a class="nav-link {{ request()->routeIs('admin.test-ui') ? 'active' : '' }}"
-                        href="{{ route('admin.test-ui') }}">
-                        <i class="fas fa-vial me-3"></i>
-                        Test UI
-                    </a>
+                    <hr class="text-white-50 mx-3">
 
+                    <!-- Customer Management -->
                     <a class="nav-link {{ request()->routeIs('admin.customers.*') ? 'active' : '' }}"
                         href="{{ route('admin.customers.index') }}">
                         <i class="fas fa-users me-3"></i>
                         Khách hàng
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.leads.*') ? 'active' : '' }}"
-                        href="{{ route('admin.leads.index') }}">
-                        <i class="fas fa-user-plus me-3"></i>
-                        Lead (KH tiềm năng)
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.service-packages.*') ? 'active' : '' }}"
-                        href="{{ route('admin.service-packages.index') }}">
-                        <i class="fas fa-box me-3"></i>
-                        Gói dịch vụ
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.suppliers.*') ? 'active' : '' }}"
-                        href="{{ route('admin.suppliers.index') }}">
-                        <i class="fas fa-truck me-3"></i>
-                        Nhà cung cấp
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.collaborators.*') ? 'active' : '' }}"
-                        href="{{ route('admin.collaborators.index') }}">
-                        <i class="fas fa-user-friends me-3"></i>
-                        Cộng tác viên
                     </a>
 
                     <a class="nav-link {{ request()->routeIs('admin.customer-services.*') ? 'active' : '' }}"
@@ -143,25 +140,63 @@
                         Dịch vụ khách hàng
                     </a>
 
+                    <a class="nav-link {{ request()->routeIs('admin.leads.*') ? 'active' : '' }}"
+                        href="{{ route('admin.leads.index') }}">
+                        <i class="fas fa-user-plus me-3"></i>
+                        Leads
+                    </a>
+
+                    <hr class="text-white-50 mx-3">
+
+                    <!-- Family & Shared Accounts -->
+                    <a class="nav-link {{ request()->routeIs('admin.family-accounts.*') ? 'active' : '' }}"
+                        href="{{ route('admin.family-accounts.index') }}">
+                        <i class="fas fa-home me-3"></i>
+                        Family Accounts
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.shared-accounts.*') ? 'active' : '' }}"
+                        href="{{ route('admin.shared-accounts.index') }}">
+                        <i class="fas fa-share-alt me-3"></i>
+                        Shared Accounts
+                    </a>
+
+                    <hr class="text-white-50 mx-3">
+
+                    <!-- Service Management -->
+                    <a class="nav-link {{ request()->routeIs('admin.service-packages.*') ? 'active' : '' }}"
+                        href="{{ route('admin.service-packages.index') }}">
+                        <i class="fas fa-cube me-3"></i>
+                        Gói dịch vụ
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.suppliers.*') || request()->routeIs('admin.potential-suppliers.*') ? 'active' : '' }}"
+                        href="{{ route('admin.suppliers.index') }}">
+                        <i class="fas fa-truck me-3"></i>
+                        Nhà cung cấp
+                    </a>
+
+                    <hr class="text-white-50 mx-3">
+
+                    <!-- Reports & Analytics -->
                     <a class="nav-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}"
                         href="{{ route('admin.reports.profit') }}">
                         <i class="fas fa-chart-line me-3"></i>
-                        Báo cáo lợi nhuận
+                        Báo cáo
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.backup.*') ? 'active' : '' }}"
+                        href="{{ route('admin.backup.index') }}">
+                        <i class="fas fa-shield-alt me-3"></i>
+                        Backup
                     </a>
 
                     <hr class="text-white-50 mx-3">
 
-                    <a class="nav-link {{ request()->routeIs('admin.content-scheduler.*') ? 'active' : '' }}"
-                        href="{{ route('admin.content-scheduler.index') }}">
-                        <i class="fas fa-calendar-alt me-3"></i>
-                        Lịch đăng bài
-                    </a>
-
-                    <hr class="text-white-50 mx-3">
-
+                    <!-- External Tools -->
                     <a class="nav-link" href="{{ route('lookup.index') }}" target="_blank">
                         <i class="fas fa-search me-3"></i>
-                        Trang tra cứu
+                        Tra cứu công khai
                         <i class="fas fa-external-link-alt ms-auto"></i>
                     </a>
                 </nav>
@@ -236,6 +271,15 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
+    <!-- Enhanced Tables JS -->
+    <script src="{{ asset('js/enhanced-tables.js') }}"></script>
+
+    <!-- Enhanced Forms JS -->
+    <script src="{{ asset('js/enhanced-forms.js') }}"></script>
+
+    <!-- Page Navigation Fix -->
+    <script src="{{ asset('js/page-navigation-fix.js') }}"></script>
+
     <script>
         // Optimized admin layout JavaScript
         document.addEventListener('DOMContentLoaded', function() {
@@ -281,14 +325,23 @@
                 form.addEventListener('submit', function() {
                     const submitBtn = form.querySelector('button[type="submit"]');
                     if (submitBtn && !submitBtn.disabled) {
+                        // Store original text for restoration
+                        submitBtn.setAttribute('data-original-text', submitBtn.innerHTML);
                         submitBtn.disabled = true;
                         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Đang xử lý...';
+
+                        // Auto-restore after timeout
                         setTimeout(() => {
-                            submitBtn.disabled = false;
+                            if (submitBtn.disabled) {
+                                submitBtn.disabled = false;
+                                submitBtn.innerHTML = submitBtn.getAttribute('data-original-text') || 'Submit';
+                            }
                         }, 10000);
                     }
                 });
             });
+
+            // Navigation handling is now done by page-navigation-fix.js
         });
     </script>
 

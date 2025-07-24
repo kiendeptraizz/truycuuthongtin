@@ -18,7 +18,7 @@ class ViewSharedAccountsData extends Command
 
         $query = CustomerService::with(['customer', 'servicePackage'])
             ->whereHas('servicePackage', function ($q) {
-                $q->where('account_type', 'Team dùng chung');
+                $q->where('account_type', 'Tài khoản dùng chung');
             });
 
         if ($email = $this->option('email')) {
@@ -34,7 +34,7 @@ class ViewSharedAccountsData extends Command
             $this->warn('⚠️ Không tìm thấy dữ liệu tài khoản dùng chung nào.');
             $this->info('Điều này có thể là do:');
             $this->info('1. Chưa có dữ liệu thật nào');
-            $this->info('2. Không có gói dịch vụ nào có account_type = "Team dùng chung"');
+            $this->info('2. Không có gói dịch vụ nào có account_type = "Tài khoản dùng chung"');
             return 0;
         }
 

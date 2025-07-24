@@ -42,11 +42,19 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        // Dịch vụ sắp hết hạn (7 ngày tới)
+        // Dịch vụ sắp hết hạn (5 ngày tới)
         $expiringSoon = CustomerService::with(['customer', 'servicePackage'])
             ->expiringSoon()
             ->orderBy('expires_at')
             ->limit(10)
+            ->get();
+
+        // Dịch vụ đã hết hạn
+        $expiredServices = CustomerService::with(['customer', 'servicePackage'])
+            ->where('expires_at', '<', now())
+            ->where('status', 'active') // Chỉ lấy những dịch vụ đang active nhưng đã hết hạn
+            ->orderBy('expires_at', 'desc')
+            ->limit(15)
             ->get();
 
         // Khách hàng mới nhất
@@ -71,12 +79,22 @@ class DashboardController extends Controller
 
         $overduePosts = ContentPost::overdue()->limit(5)->get();
 
+        // Thống kê gán dịch vụ
+        $recentAssignments = CustomerService::with(['customer', 'servicePackage'])
+            ->latest()
+            ->limit(3)
+            ->get();
+
+        $assignmentsToday = CustomerService::whereDate('created_at', today())->count();
+        $assignmentsThisWeek = CustomerService::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count();
+
         return view('admin.dashboard', compact(
             'totalCustomers',
             'totalServicePackages',
             'totalActiveServices',
             'expiringSoonServices',
             'expiringSoon',
+            'expiredServices',
             'recentCustomers',
             'popularServices',
             'upcomingPosts',
@@ -87,7 +105,10 @@ class DashboardController extends Controller
             'overdueLeads',
             'convertedThisMonth',
             'urgentLeads',
-            'overdueLeadsList'
+            'overdueLeadsList',
+            'recentAssignments',
+            'assignmentsToday',
+            'assignmentsThisWeek'
         ));
     }
 }

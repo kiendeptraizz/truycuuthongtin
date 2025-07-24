@@ -227,10 +227,22 @@
                             <tbody>
                                 @foreach($customerServices as $service)
                                     @php
-                                        $status = $service->getStatus();
+                                        // Tính toán trạng thái theo logic mới
                                         $daysRemaining = $service->getDaysRemaining();
+                                        $daysUntilExpiry = $service->expires_at ? now()->diffInDays($service->expires_at, false) : null;
+
+                                        // Xác định trạng thái
+                                        if (!$service->expires_at) {
+                                            $status = 'active'; // Không giới hạn thời gian
+                                        } elseif ($service->expires_at->isPast()) {
+                                            $status = 'expired'; // Đã hết hạn
+                                        } elseif ($daysUntilExpiry !== null && $daysUntilExpiry <= 5) {
+                                            $status = 'expiring'; // Sắp hết hạn (5 ngày)
+                                        } else {
+                                            $status = 'active'; // Đang hoạt động bình thường
+                                        }
+
                                         $rowClass = '';
-                                        
                                         if ($status === 'expiring') {
                                             if ($daysRemaining <= 1) {
                                                 $rowClass = 'table-danger'; // Đỏ cho 0-1 ngày
@@ -325,17 +337,39 @@
                                                     <i class="fas fa-edit"></i>
                                                 </a>
                                                 
-                                                @if($service->getStatus() === 'expiring')
+                                                @php
+                                                    $daysUntilExpiry = $service->expires_at ? now()->diffInDays($service->expires_at, false) : null;
+                                                    $isExpiringSoon = $daysUntilExpiry !== null && $daysUntilExpiry >= 0 && $daysUntilExpiry <= 5;
+                                                    $isExpired = $service->expires_at && $service->expires_at->isPast();
+                                                @endphp
+
+                                                @if($isExpiringSoon)
                                                     @if(!$service->reminder_sent || $service->needsReminderAgain())
-                                                        <button class="btn btn-sm btn-outline-warning" 
+                                                        <button class="btn btn-sm btn-outline-warning"
                                                                 onclick="markReminded({{ $service->id }})"
                                                                 title="Đánh dấu đã nhắc nhở">
                                                             <i class="fas fa-bell"></i>
                                                         </button>
                                                     @endif
-                                                    
+
                                                     @if($service->reminder_sent)
-                                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                        <button class="btn btn-sm btn-outline-secondary"
+                                                                onclick="resetReminder({{ $service->id }})"
+                                                                title="Reset trạng thái nhắc nhở">
+                                                            <i class="fas fa-undo"></i>
+                                                        </button>
+                                                    @endif
+                                                @elseif($isExpired)
+                                                    @if(!$service->reminder_sent || $service->needsReminderAgain())
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                onclick="markReminded({{ $service->id }})"
+                                                                title="Đánh dấu đã nhắc nhở (Đã hết hạn)">
+                                                            <i class="fas fa-bell-slash"></i>
+                                                        </button>
+                                                    @endif
+
+                                                    @if($service->reminder_sent)
+                                                        <button class="btn btn-sm btn-outline-secondary"
                                                                 onclick="resetReminder({{ $service->id }})"
                                                                 title="Reset trạng thái nhắc nhở">
                                                             <i class="fas fa-undo"></i>

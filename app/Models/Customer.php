@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Customer extends Model
 {
@@ -12,11 +13,22 @@ class Customer extends Model
         'name',
         'email',
         'phone',
+        'notes',
     ];
 
     public function customerServices(): HasMany
     {
         return $this->hasMany(CustomerService::class);
+    }
+
+    public function familyMemberships(): HasMany
+    {
+        return $this->hasMany(FamilyMember::class);
+    }
+
+    public function activeFamilyMembership(): HasOne
+    {
+        return $this->hasOne(FamilyMember::class)->where('status', 'active');
     }
 
     public function activeServices(): HasMany

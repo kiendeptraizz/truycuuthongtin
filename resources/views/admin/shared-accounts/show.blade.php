@@ -3,7 +3,62 @@
 @section('title', 'Chi tiết tài khoản dùng chung')
 @section('page-title', 'Chi tiết tài khoản dùng chung')
 
+@section('styles')
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .table th, .table td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .table th {
+        position: sticky;
+        top: 0;
+        background-color: var(--bs-dark);
+        z-index: 10;
+    }
+
+    @media (max-width: 768px) {
+        .d-none-md {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .d-none-lg {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .d-none-xl {
+            display: none !important;
+        }
+    }
+</style>
+@endsection
+
 @section('content')
+<!-- Thông báo -->
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="fas fa-check-circle me-2"></i>
+    {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-circle me-2"></i>
+    {{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
 <div class="row">
     <div class="col-12">
         <div class="card">
@@ -105,10 +160,10 @@
                                     @endif
                                 </div>
                                 <div class="mb-2">
-                                    <strong>Hết hạn mật khẩu:</strong> 
+                                    <strong>Hết hạn tài khoản:</strong> 
                                     @if($firstService->password_expires_at)
                                         <span class="badge bg-{{ $firstService->password_expires_at->isPast() ? 'danger' : 'info' }}">
-                                            {{ $firstService->password_expires_at->format('d/m/Y H:i') }}
+                                            {{ $firstService->password_expires_at->format('d/m/Y') }}
                                         </span>
                                     @else
                                         <span class="text-muted">Không giới hạn</span>
@@ -210,14 +265,16 @@
                     <!-- Responsive info alert -->
                     <div class="alert alert-info alert-sm d-lg-none mb-2">
                         <i class="fas fa-info-circle me-1"></i>
-                        <small>Một số cột (mật khẩu, thông tin chi tiết) được ẩn trên màn hình nhỏ để tối ưu hiển thị.</small>
+                        <small>Một số cột (Ghi chú, Mật khẩu, Kích hoạt, Nhắc nhở, Người PC) được ẩn trên màn hình nhỏ để tối ưu hiển thị.</small>
                     </div>
-                    
-                    <table class="table table-striped table-hover table-sm">
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-sm">
                         <thead class="table-dark">
                             <tr>
                                 <th style="min-width: 180px;">Khách hàng</th>
                                 <th style="min-width: 120px;">Gói dịch vụ</th>
+                                <th class="d-none-md" style="min-width: 150px;">Ghi chú</th>
                                 <th class="d-none-lg" style="min-width: 150px;">Mật khẩu</th>
                                 <th class="d-none-xl" style="min-width: 100px;">Kích hoạt</th>
                                 <th style="min-width: 120px;">Hết hạn</th>
@@ -253,6 +310,17 @@
                                 </td>
                                 <td>
                                     <span class="badge bg-primary">{{ $service->servicePackage->name }}</span>
+                                </td>
+                                <td class="d-none-md">
+                                    <div class="text-muted small">
+                                        @if($service->internal_notes)
+                                            {{ Str::limit($service->internal_notes, 50) }}
+                                        @elseif($service->shared_account_notes)
+                                            {{ Str::limit($service->shared_account_notes, 50) }}
+                                        @else
+                                            <em>Không có ghi chú</em>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="d-none-lg">
                                     <div class="d-flex align-items-center">
@@ -323,29 +391,37 @@
                                         </button>
                                         <ul class="dropdown-menu">
                                             <li>
-                                                <a class="dropdown-item" href="{{ route('admin.customer-services.index', ['customer_id' => $service->customer_id]) }}">
+                                                <a class="dropdown-item" href="{{ route('admin.customers.show', $service->customer) }}">
                                                     <i class="fas fa-user me-2"></i>
                                                     Xem khách hàng
                                                 </a>
                                             </li>
                                             @if($isExpiring || $isExpired)
                                             <li>
-                                                <form method="POST" action="{{ route('admin.customer-services.mark-reminded', $service->id) }}" class="d-inline">
-                                                    @csrf
-                                                    <button type="submit" class="dropdown-item">
-                                                        <i class="fas fa-bell me-2"></i>
-                                                        Đánh dấu đã nhắc
-                                                    </button>
-                                                </form>
+                                                <button type="button"
+                                                        class="dropdown-item"
+                                                        onclick="markReminded({{ $service->id }})">
+                                                    <i class="fas fa-bell me-2"></i>
+                                                    Đánh dấu đã nhắc
+                                                </button>
                                             </li>
                                             @endif
                                             <li><hr class="dropdown-divider"></li>
                                             <li>
-                                                <a class="dropdown-item text-primary" 
+                                                <a class="dropdown-item text-primary"
                                                    href="mailto:{{ $service->customer->email }}?subject=Thông báo gia hạn dịch vụ {{ $service->servicePackage->name }}">
                                                     <i class="fas fa-envelope me-2"></i>
                                                     Gửi email
                                                 </a>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <button type="button"
+                                                        class="dropdown-item text-danger"
+                                                        onclick="confirmDeleteService('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')">
+                                                    <i class="fas fa-trash me-2"></i>
+                                                    Xóa dịch vụ
+                                                </button>
                                             </li>
                                         </ul>
                                     </div>
@@ -456,6 +532,64 @@ function togglePasswordView(button) {
 function showRecoveryCodes(codes) {
     const codesText = codes.join('\n');
     alert('Mã khôi phục:\n\n' + codesText);
+}
+
+// Hàm đánh dấu đã nhắc nhở
+function markReminded(serviceId) {
+    const notes = prompt('Ghi chú về việc nhắc nhở (tùy chọn):');
+    if (notes === null) return; // User cancelled
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch(`/admin/customer-services/${serviceId}/mark-reminded`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({ notes: notes })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Reload to update UI
+        } else {
+            alert('Có lỗi xảy ra!');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra!');
+    });
+}
+
+// Hàm xác nhận xóa dịch vụ
+function confirmDeleteService(serviceName, deleteUrl) {
+    if (confirm('Bạn có chắc chắn muốn xóa dịch vụ "' + serviceName + '"?\n\nHành động này không thể hoàn tác!')) {
+        // Tạo form để gửi DELETE request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+
+        // Thêm CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = '_token';
+        csrfToken.value = '{{ csrf_token() }}';
+        form.appendChild(csrfToken);
+
+        // Thêm method DELETE
+        const methodField = document.createElement('input');
+        methodField.type = 'hidden';
+        methodField.name = '_method';
+        methodField.value = 'DELETE';
+        form.appendChild(methodField);
+
+        // Thêm form vào body và submit
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 @endsection

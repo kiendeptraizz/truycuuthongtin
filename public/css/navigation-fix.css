@@ -1,0 +1,112 @@
+/**
+ * Navigation Fix CSS
+ * Prevents white screen and layout issues during browser navigation
+ */
+
+/* Ensure page is always visible */
+html, body {
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+/* Prevent flash of unstyled content */
+body {
+    min-height: 100vh;
+    background-color: #f8fafc;
+}
+
+/* Ensure main content is always visible */
+.main-content,
+.container,
+.container-fluid,
+main {
+    min-height: 200px;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Loading state improvements */
+.btn[disabled] {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Prevent layout shift */
+.sidebar {
+    position: fixed;
+    z-index: 1000;
+}
+
+.main-content {
+    margin-left: 240px;
+    transition: margin-left 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+    }
+}
+
+/* Ensure cards and content are visible */
+.card,
+.table,
+.alert {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Fix for potential z-index issues */
+.dropdown-menu {
+    z-index: 1050;
+}
+
+.modal {
+    z-index: 1055;
+}
+
+.modal-backdrop {
+    z-index: 1050;
+}
+
+/* Smooth transitions */
+* {
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+/* Emergency fallback styles */
+.emergency-fallback {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.emergency-fallback .message {
+    text-align: center;
+    padding: 2rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Hide emergency fallback by default */
+.emergency-fallback {
+    display: none;
+}

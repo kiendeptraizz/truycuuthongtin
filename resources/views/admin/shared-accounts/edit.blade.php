@@ -102,12 +102,12 @@
                                         </div>
 
                                         <div class="mb-3">
-                                            <label for="password_expires_at" class="form-label">Ngày hết hạn mật khẩu</label>
-                                            <input type="datetime-local" 
+                                            <label for="password_expires_at" class="form-label">Ngày hết hạn tài khoản</label>
+                                            <input type="date" 
                                                    class="form-control" 
                                                    id="password_expires_at" 
                                                    name="password_expires_at" 
-                                                   value="{{ old('password_expires_at', $sharedAccountInfo->password_expires_at ? $sharedAccountInfo->password_expires_at->format('Y-m-d\TH:i') : '') }}">
+                                                   value="{{ old('password_expires_at', $sharedAccountInfo->password_expires_at ? $sharedAccountInfo->password_expires_at->format('Y-m-d') : '') }}">
                                         </div>
 
                                         <div class="mb-3">

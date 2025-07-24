@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Supplier;
+use App\Models\PotentialSupplier;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -13,7 +14,16 @@ class SupplierController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request): View
+    public function index(): RedirectResponse
+    {
+        // Redirect to combined view
+        return redirect()->route('admin.suppliers.combined');
+    }
+
+    /**
+     * Display original suppliers index for AJAX calls
+     */
+    public function originalIndex(Request $request): View
     {
         $query = Supplier::with('products')
             ->withCount('products as product_count')
@@ -31,6 +41,14 @@ class SupplierController extends Controller
                     ->orWhereHas('products', function ($productQuery) use ($search) {
                         $productQuery->where('product_name', 'like', "%{$search}%");
                     });
+            });
+        }
+
+        // Lọc theo dịch vụ
+        if ($request->filled('service_filter')) {
+            $serviceFilter = $request->get('service_filter');
+            $query->whereHas('products', function ($productQuery) use ($serviceFilter) {
+                $productQuery->where('product_name', 'like', "%{$serviceFilter}%");
             });
         }
 
@@ -199,5 +217,131 @@ class SupplierController extends Controller
 
         return redirect()->route('admin.suppliers.index')
             ->with('success', "Đã xóa thành công {$deletedCount} nhà cung cấp!");
+    }
+
+    /**
+     * Display combined view with tabs for current and potential suppliers
+     */
+    public function combinedIndex(): View
+    {
+        $currentSuppliersCount = Supplier::count();
+        $potentialSuppliersCount = PotentialSupplier::count();
+
+        return view('admin.suppliers.combined-index', compact(
+            'currentSuppliersCount',
+            'potentialSuppliersCount'
+        ));
+    }
+
+    /**
+     * Display statistics for suppliers
+     */
+    public function statistics(): View
+    {
+        // Current suppliers statistics
+        $currentSuppliers = Supplier::with('products')->get();
+        $currentStats = [
+            'total' => $currentSuppliers->count(),
+            'total_value' => $currentSuppliers->sum(function ($supplier) {
+                return $supplier->products->sum('price');
+            }),
+            'avg_products_per_supplier' => $currentSuppliers->count() > 0 ?
+                round($currentSuppliers->sum(function ($supplier) {
+                    return $supplier->products->count();
+                }) / $currentSuppliers->count(), 1) : 0,
+        ];
+
+        // Potential suppliers statistics
+        $potentialSuppliers = PotentialSupplier::with('services')->get();
+        $potentialStats = [
+            'total' => $potentialSuppliers->count(),
+            'high_priority' => $potentialSuppliers->where('priority', 'high')->count(),
+            'medium_priority' => $potentialSuppliers->where('priority', 'medium')->count(),
+            'low_priority' => $potentialSuppliers->where('priority', 'low')->count(),
+            'total_estimated_value' => $potentialSuppliers->sum(function ($supplier) {
+                return $supplier->services->sum('estimated_price');
+            }),
+            'avg_services_per_supplier' => $potentialSuppliers->count() > 0 ?
+                round($potentialSuppliers->sum(function ($supplier) {
+                    return $supplier->services->count();
+                }) / $potentialSuppliers->count(), 1) : 0,
+        ];
+
+        // Service distribution for current suppliers
+        $serviceDistribution = \App\Models\SupplierProduct::select('product_name')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('product_name')
+            ->orderBy('count', 'desc')
+            ->limit(10)
+            ->get();
+
+        // Potential service distribution
+        $potentialServiceDistribution = \App\Models\PotentialSupplierService::select('service_name')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('service_name')
+            ->orderBy('count', 'desc')
+            ->limit(10)
+            ->get();
+
+        return view('admin.suppliers.statistics', compact(
+            'currentStats',
+            'potentialStats',
+            'serviceDistribution',
+            'potentialServiceDistribution'
+        ));
+    }
+
+    /**
+     * API endpoint for current suppliers data
+     */
+    public function apiCurrentSuppliers(Request $request)
+    {
+        $query = Supplier::with('products')
+            ->withCount('products as product_count')
+            ->addSelect([
+                'total_value' => \App\Models\SupplierProduct::selectRaw('SUM(price)')
+                    ->whereColumn('supplier_id', 'suppliers.id')
+            ]);
+
+        // Tìm kiếm
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('supplier_name', 'like', "%{$search}%")
+                    ->orWhere('supplier_code', 'like', "%{$search}%")
+                    ->orWhereHas('products', function ($productQuery) use ($search) {
+                        $productQuery->where('product_name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Lọc theo dịch vụ
+        if ($request->filled('service_filter')) {
+            $serviceFilter = $request->get('service_filter');
+            $query->whereHas('products', function ($productQuery) use ($serviceFilter) {
+                $productQuery->where('product_name', 'like', "%{$serviceFilter}%");
+            });
+        }
+
+        // Sắp xếp
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        $query->orderBy($sortBy, $sortDirection);
+
+        $suppliers = $query->paginate(20);
+
+        // Thống kê
+        $stats = [
+            'total' => Supplier::count(),
+            'total_value' => \App\Models\SupplierProduct::sum('price'),
+            'active' => 0,
+            'inactive' => 0,
+            'over_credit' => 0,
+        ];
+
+        return response()->json([
+            'suppliers' => $suppliers,
+            'stats' => $stats
+        ]);
     }
 }

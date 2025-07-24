@@ -22,30 +22,19 @@
                     <div class="row">
                         <div class="col-md-12 mb-3">
                             <label for="service_package_id" class="form-label">
+                                <i class="fas fa-box me-1"></i>
                                 Gói dịch vụ <span class="text-danger">*</span>
+                                <small class="text-muted ms-2">(Nhóm theo loại tài khoản)</small>
                             </label>
-                            <select class="form-select @error('service_package_id') is-invalid @enderror"
-                                id="service_package_id"
+
+                            <x-service-package-selector
+                                :service-packages="$servicePackages"
+                                :account-type-priority="$accountTypePriority"
                                 name="service_package_id"
-                                required>
-                                <option value="">Chọn gói dịch vụ</option>
-                                @foreach($servicePackages->groupBy('category.name') as $categoryName => $packages)
-                                <optgroup label="{{ $categoryName }}">
-                                    @foreach($packages as $package)
-                                    <option value="{{ $package->id }}"
-                                        data-price="{{ $package->price }}"
-                                        data-duration="{{ $package->default_duration_days }}"
-                                        {{ old('service_package_id') == $package->id ? 'selected' : '' }}>
-                                        {{ $package->name }} - {{ $package->account_type }}
-                                        ({{ number_format($package->price) }}đ)
-                                    </option>
-                                    @endforeach
-                                </optgroup>
-                                @endforeach
-                            </select>
-                            @error('service_package_id')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                                id="service_package_id"
+                                :required="true"
+                                placeholder="Chọn gói dịch vụ cho khách hàng..."
+                            />
                         </div>
 
 

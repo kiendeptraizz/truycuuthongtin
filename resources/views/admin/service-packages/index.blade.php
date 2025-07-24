@@ -47,12 +47,30 @@
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-end">
-                    <a href="{{ route('admin.service-packages.create') }}"
-                       class="btn btn-success">
-                        <i class="fas fa-plus me-2"></i>
-                        Thêm gói dịch vụ
-                    </a>
+                <!-- Enhanced Search và Actions -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <input type="text" data-table-search="servicePackagesTable"
+                            class="form-control" placeholder="Tìm kiếm gói dịch vụ...">
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted" data-table-count="servicePackagesTable">
+                            Hiển thị {{ $servicePackages->count() }} gói dịch vụ
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-secondary btn-sm" data-export-csv="servicePackagesTable">
+                                <i class="fas fa-file-csv me-1"></i>
+                                Xuất CSV
+                            </button>
+                            <a href="{{ route('admin.service-packages.create') }}"
+                               class="btn btn-success">
+                                <i class="fas fa-plus me-2"></i>
+                                Thêm gói dịch vụ
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
     
@@ -271,7 +289,7 @@
         <!-- Service Packages Table -->
         @if($servicePackages->count() > 0)
             <div class="table-responsive">
-                <table class="table table-hover service-packages-table">
+                <table id="servicePackagesTable" class="table table-hover service-packages-table enhanced-table">
                     <thead>
                         <tr>
                             <th style="min-width: 250px;">

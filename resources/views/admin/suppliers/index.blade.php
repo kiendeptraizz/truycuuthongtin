@@ -136,26 +136,34 @@
                 <!-- Search Filter -->
                 <div class="card border-0 bg-light mb-4">
                     <div class="card-body py-4">
-                        <form method="GET" class="row g-4 align-items-end">
-                            <div class="col-lg-8 col-md-6">
+                        <form method="GET" class="row g-3 align-items-end">
+                            <div class="col-md-4">
                                 <label class="form-label fw-semibold fs-6">
                                     <i class="fas fa-search me-2 text-primary"></i>Tìm kiếm
                                 </label>
-                                <input type="text" name="search" class="form-control search-box form-control-lg"
-                                    placeholder="Nhập tên nhà cung cấp, mã NCC hoặc tên dịch vụ..."
+                                <input type="text" name="search" class="form-control search-box"
+                                    placeholder="Tên nhà cung cấp, mã NCC..."
                                     value="{{ request('search') }}">
                             </div>
-                            <div class="col-lg-2 col-md-3">
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold fs-6">
+                                    <i class="fas fa-filter me-2 text-primary"></i>Lọc theo dịch vụ
+                                </label>
+                                <input type="text" name="service_filter" class="form-control search-box"
+                                    placeholder="Tên dịch vụ..."
+                                    value="{{ request('service_filter') }}">
+                            </div>
+                            <div class="col-md-2">
                                 <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary btn-lg">
+                                    <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-search me-2"></i>Tìm kiếm
                                     </button>
                                 </div>
                             </div>
-                            <div class="col-lg-2 col-md-3">
-                                @if(request('search'))
+                            <div class="col-md-2">
+                                @if(request('search') || request('service_filter'))
                                 <div class="d-grid">
-                                    <a href="{{ route('admin.suppliers.index') }}" class="btn btn-outline-secondary btn-lg">
+                                    <a href="{{ route('admin.suppliers.index') }}" class="btn btn-outline-secondary">
                                         <i class="fas fa-times me-2"></i>Xóa lọc
                                     </a>
                                 </div>

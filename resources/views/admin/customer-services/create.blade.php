@@ -4,68 +4,78 @@
 @section('page-title', 'Gán dịch vụ mới')
 
 @section('content')
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-plus me-2"></i>
-                    Gán dịch vụ cho khách hàng
-                </h5>
-            </div>
-            
-            <div class="card-body">
-                <form method="POST" action="{{ route('admin.customer-services.store') }}">
-                    @csrf
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">🔗 Gán Dịch Vụ Mới</h1>
+            <p class="mb-0 text-muted">Kích hoạt dịch vụ cho khách hàng một cách nhanh chóng</p>
+        </div>
+        <div>
+            <a href="{{ route('admin.customer-services.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Quay lại danh sách
+            </a>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-plus me-2"></i>
+                        Thông Tin Gán Dịch Vụ
+                    </h6>
+                </div>
+
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.customer-services.store') }}" id="assignServiceForm">
+                        @csrf
                     
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="customer_id" class="form-label">
-                                Khách hàng <span class="text-danger">*</span>
-                            </label>
-                            <select class="form-select @error('customer_id') is-invalid @enderror" 
-                                    id="customer_id" 
-                                    name="customer_id" 
-                                    required>
-                                <option value="">Chọn khách hàng</option>
-                                @foreach($customers as $customer)
-                                    <option value="{{ $customer->id }}" 
-                                            {{ old('customer_id') == $customer->id ? 'selected' : '' }}>
-                                        {{ $customer->name }} ({{ $customer->customer_code }})
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('customer_id')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                        <!-- Customer Selection -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="customer_id" class="form-label font-weight-bold">
+                                    <i class="fas fa-user text-primary me-2"></i>
+                                    Khách hàng <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select @error('customer_id') is-invalid @enderror"
+                                        id="customer_id"
+                                        name="customer_id"
+                                        required>
+                                    <option value="">-- Chọn khách hàng --</option>
+                                    @foreach($customers as $customer)
+                                        <option value="{{ $customer->id }}"
+                                                {{ old('customer_id') == $customer->id ? 'selected' : '' }}>
+                                            {{ $customer->name }} ({{ $customer->customer_code }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('customer_id')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Tìm kiếm theo tên hoặc mã khách hàng
+                                </small>
+                            </div>
                         
                         <div class="col-md-6 mb-3">
                             <label for="service_package_id" class="form-label">
+                                <i class="fas fa-box me-1"></i>
                                 Gói dịch vụ <span class="text-danger">*</span>
+                                <small class="text-muted ms-2">(Nhóm theo loại tài khoản)</small>
                             </label>
-                            <select class="form-select @error('service_package_id') is-invalid @enderror" 
-                                    id="service_package_id" 
-                                    name="service_package_id" 
-                                    required>
-                                <option value="">Chọn gói dịch vụ</option>
-                                @foreach($servicePackages->groupBy('category.name') as $categoryName => $packages)
-                                    <optgroup label="{{ $categoryName }}">
-                                        @foreach($packages as $package)
-                                            <option value="{{ $package->id }}" 
-                                                    data-price="{{ $package->price }}"
-                                                    data-duration="{{ $package->default_duration_days }}"
-                                                    {{ old('service_package_id') == $package->id ? 'selected' : '' }}>
-                                                {{ $package->name }} - {{ $package->account_type }} 
-                                                ({{ number_format($package->price) }}đ)
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
-                                @endforeach
-                            </select>
-                            @error('service_package_id')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+
+                            <x-service-package-selector
+                                :service-packages="$servicePackages"
+                                :account-type-priority="$accountTypePriority"
+                                name="service_package_id"
+                                id="service_package_id"
+                                :required="true"
+                                placeholder="Chọn gói dịch vụ phù hợp..."
+                            />
                         </div>
                         
                         <div class="col-md-12 mb-3">

@@ -22,8 +22,8 @@ class SharedAccountController extends Controller
                 'customer_services.login_email',
                 DB::raw('COUNT(*) as total_services'),
                 DB::raw('COUNT(DISTINCT customer_services.customer_id) as unique_customers'),
-                DB::raw('MAX(customer_services.expires_at) as latest_expiry'),
-                DB::raw('MIN(customer_services.expires_at) as earliest_expiry'),
+                DB::raw('MAX(customer_services.password_expires_at) as latest_expiry'),
+                DB::raw('MIN(customer_services.password_expires_at) as earliest_expiry'),
                 DB::raw('COUNT(CASE WHEN customer_services.status = "active" THEN 1 END) as active_count'),
                 DB::raw('COUNT(CASE WHEN customer_services.expires_at < NOW() THEN 1 END) as expired_count'),
                 DB::raw('COUNT(CASE WHEN customer_services.expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY) THEN 1 END) as expiring_soon_count'),
@@ -32,9 +32,10 @@ class SharedAccountController extends Controller
                 DB::raw('MAX(customer_services.two_factor_code) as two_factor_code'),
                 DB::raw('MAX(customer_services.password_expires_at) as password_expires_at'),
                 DB::raw('MAX(customer_services.shared_account_notes) as shared_notes'),
+                DB::raw('MAX(customer_services.internal_notes) as account_notes'),
                 DB::raw('COUNT(CASE WHEN customer_services.is_password_shared = 1 THEN 1 END) as shared_count')
             ])
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->whereNotNull('customer_services.login_email')
             ->where('customer_services.login_email', '!=', '')
             ->groupBy('customer_services.login_email')
@@ -68,13 +69,13 @@ class SharedAccountController extends Controller
             'total_shared_accounts' => $sharedAccounts->total(),
             'total_users_in_shared' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->count(),
             'problematic_accounts' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->select('customer_services.login_email')
@@ -84,7 +85,7 @@ class SharedAccountController extends Controller
                 ->count(),
             'expiring_shared_services' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->where('customer_services.expires_at', '<=', now()->addDays(7))
@@ -104,7 +105,7 @@ class SharedAccountController extends Controller
     {
         $services = CustomerService::with(['customer', 'servicePackage', 'assignedBy'])
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->where('login_email', $email)
             ->select('customer_services.*') // Chỉ lấy các cột từ customer_services
             ->orderBy('expires_at', 'asc')
@@ -141,7 +142,7 @@ class SharedAccountController extends Controller
         // Top 10 tài khoản dùng chung nhiều nhất
         $topSharedAccounts = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->whereNotNull('customer_services.login_email')
             ->where('customer_services.login_email', '!=', '')
             ->select([
@@ -161,7 +162,7 @@ class SharedAccountController extends Controller
         $problematicAccounts = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->join('customers', 'customer_services.customer_id', '=', 'customers.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->whereNotNull('customer_services.login_email')
             ->where('customer_services.login_email', '!=', '')
             ->select([
@@ -180,20 +181,20 @@ class SharedAccountController extends Controller
         $overallStats = [
             'total_services_with_email' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->count(),
             'unique_emails' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->distinct()
                 ->count('customer_services.login_email'),
             'shared_emails' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->select('customer_services.login_email')
@@ -203,7 +204,7 @@ class SharedAccountController extends Controller
                 ->count(),
             'multi_customer_emails' => DB::table('customer_services')
                 ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->where('service_packages.account_type', 'Team dùng chung')
+                ->where('service_packages.account_type', 'Tài khoản dùng chung')
                 ->whereNotNull('customer_services.login_email')
                 ->where('customer_services.login_email', '!=', '')
                 ->select([
@@ -230,7 +231,7 @@ class SharedAccountController extends Controller
     {
         $sharedAccountInfo = CustomerService::with(['customer', 'servicePackage'])
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->where('customer_services.login_email', $email)
             ->select('customer_services.*')
             ->first();
@@ -243,7 +244,7 @@ class SharedAccountController extends Controller
         // Lấy tất cả dịch vụ cùng email để hiển thị danh sách khách hàng
         $allServices = CustomerService::with(['customer', 'servicePackage'])
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->where('customer_services.login_email', $email)
             ->select('customer_services.*')
             ->get();
@@ -268,7 +269,7 @@ class SharedAccountController extends Controller
 
         // Cập nhật TẤT CẢ các dịch vụ cùng email (để đồng bộ thông tin)
         $services = CustomerService::join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->where('service_packages.account_type', 'Team dùng chung')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->where('customer_services.login_email', $email)
             ->select('customer_services.*')
             ->get();

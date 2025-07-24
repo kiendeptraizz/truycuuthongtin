@@ -67,11 +67,14 @@
                                 <option value="Tài khoản chính chủ" {{ old('account_type') === 'Tài khoản chính chủ' ? 'selected' : '' }}>
                                     Tài khoản chính chủ
                                 </option>
-                                <option value="Add mail" {{ old('account_type') === 'Add mail' ? 'selected' : '' }}>
-                                    Add mail
+                                <option value="Tài khoản cấp (dùng riêng)" {{ old('account_type') === 'Tài khoản cấp (dùng riêng)' ? 'selected' : '' }}>
+                                    Tài khoản cấp (dùng riêng)
                                 </option>
-                                <option value="Team dùng chung" {{ old('account_type') === 'Team dùng chung' ? 'selected' : '' }}>
-                                    Team dùng chung
+                                <option value="Tài khoản add family" {{ old('account_type') === 'Tài khoản add family' ? 'selected' : '' }}>
+                                    Tài khoản add family
+                                </option>
+                                <option value="Tài khoản dùng chung" {{ old('account_type') === 'Tài khoản dùng chung' ? 'selected' : '' }}>
+                                    Tài khoản dùng chung
                                 </option>
                             </select>
                             @error('account_type')

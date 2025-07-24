@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\ServicePackageController;
 use App\Http\Controllers\Admin\CustomerServiceController;
@@ -13,14 +12,14 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\LeadController;
 use App\Http\Controllers\LookupController;
 use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\PotentialSupplierController;
 use App\Http\Controllers\Admin\CollaboratorController;
 
-// Trang chủ - chuyển hướng đến admin dashboard hoặc login
+
+
+// Trang chủ - chuyển hướng đến admin dashboard trực tiếp
 Route::get('/', function () {
-    if (Auth::guard('admin')->check()) {
-        return redirect()->route('admin.dashboard');
-    }
-    return redirect()->route('admin.login');
+    return redirect()->route('admin.dashboard');
 });
 
 // Trang tra cứu công khai
@@ -34,16 +33,30 @@ Route::prefix('admin')->name('admin.')->group(function () {
 });
 
 // Admin routes (cần đăng nhập)
-Route::prefix('admin')->name('admin.')->middleware('admin.auth')->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.caching'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
-
-    // Test UI
-    Route::get('/test-ui', function () {
-        return view('admin.test-ui');
-    })->name('test-ui');
 
     // Quản lý khách hàng
     Route::resource('customers', CustomerController::class);
+    Route::get('customers/check-code/{code}', [CustomerController::class, 'checkCustomerCode'])
+        ->name('customers.check-code');
+
+    // ========================================================================
+    // 🛡️ QUẢN LÝ BACKUP
+    // ========================================================================
+    Route::prefix('backup-management')->name('backup.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\BackupController::class, 'index'])->name('index');
+        Route::get('/list', [App\Http\Controllers\Admin\BackupController::class, 'list'])->name('list');
+        Route::post('/create', [App\Http\Controllers\Admin\BackupController::class, 'create'])->name('create');
+        Route::get('/download/{filename}', [App\Http\Controllers\Admin\BackupController::class, 'download'])->name('download');
+        Route::delete('/delete/{filename}', [App\Http\Controllers\Admin\BackupController::class, 'delete'])->name('delete');
+        Route::post('/restore', [App\Http\Controllers\Admin\BackupController::class, 'restore'])->name('restore');
+        Route::get('/report', [App\Http\Controllers\Admin\BackupController::class, 'report'])->name('report');
+        Route::get('/history', [App\Http\Controllers\Admin\BackupController::class, 'history'])->name('history');
+        Route::get('/settings', [App\Http\Controllers\Admin\BackupController::class, 'settings'])->name('settings');
+        Route::post('/settings', [App\Http\Controllers\Admin\BackupController::class, 'updateSettings'])->name('settings.update');
+        Route::get('/status', [App\Http\Controllers\Admin\BackupController::class, 'status'])->name('status');
+    });
 
     // Quản lý gói dịch vụ
     Route::resource('service-packages', ServicePackageController::class);
@@ -92,7 +105,17 @@ Route::prefix('admin')->name('admin.')->middleware('admin.auth')->group(function
 
     // Suppliers routes
     Route::delete('suppliers/bulk-delete', [SupplierController::class, 'bulkDelete'])->name('suppliers.bulk-delete');
+    Route::get('suppliers/combined', [SupplierController::class, 'combinedIndex'])->name('suppliers.combined');
+    Route::get('suppliers/original', [SupplierController::class, 'originalIndex'])->name('suppliers.original');
+    Route::get('suppliers/statistics', [SupplierController::class, 'statistics'])->name('suppliers.statistics');
+    Route::get('suppliers/api/current', [SupplierController::class, 'apiCurrentSuppliers'])->name('suppliers.api.current');
     Route::resource('suppliers', SupplierController::class);
+
+    // Potential Suppliers routes
+    Route::delete('potential-suppliers/bulk-delete', [PotentialSupplierController::class, 'bulkDelete'])->name('potential-suppliers.bulk-delete');
+    Route::post('potential-suppliers/{potentialSupplier}/convert', [PotentialSupplierController::class, 'convertToSupplier'])->name('potential-suppliers.convert');
+    Route::get('potential-suppliers/api/list', [PotentialSupplierController::class, 'apiPotentialSuppliers'])->name('potential-suppliers.api.list');
+    Route::resource('potential-suppliers', PotentialSupplierController::class);
 
     // Collaborators routes
     Route::resource('collaborators', CollaboratorController::class);
@@ -112,6 +135,38 @@ Route::prefix('admin')->name('admin.')->middleware('admin.auth')->group(function
         ->name('shared-accounts.update');
     Route::get('shared-accounts/{email}', [\App\Http\Controllers\Admin\SharedAccountController::class, 'show'])
         ->name('shared-accounts.show');
+
+    // Family Accounts Management
+    Route::resource('family-accounts', \App\Http\Controllers\Admin\FamilyAccountController::class);
+    Route::get('family-accounts/{familyAccount}/add-member', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'addMemberForm'])
+        ->name('family-accounts.add-member-form');
+    Route::post('family-accounts/{familyAccount}/add-member', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'addMember'])
+        ->name('family-accounts.add-member');
+    Route::delete('family-accounts/{familyAccount}/members/{member}', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'removeMember'])
+        ->name('family-accounts.remove-member');
+    Route::put('family-accounts/{familyAccount}/members/{member}', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'updateMember'])
+        ->name('family-accounts.update-member');
+    Route::get('family-accounts-report', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'report'])
+        ->name('family-accounts.report');
+
+    // Demo pages
+    Route::get('/demo/service-package-selector', function () {
+        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
+
+        $accountTypePriority = [
+            'Tài khoản dùng chung' => 1,
+            'Tài khoản chính chủ' => 2,
+            'Tài khoản add family' => 3,
+            'Tài khoản cấp (dùng riêng)' => 4,
+        ];
+
+        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
+            $priority = $accountTypePriority[$package->account_type] ?? 999;
+            return [$priority, $package->name];
+        });
+
+        return view('admin.demo.service-package-selector', compact('servicePackages', 'accountTypePriority'));
+    })->name('demo.service-package-selector');
 });
 Route::get("/test-filter", function () {
     $request = request();

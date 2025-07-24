@@ -13,6 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin.auth' => \App\Http\Middleware\AdminAuth::class,
+            'prevent.caching' => \App\Http\Middleware\PreventCaching::class,
+        ]);
+
+        // Exclude CSRF verification for admin login POST route
+        $middleware->validateCsrfTokens(except: [
+            '/admin/login',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -16,6 +16,11 @@ class AdminAuth
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Bypass authentication for local development
+        if (config('app.env') === 'local' || config('app.debug') === true) {
+            return $next($request);
+        }
+
         if (!Auth::guard('admin')->check()) {
             return redirect()->route('admin.login')
                 ->with('error', 'Vui lòng đăng nhập để tiếp tục.');

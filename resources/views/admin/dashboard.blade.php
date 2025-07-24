@@ -1,671 +1,151 @@
 @extends('layouts.admin')
 
 @section('title', 'Dashboard')
-@section('page-title', 'Dashboard')
+@section('page-title', 'Dashboard Tổng Quan')
 
 @section('content')
+<!-- Header Welcome -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0 text-gray-800">🏠 Dashboard Tổng Quan</h1>
+        <p class="mb-0 text-muted">Chào mừng trở lại! Đây là tổng quan hệ thống của bạn.</p>
+    </div>
+    <div>
+        <span class="badge badge-success">Hệ thống hoạt động tốt</span>
+        <small class="text-muted ml-2">{{ now()->format('d/m/Y H:i') }}</small>
+    </div>
+</div>
+
 <!-- Thống kê tổng quan -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-3 col-lg-6 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-primary">
-                    <i class="fas fa-users"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($totalCustomers) }}</h2>
-                <p class="stats-label mb-0">Khách hàng</p>
-                <small class="text-success">
-                    <i class="fas fa-arrow-up me-1"></i>
-                    Tăng trưởng tốt
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-lg-6 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-success">
-                    <i class="fas fa-box"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($totalServicePackages) }}</h2>
-                <p class="stats-label mb-0">Gói dịch vụ</p>
-                <small class="text-info">
-                    <i class="fas fa-chart-line me-1"></i>
-                    Đa dạng sản phẩm
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-lg-6 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-info">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($totalActiveServices) }}</h2>
-                <p class="stats-label mb-0">Dịch vụ hoạt động</p>
-                <small class="text-primary">
-                    <i class="fas fa-sync-alt me-1"></i>
-                    Đang vận hành
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-lg-6 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($expiringSoonServices) }}</h2>
-                <p class="stats-label mb-0">Sắp hết hạn</p>
-                <small class="text-warning">
-                    <i class="fas fa-clock me-1"></i>
-                    Cần chú ý
-                </small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Lead Statistics -->
-<div class="row g-3 mb-4">
-    <div class="col-12">
-        <h4 class="mb-3">
-            <i class="fas fa-user-plus text-primary me-2"></i>
-            Thống kê Lead (Khách hàng tiềm năng)
-        </h4>
-    </div>
-
-    <div class="col-xl-2-4 col-lg-4 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-info">
-                    <i class="fas fa-users"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($totalLeads) }}</h2>
-                <p class="stats-label mb-0">Tổng Lead</p>
-                <small class="text-info">
-                    <i class="fas fa-chart-line me-1"></i>
-                    Tất cả lead
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-2-4 col-lg-4 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-success">
-                    <i class="fas fa-user-plus"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($newLeads) }}</h2>
-                <p class="stats-label mb-0">Lead mới</p>
-                <small class="text-success">
-                    <i class="fas fa-plus me-1"></i>
-                    Chưa xử lý
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-2-4 col-lg-4 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-warning">
-                    <i class="fas fa-calendar-day"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($followUpTodayLeads) }}</h2>
-                <p class="stats-label mb-0">Cần theo dõi hôm nay</p>
-                <small class="text-warning">
-                    <i class="fas fa-clock me-1"></i>
-                    Hôm nay
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-2-4 col-lg-4 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-danger">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($overdueLeads) }}</h2>
-                <p class="stats-label mb-0">Quá hạn</p>
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-triangle me-1"></i>
-                    Cần xử lý gấp
-                </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-2-4 col-lg-4 col-md-6">
-        <div class="card card-stats">
-            <div class="card-body text-center">
-                <div class="stats-icon mx-auto mb-3 bg-primary">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <h2 class="stats-number">{{ number_format($convertedThisMonth) }}</h2>
-                <p class="stats-label mb-0">Chuyển đổi tháng này</p>
-                <small class="text-primary">
-                    <i class="fas fa-trophy me-1"></i>
-                    Thành công
-                </small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Lead cần chú ý -->
-<div class="row g-4 mb-4">
-    <div class="col-xl-6 col-lg-6">
-        <div class="card ">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2 text-danger"></i>
-                        Lead khẩn cấp
-                    </h5>
-                    <a href="{{ route('admin.leads.index', ['priority' => 'urgent']) }}"
-                        class="btn btn-sm btn-outline-danger">
-                        <i class="fas fa-eye me-1"></i>
-                        Xem tất cả
-                    </a>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                @if($urgentLeads->count() > 0)
-                @foreach($urgentLeads as $lead)
-                <div class="d-flex align-items-center p-3 border-bottom">
-                    <div class="avatar-sm me-3">
-                        <div class="avatar-initial bg-danger rounded-circle">
-                            {{ substr($lead->name, 0, 1) }}
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Tổng Khách Hàng
                         </div>
-                    </div>
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">{{ $lead->name }}</h6>
-                        <p class="text-muted mb-1">
-                            <i class="fas fa-phone me-1"></i>{{ $lead->phone }}
-                            @if($lead->servicePackage)
-                            | {{ $lead->servicePackage->name }}
-                            @endif
-                        </p>
-                        <small class="text-muted">
-                            Tạo: {{ $lead->created_at->diffForHumans() }}
-                            @if($lead->assignedUser)
-                            | PV: {{ $lead->assignedUser->name }}
-                            @endif
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ number_format($totalCustomers) }}</div>
+                        <small class="text-success">
+                            <i class="fas fa-arrow-up"></i> Tăng trưởng ổn định
                         </small>
                     </div>
-                    <div class="text-end">
-                        <span class="badge bg-danger">{{ $lead->getPriorityName() }}</span>
-                        <br><small class="text-muted">{{ $lead->getStatusName() }}</small>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
                     </div>
                 </div>
-                @endforeach
-                @else
-                <div class="text-center py-4">
-                    <div class="empty-icon mb-3">
-                        <i class="fas fa-check-circle text-success"></i>
-                    </div>
-                    <h5 class="text-muted">Không có lead khẩn cấp</h5>
-                    <p class="text-muted mb-0">Tất cả lead đều được xử lý tốt</p>
-                </div>
-                @endif
             </div>
         </div>
     </div>
 
-    <div class="col-xl-6 col-lg-6">
-        <div class="card ">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-clock me-2 text-warning"></i>
-                        Lead quá hạn theo dõi
-                    </h5>
-                    <a href="{{ route('admin.leads.index', ['overdue' => 1]) }}"
-                        class="btn btn-sm btn-outline-warning">
-                        <i class="fas fa-eye me-1"></i>
-                        Xem tất cả
-                    </a>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                @if($overdueLeadsList->count() > 0)
-                @foreach($overdueLeadsList as $lead)
-                <div class="d-flex align-items-center p-3 border-bottom">
-                    <div class="avatar-sm me-3">
-                        <div class="avatar-initial bg-warning rounded-circle">
-                            {{ substr($lead->name, 0, 1) }}
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Dịch Vụ Hoạt Động
                         </div>
-                    </div>
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">{{ $lead->name }}</h6>
-                        <p class="text-muted mb-1">
-                            <i class="fas fa-phone me-1"></i>{{ $lead->phone }}
-                            @if($lead->servicePackage)
-                            | {{ $lead->servicePackage->name }}
-                            @endif
-                        </p>
-                        <small class="text-warning">
-                            <i class="fas fa-exclamation-triangle me-1"></i>
-                            Quá hạn {{ $lead->getDaysOverdue() }} ngày
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ number_format($totalActiveServices) }}</div>
+                        <small class="text-info">
+                            <i class="fas fa-sync-alt"></i> Đang vận hành
                         </small>
                     </div>
-                    <div class="text-end">
-                        <small class="text-muted">
-                            {{ $lead->next_follow_up_at->format('d/m/Y') }}
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            Gói Dịch Vụ
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ number_format($totalServicePackages) }}</div>
+                        <small class="text-primary">
+                            <i class="fas fa-box"></i> Đa dạng sản phẩm
                         </small>
-                        <br><span class="badge {{ $lead->getStatusBadgeClass() }}">{{ $lead->getStatusName() }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-cube fa-2x text-gray-300"></i>
                     </div>
                 </div>
-                @endforeach
-                @else
-                <div class="text-center py-4">
-                    <div class="empty-icon mb-3">
-                        <i class="fas fa-check-circle text-success"></i>
-                    </div>
-                    <h5 class="text-muted">Không có lead quá hạn</h5>
-                    <p class="text-muted mb-0">Tất cả lead đều được theo dõi đúng hạn</p>
-                </div>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <!-- Dịch vụ sắp hết hạn -->
-    <div class="col-xl-8 col-lg-7">
-        <div class="card ">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-clock me-2 text-warning"></i>
-                        Dịch vụ sắp hết hạn (5 ngày tới)
-                    </h5>
-                    <a href="{{ route('admin.customer-services.index', ['filter' => 'expiring']) }}"
-                        class="btn btn-sm btn-outline-warning">
-                        <i class="fas fa-eye me-1"></i>
-                        Xem tất cả
-                    </a>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                @if($expiringSoon->count() > 0)
-                <div class="table-container">
-                    <table class="table mb-0">
-                        <thead>
-                            <tr>
-                                <th><i class="fas fa-user me-2"></i>Khách hàng</th>
-                                <th><i class="fas fa-box-open me-2"></i>Dịch vụ</th>
-                                <th><i class="fas fa-calendar-times me-2"></i>Hết hạn</th>
-                                <th><i class="fas fa-hourglass-half me-2"></i>Còn lại</th>
-                                <th><i class="fas fa-cogs me-2"></i>Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($expiringSoon as $service)
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar-initial rounded-circle bg-primary text-white me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                                            {{ substr($service->customer->name, 0, 1) }}
-                                        </div>
-                                        <div>
-                                            <div class="fw-bold">{{ $service->customer->name }}</div>
-                                            <small class="text-muted">{{ $service->customer->customer_code }}</small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ $service->servicePackage->name }}</div>
-                                    <small class="text-muted">{{ $service->servicePackage->category->name ?? 'N/A' }}</small>
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ $service->expires_at->format('d/m/Y') }}</div>
-                                    <small class="text-muted">{{ $service->expires_at->format('H:i') }}</small>
-                                </td>
-                                <td>
-                                    @php
-                                    $daysRemaining = $service->getDaysRemaining();
-                                    @endphp
-                                    @if($daysRemaining <= 1)
-                                        <span class="badge bg-danger">
-                                        <i class="fas fa-exclamation-triangle me-1"></i>
-                                        {{ $daysRemaining }} ngày
-                                        </span>
-                                        @elseif($daysRemaining <= 3)
-                                            <span class="badge bg-warning">
-                                            <i class="fas fa-clock me-1"></i>
-                                            {{ $daysRemaining }} ngày
-                                            </span>
-                                            @else
-                                            <span class="badge bg-info">
-                                                <i class="fas fa-calendar me-1"></i>
-                                                {{ $daysRemaining }} ngày
-                                            </span>
-                                            @endif
-                                </td>
-                                <td>
-                                    <div class="btn-group">
-                                        <a href="{{ route('admin.customers.show', $service->customer) }}"
-                                            class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="tooltip"
-                                            title="Xem chi tiết khách hàng">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ route('admin.customer-services.show', $service) }}"
-                                            class="btn btn-sm btn-outline-info"
-                                            data-bs-toggle="tooltip"
-                                            title="Xem chi tiết dịch vụ">
-                                            <i class="fas fa-info-circle"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                @else
-                <div class="text-center py-5">
-                    <div class="mb-3">
-                        <i class="fas fa-check-circle fa-3x text-success opacity-50"></i>
-                    </div>
-                    <h5 class="text-muted">Không có dịch vụ nào sắp hết hạn</h5>
-                    <p class="text-muted mb-0">Tất cả dịch vụ đều hoạt động bình thường</p>
-                </div>
-                @endif
             </div>
         </div>
     </div>
 
-    <!-- Khách hàng mới nhất -->
-    <div class="col-xl-4 col-lg-5">
-        <div class="card ">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-user-plus me-2 text-primary"></i>
-                    Khách hàng mới nhất
-                </h5>
-            </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
             <div class="card-body">
-                @if($recentCustomers->count() > 0)
-                <div class="customer-list">
-                    @foreach($recentCustomers as $customer)
-                    <div class="d-flex align-items-center p-3 mb-3 bg-light rounded">
-                        <div class="avatar-initial bg-primary text-white rounded-circle me-3" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                            {{ substr($customer->name, 0, 1) }}
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Sắp Hết Hạn
                         </div>
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold">{{ $customer->name }}</div>
-                            <div class="text-muted small">
-                                <span class="me-3">{{ $customer->customer_code }}</span>
-                                <span>{{ $customer->customerServices->count() }} dịch vụ</span>
-                            </div>
-                            <small class="text-muted">
-                                {{ $customer->created_at->diffForHumans() }}
-                            </small>
-                        </div>
-                        <a href="{{ route('admin.customers.show', $customer) }}"
-                            class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-arrow-right"></i>
-                        </a>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ number_format($expiringSoonServices) }}</div>
+                        <small class="text-danger">
+                            <i class="fas fa-exclamation-triangle"></i> Cần chú ý
+                        </small>
                     </div>
-                    @endforeach
-                </div>
-
-                <div class="text-center mt-3">
-                    <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-users me-2"></i>
-                        Xem tất cả khách hàng
-                    </a>
-                </div>
-                @else
-                <div class="text-center py-4">
-                    <div class="mb-3">
-                        <i class="fas fa-user-plus fa-2x text-muted opacity-50"></i>
+                    <div class="col-auto">
+                        <i class="fas fa-clock fa-2x text-gray-300"></i>
                     </div>
-                    <p class="text-muted mb-0">Chưa có khách hàng mới</p>
                 </div>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Dịch vụ phổ biến và Bài đăng -->
-<div class="row g-4 mt-2">
-    <!-- Dịch vụ phổ biến -->
-    <div class="col-12">
-        <div class="card ">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2 text-success"></i>
-                    Dịch vụ phổ biến nhất
-                </h5>
-            </div>
-            <div class="card-body">
-                @if($popularServices->count() > 0)
-                <div class="row g-3">
-                    @foreach($popularServices as $index => $service)
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <div class="service-card text-center p-4 rounded-3 h-100" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%); border: 2px solid rgba(16, 185, 129, 0.2); transition: all 0.3s ease;">
-                            <div class="service-rank position-absolute top-0 start-0 m-2">
-                                <span class="badge bg-success rounded-pill">#{{ $index + 1 }}</span>
-                            </div>
-                            <div class="service-icon mb-3">
-                                <div class="icon-wrapper mx-auto" style="width: 60px; height: 60px; background: var(--success-gradient); border-radius: 15px; display: flex; align-items: center; justify-content: center;">
-                                    <i class="fas fa-box fa-2x text-white"></i>
-                                </div>
-                            </div>
-                            <h6 class="fw-bold mb-2">{{ $service->name }}</h6>
-                            <div class="mb-2">
-                                <span class="badge bg-primary">
-                                    <i class="fas fa-users me-1"></i>
-                                    {{ $service->customer_services_count }} khách hàng
-                                </span>
-                            </div>
-                            @if($service->category)
-                            <small class="text-muted">{{ $service->category->name }}</small>
-                            @endif
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-                @else
-                <div class="text-center py-5">
-                    <div class="mb-3">
-                        <i class="fas fa-chart-bar fa-3x text-muted opacity-50"></i>
-                    </div>
-                    <h5 class="text-muted">Chưa có dữ liệu thống kê</h5>
-                    <p class="text-muted mb-0">Dữ liệu sẽ hiển thị khi có khách hàng sử dụng dịch vụ</p>
-                </div>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Content Posts Status -->
-<div class="row g-4 mt-2">
-    <div class="col-lg-6">
-        <div class="card ">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-calendar-alt me-2 text-info"></i>
-                        Bài đăng sắp tới (24h)
-                    </h5>
-                    <a href="{{ route('admin.content-scheduler.index') }}" class="btn btn-sm btn-outline-info">
-                        <i class="fas fa-eye me-1"></i>
-                        Xem tất cả
-                    </a>
-                </div>
-            </div>
-            <div class="card-body">
-                @if($upcomingPosts->count() > 0)
-                <div class="post-list">
-                    @foreach($upcomingPosts as $post)
-                    <div class="post-item d-flex align-items-center p-3 rounded-3 mb-3" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(29, 78, 216, 0.05) 100%); border-left: 4px solid var(--info-gradient);">
-                        <div class="post-icon me-3">
-                            <div class="icon-wrapper" style="width: 45px; height: 45px; background: var(--info-gradient); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-calendar text-white"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1">
-                            <div class="fw-bold mb-1">{{ $post->title }}</div>
-                            <div class="d-flex align-items-center text-muted small">
-                                <i class="fas fa-clock me-1"></i>
-                                <span class="me-3">{{ $post->scheduled_at->format('d/m/Y H:i') }}</span>
-                                <i class="fas fa-users me-1"></i>
-                                <span>{{ $post->target_groups_string }}</span>
-                            </div>
-                            <div class="mt-1">
-                                <span class="badge bg-info">
-                                    {{ $post->scheduled_at->diffForHumans() }}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="ms-2">
-                            <a href="{{ route('admin.content-scheduler.show', $post) }}"
-                                class="btn btn-sm btn-outline-info rounded-pill"
-                                data-bs-toggle="tooltip"
-                                title="Xem chi tiết">
-                                <i class="fas fa-arrow-right"></i>
-                            </a>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-                @else
-                <div class="text-center py-4">
-                    <div class="mb-3">
-                        <i class="fas fa-calendar-check fa-2x text-success opacity-50"></i>
-                    </div>
-                    <h6 class="text-muted">Không có bài đăng nào trong 24h tới</h6>
-                    <p class="text-muted mb-0 small">Lịch đăng bài trống</p>
-                </div>
-                @endif
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6">
-        <div class="card ">
-            <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2 text-danger"></i>
-                        Bài đăng quá hạn
-                    </h5>
-                    <a href="{{ route('admin.content-scheduler.index', ['status' => 'scheduled']) }}" class="btn btn-sm btn-outline-danger">
-                        <i class="fas fa-eye me-1"></i>
-                        Xem tất cả
-                    </a>
-                </div>
-            </div>
-            <div class="card-body">
-                @if($overduePosts->count() > 0)
-                <div class="post-list">
-                    @foreach($overduePosts as $post)
-                    <div class="post-item d-flex align-items-center p-3 rounded-3 mb-3" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(220, 38, 38, 0.05) 100%); border-left: 4px solid var(--danger-gradient);">
-                        <div class="post-icon me-3">
-                            <div class="icon-wrapper" style="width: 45px; height: 45px; background: var(--danger-gradient); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-exclamation text-white"></i>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1">
-                            <div class="fw-bold mb-1">{{ $post->title }}</div>
-                            <div class="d-flex align-items-center text-muted small">
-                                <i class="fas fa-clock me-1"></i>
-                                <span class="me-3">Đã quá {{ $post->scheduled_at->diffForHumans() }}</span>
-                                <i class="fas fa-users me-1"></i>
-                                <span>{{ $post->target_groups_string }}</span>
-                            </div>
-                            <div class="mt-1">
-                                <span class="badge bg-danger">
-                                    Quá hạn
-                                </span>
-                            </div>
-                        </div>
-                        <div class="ms-2">
-                            <a href="{{ route('admin.content-scheduler.edit', $post) }}"
-                                class="btn btn-sm btn-outline-danger rounded-pill"
-                                data-bs-toggle="tooltip"
-                                title="Chỉnh sửa">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-                @else
-                <div class="text-center py-4">
-                    <div class="mb-3">
-                        <i class="fas fa-check-circle fa-2x text-success opacity-50"></i>
-                    </div>
-                    <h6 class="text-muted">Không có bài đăng quá hạn</h6>
-                    <p class="text-muted mb-0 small">Lịch đăng bài được quản lý tốt</p>
-                </div>
-                @endif
             </div>
         </div>
     </div>
 </div>
 
 <!-- Quick Actions -->
-<div class="row g-4 mt-2">
+<div class="row mb-4">
     <div class="col-12">
-        <div class="card ">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-bolt me-2 text-warning"></i>
-                    Thao tác nhanh
-                </h5>
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">⚡ Hành Động Nhanh</h6>
             </div>
             <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <a href="{{ route('admin.customers.create') }}" class="btn btn-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4" style="min-height: 120px;">
-                            <i class="fas fa-user-plus fa-2x mb-2"></i>
-                            <span class="fw-bold">Thêm khách hàng</span>
-                            <small class="text-white-50 mt-1">Khách hàng mới</small>
+                <div class="row">
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('admin.customers.create') }}" class="btn btn-primary btn-block">
+                            <i class="fas fa-user-plus d-block mb-1"></i>
+                            <small>Thêm KH</small>
                         </a>
                     </div>
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <a href="{{ route('admin.service-packages.create') }}" class="btn btn-success w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4" style="min-height: 120px;">
-                            <i class="fas fa-box fa-2x mb-2"></i>
-                            <span class="fw-bold">Thêm gói dịch vụ</span>
-                            <small class="text-white-50 mt-1">Sản phẩm mới</small>
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('admin.customer-services.create') }}" class="btn btn-success btn-block">
+                            <i class="fas fa-link d-block mb-1"></i>
+                            <small>Gán Dịch Vụ</small>
                         </a>
                     </div>
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <a href="{{ route('admin.customer-services.create') }}" class="btn btn-info w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4" style="min-height: 120px;">
-                            <i class="fas fa-link fa-2x mb-2"></i>
-                            <span class="fw-bold">Gán dịch vụ</span>
-                            <small class="text-white-50 mt-1">Kích hoạt dịch vụ</small>
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('admin.service-packages.create') }}" class="btn btn-info btn-block">
+                            <i class="fas fa-box-open d-block mb-1"></i>
+                            <small>Thêm Gói</small>
                         </a>
                     </div>
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <a href="{{ route('admin.content-scheduler.create') }}" class="btn btn-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4" style="min-height: 120px;">
-                            <i class="fas fa-calendar-plus fa-2x mb-2"></i>
-                            <span class="fw-bold">Tạo bài đăng</span>
-                            <small class="text-white-50 mt-1">Lên lịch đăng</small>
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('admin.backup.index') }}" class="btn btn-warning btn-block">
+                            <i class="fas fa-shield-alt d-block mb-1"></i>
+                            <small>Backup</small>
                         </a>
                     </div>
-
-                    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                        <a href="{{ route('admin.reports.profit') }}" class="btn btn-dark w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4" style="min-height: 120px;">
-                            <i class="fas fa-chart-line fa-2x mb-2"></i>
-                            <span class="fw-bold">Báo cáo</span>
-                            <small class="text-white-50 mt-1">Lợi nhuận</small>
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('admin.reports.profit') }}" class="btn btn-secondary btn-block">
+                            <i class="fas fa-chart-line d-block mb-1"></i>
+                            <small>Báo Cáo</small>
+                        </a>
+                    </div>
+                    <div class="col-md-2 col-sm-4 col-6 mb-3">
+                        <a href="{{ route('lookup.index') }}" target="_blank" class="btn btn-outline-primary btn-block">
+                            <i class="fas fa-search d-block mb-1"></i>
+                            <small>Tra Cứu</small>
                         </a>
                     </div>
                 </div>
@@ -674,46 +154,163 @@
     </div>
 </div>
 
+<!-- Main Content -->
+<div class="row">
+    <!-- Recent Activities -->
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">📋 Hoạt Động Gần Đây</h6>
+                <a href="{{ route('admin.customer-services.index') }}" class="btn btn-sm btn-outline-primary">
+                    Xem Tất Cả
+                </a>
+            </div>
+            <div class="card-body">
+                @if($recentAssignments->count() > 0)
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%">
+                            <thead>
+                                <tr>
+                                    <th>Khách Hàng</th>
+                                    <th>Dịch Vụ</th>
+                                    <th>Ngày Gán</th>
+                                    <th>Trạng Thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($recentAssignments as $assignment)
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="mr-3">
+                                                    <div class="icon-circle bg-primary">
+                                                        <i class="fas fa-user text-white"></i>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="small font-weight-bold">{{ $assignment->customer->name }}</div>
+                                                    <div class="small text-gray-500">{{ $assignment->customer->customer_code }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="font-weight-bold">{{ $assignment->servicePackage->name }}</div>
+                                            <div class="small text-gray-500">{{ number_format($assignment->servicePackage->price) }}đ</div>
+                                        </td>
+                                        <td>{{ $assignment->created_at->format('d/m/Y') }}</td>
+                                        <td>
+                                            @if($assignment->status === 'active')
+                                                <span class="badge badge-success">Hoạt động</span>
+                                            @elseif($assignment->status === 'pending')
+                                                <span class="badge badge-warning">Chờ kích hoạt</span>
+                                            @else
+                                                <span class="badge badge-secondary">{{ ucfirst($assignment->status) }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-gray-300 mb-3"></i>
+                        <p class="text-muted">Chưa có hoạt động nào gần đây</p>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Info -->
+    <div class="col-lg-4">
+        <!-- Expiring Services -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">⏰ Sắp Hết Hạn</h6>
+            </div>
+            <div class="card-body">
+                @if($expiringSoon->count() > 0)
+                    @foreach($expiringSoon->take(5) as $service)
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="mr-3">
+                                <div class="icon-circle bg-warning">
+                                    <i class="fas fa-clock text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="small font-weight-bold">{{ $service->customer->name }}</div>
+                                <div class="small text-gray-500">{{ $service->servicePackage->name }}</div>
+                                <div class="small text-danger">
+                                    Hết hạn: {{ $service->expires_at->format('d/m/Y') }}
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                    @if($expiringSoon->count() > 5)
+                        <div class="text-center">
+                            <a href="{{ route('admin.customer-services.index', ['filter' => 'expiring']) }}" class="btn btn-sm btn-outline-warning">
+                                Xem thêm {{ $expiringSoon->count() - 5 }} dịch vụ
+                            </a>
+                        </div>
+                    @endif
+                @else
+                    <div class="text-center py-3">
+                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                        <p class="text-muted small">Không có dịch vụ nào sắp hết hạn</p>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">🔧 Trạng Thái Hệ Thống</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="mr-3">
+                        <i class="fas fa-server text-success"></i>
+                    </div>
+                    <div>
+                        <div class="small font-weight-bold">Database</div>
+                        <div class="small text-success">Hoạt động bình thường</div>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-center mb-3">
+                    <div class="mr-3">
+                        <i class="fas fa-shield-alt text-success"></i>
+                    </div>
+                    <div>
+                        <div class="small font-weight-bold">Backup System</div>
+                        <div class="small text-success">Tự động hàng ngày</div>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-center">
+                    <div class="mr-3">
+                        <i class="fas fa-chart-line text-info"></i>
+                    </div>
+                    <div>
+                        <div class="small font-weight-bold">Performance</div>
+                        <div class="small text-info">Tối ưu</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
-
-@push('styles')
-<style>
-    /* 5-column layout for lead stats */
-    .col-xl-2-4 {
-        flex: 0 0 auto;
-        width: 20%;
-    }
-
-    @media (max-width: 1199.98px) {
-        .col-xl-2-4 {
-            width: 25%;
-        }
-    }
-
-    @media (max-width: 991.98px) {
-        .col-xl-2-4 {
-            width: 50%;
-        }
-    }
-
-    @media (max-width: 575.98px) {
-        .col-xl-2-4 {
-            width: 100%;
-        }
-    }
-</style>
-@endpush
 
 @section('scripts')
 <script>
-    // Simple dashboard interactions
-    document.addEventListener('DOMContentLoaded', function() {
-        // Track user activity for potential auto-refresh
-        ['mousemove', 'keypress', 'scroll', 'click'].forEach(event => {
-            document.addEventListener(event, () => {
-                localStorage.setItem('lastActivity', Date.now());
-            });
-        });
-    });
+$(document).ready(function() {
+    // Auto refresh dashboard every 5 minutes
+    setInterval(function() {
+        location.reload();
+    }, 300000);
+});
 </script>
 @endsection

@@ -145,9 +145,25 @@ class CustomerServiceController extends Controller
     public function create()
     {
         $customers = Customer::orderBy('name')->get();
-        $servicePackages = ServicePackage::with('category')->active()->orderBy('name')->get();
 
-        return view('admin.customer-services.create', compact('customers', 'servicePackages'));
+        // Group service packages by account_type with priority order
+        $servicePackages = ServicePackage::with('category')->active()->get();
+
+        // Define account type priority and styling
+        $accountTypePriority = [
+            'Tài khoản dùng chung' => 1,
+            'Tài khoản chính chủ' => 2,
+            'Tài khoản add family' => 3,
+            'Tài khoản cấp (dùng riêng)' => 4,
+        ];
+
+        // Sort packages by account type priority, then by name
+        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
+            $priority = $accountTypePriority[$package->account_type] ?? 999;
+            return [$priority, $package->name];
+        });
+
+        return view('admin.customer-services.create', compact('customers', 'servicePackages', 'accountTypePriority'));
     }
 
     /**
@@ -189,10 +205,27 @@ class CustomerServiceController extends Controller
     {
         $customerService->load(['supplier', 'supplierService']);
         $customers = Customer::orderBy('name')->get();
-        $servicePackages = ServicePackage::with('category')->active()->orderBy('name')->get();
+
+        // Group service packages by account_type with priority order
+        $servicePackages = ServicePackage::with('category')->active()->get();
+
+        // Define account type priority and styling
+        $accountTypePriority = [
+            'Tài khoản dùng chung' => 1,
+            'Tài khoản chính chủ' => 2,
+            'Tài khoản add family' => 3,
+            'Tài khoản cấp (dùng riêng)' => 4,
+        ];
+
+        // Sort packages by account type priority, then by name
+        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
+            $priority = $accountTypePriority[$package->account_type] ?? 999;
+            return [$priority, $package->name];
+        });
+
         $suppliers = \App\Models\Supplier::with('products')->orderBy('supplier_name')->get();
 
-        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers'));
+        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers', 'accountTypePriority'));
     }
 
     /**
@@ -224,8 +257,24 @@ class CustomerServiceController extends Controller
      */
     public function destroy(CustomerService $customerService)
     {
+        $customerId = $customerService->customer_id;
+        $loginEmail = $customerService->login_email;
         $customerService->delete();
 
+        // Kiểm tra referer để xác định redirect về đâu
+        $referer = request()->headers->get('referer');
+
+        if ($referer && strpos($referer, '/admin/customers/') !== false) {
+            // Nếu đến từ trang chi tiết khách hàng, redirect về trang đó
+            return redirect()->route('admin.customers.show', $customerId)
+                ->with('success', 'Dịch vụ đã được xóa!');
+        } elseif ($referer && strpos($referer, '/admin/shared-accounts/') !== false) {
+            // Nếu đến từ trang chi tiết tài khoản dùng chung, redirect về trang đó
+            return redirect()->route('admin.shared-accounts.show', urlencode($loginEmail))
+                ->with('success', 'Dịch vụ đã được xóa!');
+        }
+
+        // Mặc định redirect về trang danh sách dịch vụ
         return redirect()->route('admin.customer-services.index')
             ->with('success', 'Dịch vụ đã được xóa!');
     }
@@ -235,10 +284,26 @@ class CustomerServiceController extends Controller
      */
     public function assignForm(Customer $customer)
     {
-        $servicePackages = ServicePackage::with('category')->active()->orderBy('name')->get();
+        // Group service packages by account_type with priority order
+        $servicePackages = ServicePackage::with('category')->active()->get();
+
+        // Define account type priority and styling
+        $accountTypePriority = [
+            'Tài khoản dùng chung' => 1,
+            'Tài khoản chính chủ' => 2,
+            'Tài khoản add family' => 3,
+            'Tài khoản cấp (dùng riêng)' => 4,
+        ];
+
+        // Sort packages by account type priority, then by name
+        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
+            $priority = $accountTypePriority[$package->account_type] ?? 999;
+            return [$priority, $package->name];
+        });
+
         $suppliers = \App\Models\Supplier::with('products')->orderBy('supplier_name')->get();
 
-        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers'));
+        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers', 'accountTypePriority'));
     }
 
     /**

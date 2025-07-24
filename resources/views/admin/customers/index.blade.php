@@ -210,19 +210,70 @@
     </div>
 </div>
 
+<!-- Enhanced Search và Actions -->
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input type="text" id="customerSearch" data-table-search="customersTable"
+            class="form-control" placeholder="Tìm kiếm nhanh...">
+    </div>
+    <div class="col-md-4">
+        <div id="bulkActions" data-bulk-actions="customersTable" style="display: none;">
+            <div class="btn-group">
+                <button class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">
+                    <i class="fas fa-trash me-1"></i>
+                    Xóa (<span data-selected-count>0</span>)
+                </button>
+                <button class="btn btn-outline-info btn-sm" onclick="bulkExport()">
+                    <i class="fas fa-download me-1"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary btn-sm" data-export-csv="customersTable">
+                <i class="fas fa-file-csv me-1"></i>
+                Xuất CSV
+            </button>
+            <a href="{{ route('admin.customers.create') }}" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i>
+                Thêm khách hàng
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Table Info -->
+<div class="row mb-2">
+    <div class="col-md-6">
+        <small class="text-muted" data-table-count="customersTable">
+            Hiển thị {{ $customers->count() }} / {{ $customers->count() }} bản ghi
+        </small>
+    </div>
+    <div class="col-md-6 text-end">
+        @if(request('search'))
+            <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-times me-1"></i>
+                Xóa bộ lọc
+            </a>
+        @endif
+    </div>
+</div>
+
 <!-- Customers Table -->
 @if($customers->count() > 0)
 <div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0 customers-table">
+            <table id="customersTable" class="table table-hover mb-0 customers-table enhanced-table">
                 <thead>
                     <tr>
-                        <th>Mã KH</th>
-                        <th>Khách hàng</th>
-                        <th class="d-none d-lg-table-cell">Liên hệ</th>
-                        <th class="text-center">Dịch vụ</th>
-                        <th class="d-none d-xl-table-cell">Ngày tạo</th>
+                        <th data-sort="customer_code">Mã KH</th>
+                        <th data-sort="name">Khách hàng</th>
+                        <th class="d-none d-lg-table-cell" data-sort="email">Liên hệ</th>
+                        <th class="text-center" data-sort="services">Dịch vụ</th>
+                        <th class="d-none d-xl-table-cell" data-sort="created_at">Ngày tạo</th>
                         <th class="text-center">Thao tác</th>
                     </tr>
                 </thead>
@@ -599,5 +650,53 @@
             }
             */
         });
+
+        // Bulk actions functions
+        window.bulkDelete = function() {
+            const checkedBoxes = document.querySelectorAll('#customersTable tbody input[type="checkbox"]:checked');
+            if (checkedBoxes.length === 0) {
+                alert('Vui lòng chọn ít nhất một khách hàng để xóa.');
+                return;
+            }
+
+            if (confirm(`Bạn có chắc chắn muốn xóa ${checkedBoxes.length} khách hàng đã chọn?`)) {
+                // Simple approach: delete one by one
+                checkedBoxes.forEach(checkbox => {
+                    const row = checkbox.closest('tr');
+                    const deleteBtn = row.querySelector('.delete-btn');
+                    if (deleteBtn) {
+                        deleteBtn.click();
+                    }
+                });
+            }
+        };
+
+        window.bulkExport = function() {
+            const checkedBoxes = document.querySelectorAll('#customersTable tbody input[type="checkbox"]:checked');
+            if (checkedBoxes.length === 0) {
+                alert('Vui lòng chọn ít nhất một khách hàng để xuất.');
+                return;
+            }
+
+            // Simple CSV export of selected rows
+            const table = document.getElementById('customersTable');
+            const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim());
+
+            let csv = headers.join(',') + '\n';
+
+            checkedBoxes.forEach(checkbox => {
+                const row = checkbox.closest('tr');
+                const cells = Array.from(row.cells).map(cell => {
+                    return '"' + cell.textContent.trim().replace(/"/g, '""') + '"';
+                });
+                csv += cells.join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `customers_selected_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        };
     </script>
 @endsection

@@ -3,6 +3,44 @@
 @section('title', 'Quản lý tài khoản dùng chung')
 @section('page-title', 'Quản lý tài khoản dùng chung')
 
+@section('styles')
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .table th, .table td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .table th {
+        position: sticky;
+        top: 0;
+        background-color: var(--bs-primary);
+        z-index: 10;
+    }
+
+    @media (max-width: 768px) {
+        .d-none-md {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .d-none-lg {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .d-none-xl {
+            display: none !important;
+        }
+    }
+</style>
+@endsection
+
 @section('content')
 <div class="row">
     <div class="col-12">
@@ -112,14 +150,15 @@
                         <!-- Responsive info alert -->
                         <div class="alert alert-info alert-sm d-lg-none mb-2">
                             <i class="fas fa-info-circle me-1"></i>
-                            <small>Một số cột được ẩn trên màn hình nhỏ. Xem trên màn hình lớn hơn để thấy đầy đủ thông tin.</small>
+                            <small>Một số cột (Ghi chú, Ngày hết hạn tài khoản, Hoạt động, Sắp hết, Bảo mật) được ẩn trên màn hình nhỏ. Xem trên màn hình lớn hơn để thấy đầy đủ thông tin.</small>
                         </div>
                         
                         <table class="table table-hover table-sm">
-                            <thead class="table-dark">
+                            <thead class="table-primary">
                                 <tr>
                                     <th style="min-width: 200px;">Email tài khoản</th>
-                                    <th class="d-none-md" style="min-width: 100px;">Loại</th>
+                                    <th class="d-none-md" style="min-width: 150px;">Ghi chú</th>
+                                    <th class="d-none-lg" style="min-width: 120px;">Ngày hết hạn tài khoản</th>
                                     <th style="min-width: 80px;">Tổng DV</th>
                                     <th style="min-width: 80px;">Khách hàng</th>
                                     <th class="d-none-lg" style="min-width: 80px;">Hoạt động</th>
@@ -153,7 +192,22 @@
                                         </div>
                                     </td>
                                     <td class="d-none-md">
-                                        <span class="badge bg-secondary">TEAM SPAN</span>
+                                        <div class="text-muted small">
+                                            @if(!empty($account->account_notes))
+                                                {{ Str::limit($account->account_notes, 50) }}
+                                            @elseif(!empty($account->shared_notes))
+                                                {{ Str::limit($account->shared_notes, 50) }}
+                                            @else
+                                                <em>Không có ghi chú</em>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td class="d-none-lg">
+                                        @if($account->latest_expiry)
+                                            <div class="fw-semibold">{{ \Carbon\Carbon::parse($account->latest_expiry)->format('d/m/Y') }}</div>
+                                        @else
+                                            <span class="text-muted">N/A</span>
+                                        @endif
                                     </td>
                                     <td>
                                         <span class="badge bg-primary">{{ $account->total_services }}</span>
