@@ -21,52 +21,7 @@
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">🔍 Bộ Lọc</h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-3">
-                    <label for="filterType">Loại Backup:</label>
-                    <select class="form-control" id="filterType">
-                        <option value="">Tất cả</option>
-                        <option value="daily">Hàng Ngày</option>
-                        <option value="weekly">Hàng Tuần</option>
-                        <option value="quick">Nhanh</option>
-                        <option value="manual">Thủ Công</option>
-                        <option value="auto">Tự Động</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="filterFormat">Định Dạng:</label>
-                    <select class="form-control" id="filterFormat">
-                        <option value="">Tất cả</option>
-                        <option value="json">JSON</option>
-                        <option value="zip">ZIP</option>
-                        <option value="sql">SQL</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="filterStatus">Trạng Thái:</label>
-                    <select class="form-control" id="filterStatus">
-                        <option value="">Tất cả</option>
-                        <option value="success">Thành Công</option>
-                        <option value="error">Lỗi</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label>&nbsp;</label>
-                    <div>
-                        <button type="button" class="btn btn-info btn-block" id="applyFilters">
-                            <i class="fas fa-filter"></i> Áp Dụng Bộ Lọc
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Backup List -->
     <div class="card shadow mb-4">
@@ -99,7 +54,6 @@
                                 </th>
                                 <th>Tên File</th>
                                 <th>Loại</th>
-                                <th>Định Dạng</th>
                                 <th>Kích Thước</th>
                                 <th>Thời Gian Tạo</th>
                                 <th>Trạng Thái</th>
@@ -108,9 +62,7 @@
                         </thead>
                         <tbody>
                             @foreach($backups as $backup)
-                                <tr data-type="{{ $backup['type'] }}" 
-                                    data-format="{{ $backup['extension'] }}" 
-                                    data-status="{{ $backup['status'] }}">
+                                <tr data-status="{{ $backup['status'] }}">
                                     <td>
                                         <input type="checkbox" class="backup-checkbox" value="{{ $backup['filename'] }}">
                                     </td>
@@ -124,29 +76,8 @@
                                         </div>
                                     </td>
                                     <td>
-                                        @php
-                                            $typeColors = [
-                                                'daily' => 'primary',
-                                                'weekly' => 'success', 
-                                                'quick' => 'info',
-                                                'auto' => 'secondary',
-                                                'manual' => 'warning'
-                                            ];
-                                            $typeLabels = [
-                                                'daily' => 'Hàng Ngày',
-                                                'weekly' => 'Hàng Tuần',
-                                                'quick' => 'Nhanh',
-                                                'auto' => 'Tự Động',
-                                                'manual' => 'Thủ Công'
-                                            ];
-                                        @endphp
-                                        <span class="badge badge-{{ $typeColors[$backup['type']] ?? 'secondary' }}">
-                                            {{ $typeLabels[$backup['type']] ?? ucfirst($backup['type']) }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-outline-{{ $backup['extension'] === 'json' ? 'info' : ($backup['extension'] === 'zip' ? 'warning' : 'success') }}">
-                                            {{ strtoupper($backup['extension']) }}
+                                        <span class="badge badge-{{ $backup['type'] === 'Tự động' ? 'primary' : 'warning' }}">
+                                            {{ $backup['type'] }}
                                         </span>
                                     </td>
                                     <td>{{ $backup['size_formatted'] }}</td>
@@ -180,13 +111,7 @@
                                                     data-toggle="tooltip">
                                                 <i class="fas fa-undo"></i>
                                             </button>
-                                            <button type="button" 
-                                                    class="btn btn-outline-info btn-sm info-btn" 
-                                                    data-filename="{{ $backup['filename'] }}" 
-                                                    title="Thông tin chi tiết"
-                                                    data-toggle="tooltip">
-                                                <i class="fas fa-info"></i>
-                                            </button>
+
                                             <button type="button" 
                                                     class="btn btn-outline-danger btn-sm delete-btn" 
                                                     data-filename="{{ $backup['filename'] }}" 
@@ -287,49 +212,18 @@
     </div>
 </div>
 
-<!-- Create Backup Modal -->
-<div class="modal fade" id="createBackupModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">🔄 Tạo Backup Mới</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+<!-- Restore Confirmation Modal -->
+<div class="modal fade" id="restoreConfirmModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-body text-center p-4">
+                <i class="fas fa-exclamation-triangle fa-4x text-warning mb-3"></i>
+                <h4 class="modal-title mb-3">Xác Nhận Khôi Phục</h4>
+                <p class="text-muted">Bạn có chắc chắn muốn khôi phục cơ sở dữ liệu từ file <strong id="restore-filename-confirm"></strong>? <br> <strong>Toàn bộ dữ liệu hiện tại sẽ bị ghi đè.</strong> Thao tác này không thể hoàn tác.</p>
             </div>
-            <div class="modal-body">
-                <form id="createBackupForm">
-                    <div class="form-group">
-                        <label for="backupType">Loại Backup:</label>
-                        <select class="form-control" id="backupType" name="type">
-                            <option value="manual">Thủ Công</option>
-                            <option value="daily">Hàng Ngày</option>
-                            <option value="weekly">Hàng Tuần</option>
-                            <option value="quick">Nhanh</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="backupFormat">Định Dạng:</label>
-                        <select class="form-control" id="backupFormat" name="format">
-                            <option value="json">JSON</option>
-                            <option value="sql">SQL</option>
-                            <option value="both">Cả Hai</option>
-                        </select>
-                    </div>
-                </form>
-                <div id="backupProgress" style="display: none;">
-                    <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 100%"></div>
-                    </div>
-                    <p class="text-center text-muted">Đang tạo backup...</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Hủy</button>
-                <button type="button" class="btn btn-primary" id="confirmCreateBackup">
-                    <i class="fas fa-play"></i> Tạo Backup
-                </button>
+            <div class="modal-footer justify-content-center border-0">
+                <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-warning" id="confirmRestoreBtn">Tôi hiểu, Tiếp tục</button>
             </div>
         </div>
     </div>
@@ -363,128 +257,49 @@
 @section('scripts')
 <script>
 $(document).ready(function() {
+    let fileToRestore = null;
+
     // Initialize tooltips
     $('[data-toggle="tooltip"]').tooltip();
-    
+
     // Create backup button handlers
     $('#createBackupBtn, #createFirstBackupBtn').click(function() {
-        $('#createBackupModal').modal('show');
-    });
-    
-    // Confirm create backup
-    $('#confirmCreateBackup').click(function() {
         createBackup();
     });
-    
-    // Select all checkbox
-    $('#selectAll').change(function() {
-        $('.backup-checkbox').prop('checked', this.checked);
-        toggleBulkDeleteButton();
+
+    // Restore backup handlers
+    $('.restore-btn').click(function() {
+        fileToRestore = $(this).data('filename');
+        $('#restore-filename-confirm').text(fileToRestore);
+        $('#restoreConfirmModal').modal('show');
     });
-    
-    // Individual checkboxes
-    $('.backup-checkbox').change(function() {
-        toggleBulkDeleteButton();
-        
-        // Update select all checkbox
-        const totalCheckboxes = $('.backup-checkbox').length;
-        const checkedCheckboxes = $('.backup-checkbox:checked').length;
-        $('#selectAll').prop('checked', totalCheckboxes === checkedCheckboxes);
+
+    // Confirm restore
+    $('#confirmRestoreBtn').click(function() {
+        if (fileToRestore) {
+            $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang khôi phục...');
+            restoreBackup(fileToRestore);
+        }
     });
-    
-    // Apply filters
-    $('#applyFilters').click(function() {
-        applyFilters();
-    });
-    
+
     // Delete backup handlers
     $('.delete-btn').click(function() {
         const filename = $(this).data('filename');
-        if (confirm('Bạn có chắc chắn muốn xóa backup này?')) {
+        if (confirm('Bạn có chắc chắn muốn xóa backup này? Hành động này không thể hoàn tác.')) {
             deleteBackup(filename);
-        }
-    });
-    
-    // Restore backup handlers
-    $('.restore-btn').click(function() {
-        const filename = $(this).data('filename');
-        if (confirm('⚠️ CẢNH BÁO: Thao tác này sẽ ghi đè toàn bộ dữ liệu hiện tại. Bạn có chắc chắn?')) {
-            restoreBackup(filename);
-        }
-    });
-    
-    // Info backup handlers
-    $('.info-btn').click(function() {
-        const filename = $(this).data('filename');
-        showBackupInfo(filename);
-    });
-    
-    // Bulk delete
-    $('#bulkDeleteBtn').click(function() {
-        const selectedFiles = $('.backup-checkbox:checked').map(function() {
-            return this.value;
-        }).get();
-        
-        if (selectedFiles.length === 0) {
-            alert('Vui lòng chọn ít nhất một file để xóa');
-            return;
-        }
-        
-        if (confirm(`Bạn có chắc chắn muốn xóa ${selectedFiles.length} file backup đã chọn?`)) {
-            bulkDeleteBackups(selectedFiles);
         }
     });
 });
 
-function toggleBulkDeleteButton() {
-    const checkedCount = $('.backup-checkbox:checked').length;
-    if (checkedCount > 0) {
-        $('#bulkDeleteBtn').show();
-    } else {
-        $('#bulkDeleteBtn').hide();
-    }
-}
-
-function applyFilters() {
-    const typeFilter = $('#filterType').val();
-    const formatFilter = $('#filterFormat').val();
-    const statusFilter = $('#filterStatus').val();
-    
-    $('#backupTable tbody tr').each(function() {
-        const row = $(this);
-        const type = row.data('type');
-        const format = row.data('format');
-        const status = row.data('status');
-        
-        let show = true;
-        
-        if (typeFilter && type !== typeFilter) show = false;
-        if (formatFilter && format !== formatFilter) show = false;
-        if (statusFilter && status !== statusFilter) show = false;
-        
-        if (show) {
-            row.show();
-        } else {
-            row.hide();
-        }
-    });
-}
-
 function createBackup() {
-    const formData = {
-        type: $('#backupType').val(),
-        format: $('#backupFormat').val(),
-        _token: '{{ csrf_token() }}'
-    };
-    
-    $('#confirmCreateBackup').prop('disabled', true);
-    $('#backupProgress').show();
-    
-    $.post('{{ route("admin.backup.create") }}', formData)
+    const btn = $('#createBackupBtn');
+    const originalHtml = btn.html();
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang tạo...');
+
+    $.post('{{ route("admin.backup.create") }}', { _token: '{{ csrf_token() }}' })
         .done(function(response) {
             if (response.success) {
                 showAlert('success', 'Backup được tạo thành công: ' + response.backup_name);
-                $('#createBackupModal').modal('hide');
                 setTimeout(() => location.reload(), 1500);
             } else {
                 showAlert('danger', 'Lỗi: ' + response.message);
@@ -492,11 +307,10 @@ function createBackup() {
         })
         .fail(function(xhr) {
             const response = xhr.responseJSON;
-            showAlert('danger', 'Lỗi khi tạo backup: ' + (response?.message || 'Unknown error'));
+            showAlert('danger', 'Lỗi khi tạo backup: ' + (response?.message || 'Lỗi không xác định'));
         })
         .always(function() {
-            $('#confirmCreateBackup').prop('disabled', false);
-            $('#backupProgress').hide();
+            btn.prop('disabled', false).html(originalHtml);
         });
 }
 
@@ -516,7 +330,7 @@ function deleteBackup(filename) {
     })
     .fail(function(xhr) {
         const response = xhr.responseJSON;
-        showAlert('danger', 'Lỗi khi xóa backup: ' + (response?.message || 'Unknown error'));
+        showAlert('danger', 'Lỗi khi xóa backup: ' + (response?.message || 'Lỗi không xác định'));
     });
 }
 
@@ -535,69 +349,25 @@ function restoreBackup(filename) {
     })
     .fail(function(xhr) {
         const response = xhr.responseJSON;
-        showAlert('danger', 'Lỗi khi khôi phục: ' + (response?.message || 'Unknown error'));
+        showAlert('danger', 'Lỗi khi khôi phục: ' + (response?.message || 'Lỗi không xác định'));
+    })
+    .always(function() {
+        $('#restoreConfirmModal').modal('hide');
+        $('#confirmRestoreBtn').prop('disabled', false).text('Tôi hiểu, Tiếp tục');
     });
-}
-
-function showBackupInfo(filename) {
-    $('#backupInfoModal').modal('show');
-    $('#backupInfoContent').html(`
-        <div class="text-center">
-            <div class="spinner-border text-primary" role="status">
-                <span class="sr-only">Đang tải...</span>
-            </div>
-            <p class="mt-2">Đang tải thông tin backup...</p>
-        </div>
-    `);
-    
-    // TODO: Implement backup info loading
-    setTimeout(() => {
-        $('#backupInfoContent').html(`
-            <h6>📁 ${filename}</h6>
-            <div class="row">
-                <div class="col-md-6">
-                    <strong>Thông tin file:</strong>
-                    <ul class="list-unstyled mt-2">
-                        <li>Kích thước: <span class="text-info">2.5 MB</span></li>
-                        <li>Định dạng: <span class="badge badge-info">JSON</span></li>
-                        <li>Trạng thái: <span class="badge badge-success">Thành công</span></li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <strong>Nội dung backup:</strong>
-                    <ul class="list-unstyled mt-2">
-                        <li>Khách hàng: <span class="text-primary">118 records</span></li>
-                        <li>Dịch vụ: <span class="text-primary">142 records</span></li>
-                        <li>Gói dịch vụ: <span class="text-primary">8 records</span></li>
-                    </ul>
-                </div>
-            </div>
-        `);
-    }, 1000);
-}
-
-function bulkDeleteBackups(filenames) {
-    // TODO: Implement bulk delete
-    showAlert('info', 'Tính năng xóa hàng loạt đang được phát triển');
 }
 
 function showAlert(type, message) {
     const alertHtml = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
             ${message}
             <button type="button" class="close" data-dismiss="alert">
                 <span>&times;</span>
             </button>
         </div>
     `;
-    
-    // Remove existing alerts
     $('.alert').remove();
-    
-    // Add new alert at top of container
-    $('.container-fluid').prepend(alertHtml);
-    
-    // Auto dismiss after 5 seconds
+    $('body').append(alertHtml);
     setTimeout(() => {
         $('.alert').fadeOut();
     }, 5000);

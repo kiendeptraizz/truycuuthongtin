@@ -89,3 +89,83 @@ if (!function_exists('formatTimeAgo')) {
         }
     }
 }
+
+if (!function_exists('formatCurrency')) {
+    /**
+     * Format tiền tệ theo định dạng Việt Nam với dấu chấm phân cách hàng nghìn
+     *
+     * @param float|int|string|null $amount
+     * @param string $currency
+     * @param bool $showCurrency
+     * @return string
+     */
+    function formatCurrency($amount, $currency = 'VND', $showCurrency = true)
+    {
+        if ($amount === null || $amount === '') {
+            return '0';
+        }
+
+        // Convert to number
+        $amount = (float) $amount;
+
+        // Format with dot as thousand separator
+        $formatted = number_format($amount, 0, ',', '.');
+
+        // Add currency if requested
+        if ($showCurrency) {
+            $formatted .= ' ' . $currency;
+        }
+
+        return $formatted;
+    }
+}
+
+if (!function_exists('formatPrice')) {
+    /**
+     * Format giá tiền ngắn gọn (alias cho formatCurrency)
+     *
+     * @param float|int|string|null $amount
+     * @return string
+     */
+    function formatPrice($amount)
+    {
+        return formatCurrency($amount, 'đ', true);
+    }
+}
+
+if (!function_exists('formatMoney')) {
+    /**
+     * Format tiền không có đơn vị (chỉ số)
+     *
+     * @param float|int|string|null $amount
+     * @return string
+     */
+    function formatMoney($amount)
+    {
+        return formatCurrency($amount, '', false);
+    }
+}
+
+if (!function_exists('parseCurrency')) {
+    /**
+     * Parse formatted currency string back to number
+     *
+     * @param string|null $formattedAmount
+     * @return float
+     */
+    function parseCurrency($formattedAmount)
+    {
+        if (!$formattedAmount || !is_string($formattedAmount)) {
+            return 0;
+        }
+
+        // Remove currency symbols, spaces, and letters
+        $cleaned = preg_replace('/[^\d.,]/', '', $formattedAmount);
+
+        // Remove dots (thousand separators) and convert comma to dot for decimal
+        $cleaned = str_replace('.', '', $cleaned);
+        $cleaned = str_replace(',', '.', $cleaned);
+
+        return (float) $cleaned;
+    }
+}

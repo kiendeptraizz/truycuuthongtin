@@ -16,7 +16,7 @@
             </div>
 
             <div class="card-body">
-                <form method="POST" action="{{ route('admin.customer-services.update', $customerService) }}">
+                <form method="POST" action="{{ route('admin.customer-services.update', $customerService) }}{{ request()->has('source') ? '?' . http_build_query(request()->only(['source', 'customer_id'])) : '' }}">
                     @csrf
                     @method('PUT')
 
@@ -93,10 +93,11 @@
                                 Ngày kích hoạt <span class="text-danger">*</span>
                             </label>
                             <input type="date"
-                                class="form-control @error('activated_at') is-invalid @enderror"
+                                class="form-control start-date-input @error('activated_at') is-invalid @enderror"
                                 id="activated_at"
                                 name="activated_at"
                                 value="{{ old('activated_at', $customerService->activated_at->format('Y-m-d')) }}"
+                                data-package-duration="{{ $customerService->servicePackage->default_duration_days ?? 30 }}"
                                 required>
                             @error('activated_at')
                             <div class="invalid-feedback">{{ $message }}</div>
@@ -108,7 +109,7 @@
                                 Ngày hết hạn <span class="text-danger">*</span>
                             </label>
                             <input type="date"
-                                class="form-control @error('expires_at') is-invalid @enderror"
+                                class="form-control end-date-input @error('expires_at') is-invalid @enderror"
                                 id="expires_at"
                                 name="expires_at"
                                 value="{{ old('expires_at', $customerService->expires_at->format('Y-m-d')) }}"
@@ -116,6 +117,7 @@
                             @error('expires_at')
                             <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
+                            <small class="text-muted">Tự động tính từ ngày kích hoạt + {{ $customerService->servicePackage->default_duration_days ?? 30 }} ngày</small>
                         </div>
 
                         <div class="col-md-4 mb-3">
@@ -226,10 +228,17 @@
                     </div>
 
                     <div class="d-flex justify-content-between">
-                        <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left me-1"></i>
-                            Quay lại
-                        </a>
+                        @if(request('source') === 'customer' && request('customer_id'))
+                            <a href="{{ route('admin.customers.show', request('customer_id')) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Quay lại khách hàng
+                            </a>
+                        @else
+                            <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Quay lại danh sách
+                            </a>
+                        @endif
 
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save me-1"></i>
@@ -246,6 +255,61 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Auto-calculation for date fields
+        const packageDurationDays = {{ $customerService->servicePackage->default_duration_days ?? 30 }};
+        const startDateInput = document.querySelector('.start-date-input');
+        const endDateInput = document.querySelector('.end-date-input');
+
+        if (startDateInput && endDateInput) {
+            startDateInput.addEventListener('change', function() {
+                if (this.value) {
+                    // Calculate end date = start date + package duration
+                    const startDate = new Date(this.value);
+                    const endDate = new Date(startDate);
+                    endDate.setDate(startDate.getDate() + packageDurationDays);
+
+                    // Format date for input
+                    const formattedEndDate = endDate.toISOString().split('T')[0];
+                    endDateInput.value = formattedEndDate;
+
+                    // Show notification
+                    showAutoCalculationNotice(packageDurationDays);
+                }
+            });
+        }
+
+        // Show auto-calculation notice
+        function showAutoCalculationNotice(days) {
+            // Remove old notice if exists
+            const oldNotice = document.querySelector('.auto-calculation-notice');
+            if (oldNotice) {
+                oldNotice.remove();
+            }
+
+            // Create new notice
+            const notice = document.createElement('div');
+            notice.className = 'alert alert-info alert-dismissible fade show auto-calculation-notice mt-3';
+            notice.innerHTML = `
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Tự động tính toán:</strong> Ngày hết hạn đã được cập nhật (+${days} ngày từ ngày kích hoạt)
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+            // Add notice after the date fields row
+            const dateFieldsRow = startDateInput.closest('.row');
+            if (dateFieldsRow) {
+                dateFieldsRow.insertAdjacentElement('afterend', notice);
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    if (notice && notice.parentNode) {
+                        notice.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        // Supplier handling code
         const supplierSelect = document.getElementById('supplier_id');
         const supplierDetails = document.getElementById('supplier-details');
         const supplierCodeDisplay = document.getElementById('supplier-code-display');

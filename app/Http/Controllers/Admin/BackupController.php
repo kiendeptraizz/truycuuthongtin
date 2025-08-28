@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Storage;
+
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 use Carbon\Carbon;
-use ZipArchive;
+
 
 class BackupController extends Controller
 {
@@ -28,7 +29,7 @@ class BackupController extends Controller
         $backupStats = $this->getBackupStatistics();
         $healthScore = $this->calculateHealthScore();
         $recentBackups = $this->getRecentBackups(5);
-        
+
         return view('admin.backup.index', compact('backupStats', 'healthScore', 'recentBackups'));
     }
 
@@ -38,41 +39,34 @@ class BackupController extends Controller
     public function list()
     {
         $backups = $this->getAllBackups();
-        
+
         return view('admin.backup.list', compact('backups'));
     }
 
     /**
      * Tạo backup manual
      */
-    public function create(Request $request)
+    public function create()
     {
-        $type = $request->get('type', 'manual');
-        $format = $request->get('format', 'json');
-        
         try {
-            // Chạy backup command
-            Artisan::call('backup:auto', [
-                '--type' => $type,
-                '--format' => $format
-            ]);
-            
+            // Chạy lệnh backup mới
+            Artisan::call('backup:run', ['--type' => 'manual']);
+
             $output = Artisan::output();
-            
+
             // Parse output để lấy tên file backup
-            preg_match('/Tạo backup: (.+)/', $output, $matches);
-            $backupName = $matches[1] ?? 'Unknown';
-            
+            preg_match('/✅ Backup thành công: (.+)/', $output, $matches);
+            $backupName = $matches[1] ?? 'Không xác định';
+
             return response()->json([
                 'success' => true,
-                'message' => 'Backup được tạo thành công!',
+                'message' => 'Backup toàn bộ CSDL đã được tạo thành công!',
                 'backup_name' => $backupName,
                 'output' => $output
             ]);
-            
         } catch (\Exception $e) {
             Log::error('Manual backup failed', ['error' => $e->getMessage()]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi tạo backup: ' . $e->getMessage()
@@ -86,11 +80,11 @@ class BackupController extends Controller
     public function download($filename)
     {
         $filePath = $this->backupPath . '/' . $filename;
-        
+
         if (!file_exists($filePath)) {
             abort(404, 'File backup không tồn tại');
         }
-        
+
         return Response::download($filePath);
     }
 
@@ -100,22 +94,21 @@ class BackupController extends Controller
     public function delete($filename)
     {
         $filePath = $this->backupPath . '/' . $filename;
-        
+
         if (!file_exists($filePath)) {
             return response()->json([
                 'success' => false,
                 'message' => 'File không tồn tại'
             ], 404);
         }
-        
+
         try {
             unlink($filePath);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Đã xóa backup thành công'
             ]);
-            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -129,37 +122,42 @@ class BackupController extends Controller
      */
     public function restore(Request $request)
     {
-        $filename = $request->get('filename');
-        
-        if (!$filename) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vui lòng chọn file backup'
-            ], 400);
+        $filename = $request->input('filename');
+        $filePath = $this->backupPath . '/' . $filename;
+
+        if (!file_exists($filePath) || pathinfo($filePath, PATHINFO_EXTENSION) !== 'sql') {
+            return response()->json(['success' => false, 'message' => 'File backup không hợp lệ hoặc không tồn tại.'], 404);
         }
-        
+
         try {
-            // Chạy restore command
-            Artisan::call('backup:restore', [
-                'file' => $filename,
-                '--confirm' => true
-            ]);
-            
-            $output = Artisan::output();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Khôi phục dữ liệu thành công!',
-                'output' => $output
-            ]);
-            
+            $connection = config('database.default');
+            $dbConfig = config("database.connections.{$connection}");
+
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+
+            $command = sprintf(
+                'mysql --host=%s --port=%s --user=%s --password="%s" %s < %s',
+                escapeshellarg($dbConfig['host']),
+                escapeshellarg($dbConfig['port']),
+                escapeshellarg($dbConfig['username']),
+                $dbConfig['password'],
+                escapeshellarg($dbConfig['database']),
+                escapeshellarg($filePath)
+            );
+
+            exec($command, $output, $returnCode);
+
+            if ($returnCode === 0) {
+                DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                Log::info("Database restored successfully from {$filename}.");
+                return response()->json(['success' => true, 'message' => 'Cơ sở dữ liệu đã được khôi phục thành công!']);
+            } else {
+                throw new \Exception("Lỗi khi khôi phục CSDL. Mã lỗi: {$returnCode}. Chi tiết: " . implode("\n", $output));
+            }
         } catch (\Exception $e) {
-            Log::error('Restore failed', ['error' => $e->getMessage(), 'file' => $filename]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Lỗi khi khôi phục: ' . $e->getMessage()
-            ], 500);
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            Log::error("Failed to restore database from {$filename}.", ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -171,12 +169,11 @@ class BackupController extends Controller
         try {
             Artisan::call('backup:monitor', ['--report' => true]);
             $reportOutput = Artisan::output();
-            
+
             $backupTrends = $this->getBackupTrends();
             $storageUsage = $this->getStorageUsage();
-            
+
             return view('admin.backup.report', compact('reportOutput', 'backupTrends', 'storageUsage'));
-            
         } catch (\Exception $e) {
             return view('admin.backup.report', [
                 'reportOutput' => 'Lỗi khi tạo báo cáo: ' . $e->getMessage(),
@@ -192,7 +189,7 @@ class BackupController extends Controller
     public function history()
     {
         $logs = $this->getBackupLogs();
-        
+
         return view('admin.backup.history', compact('logs'));
     }
 
@@ -202,14 +199,14 @@ class BackupController extends Controller
     public function settings()
     {
         $currentSettings = $this->getCurrentSettings();
-        
+
         return view('admin.backup.settings', compact('currentSettings'));
     }
 
     /**
      * Cập nhật cài đặt
      */
-    public function updateSettings(Request $request)
+    public function updateSettings()
     {
         // TODO: Implement settings update
         return response()->json([
@@ -225,7 +222,7 @@ class BackupController extends Controller
     {
         $stats = $this->getBackupStatistics();
         $health = $this->calculateHealthScore();
-        
+
         return response()->json([
             'stats' => $stats,
             'health' => $health,
@@ -239,22 +236,23 @@ class BackupController extends Controller
 
     private function getBackupStatistics()
     {
-        $files = glob($this->backupPath . '/*.{zip,json}', GLOB_BRACE);
-        
+        $files = glob($this->backupPath . '/*.sql');
+
         if (empty($files)) {
             return [
                 'total_backups' => 0,
                 'total_size' => 0,
                 'latest_backup' => null,
                 'latest_time' => null,
+                'latest_time_formatted' => null,
+                'hours_ago' => 0,
                 'daily_count' => 0,
-                'weekly_count' => 0,
-                'quick_count' => 0
+                'manual_count' => 0,
             ];
         }
 
         // Sắp xếp theo thời gian
-        usort($files, function($a, $b) {
+        usort($files, function ($a, $b) {
             return filemtime($b) - filemtime($a);
         });
 
@@ -262,9 +260,8 @@ class BackupController extends Controller
         $latestFile = $files[0];
 
         // Đếm theo loại
-        $dailyCount = count(array_filter($files, fn($f) => strpos(basename($f), 'daily') !== false));
-        $weeklyCount = count(array_filter($files, fn($f) => strpos(basename($f), 'weekly') !== false));
-        $quickCount = count(array_filter($files, fn($f) => strpos(basename($f), 'quick') !== false));
+        $dailyCount = count(array_filter($files, fn($f) => strpos(basename($f), '_daily_') !== false));
+        $manualCount = count($files) - $dailyCount;
 
         return [
             'total_backups' => count($files),
@@ -275,15 +272,14 @@ class BackupController extends Controller
             'latest_time_formatted' => date('Y-m-d H:i:s', filemtime($latestFile)),
             'hours_ago' => round((time() - filemtime($latestFile)) / 3600, 1),
             'daily_count' => $dailyCount,
-            'weekly_count' => $weeklyCount,
-            'quick_count' => $quickCount
+            'manual_count' => $manualCount,
         ];
     }
 
     private function calculateHealthScore()
     {
-        $files = glob($this->backupPath . '/*.{zip,json}', GLOB_BRACE);
-        
+        $files = glob($this->backupPath . '/*.sql');
+
         if (empty($files)) {
             return [
                 'score' => 0,
@@ -296,7 +292,7 @@ class BackupController extends Controller
         $issues = [];
 
         // Kiểm tra backup gần đây
-        usort($files, function($a, $b) {
+        usort($files, function ($a, $b) {
             return filemtime($b) - filemtime($a);
         });
 
@@ -325,14 +321,14 @@ class BackupController extends Controller
 
     private function getRecentBackups($limit = 5)
     {
-        $files = glob($this->backupPath . '/*.{zip,json}', GLOB_BRACE);
-        
+        $files = glob($this->backupPath . '/*.sql');
+
         if (empty($files)) {
             return [];
         }
 
         // Sắp xếp theo thời gian
-        usort($files, function($a, $b) {
+        usort($files, function ($a, $b) {
             return filemtime($b) - filemtime($a);
         });
 
@@ -340,7 +336,7 @@ class BackupController extends Controller
         for ($i = 0; $i < min($limit, count($files)); $i++) {
             $file = $files[$i];
             $filename = basename($file);
-            
+
             $backups[] = [
                 'filename' => $filename,
                 'size' => filesize($file),
@@ -357,21 +353,21 @@ class BackupController extends Controller
 
     private function getAllBackups()
     {
-        $files = glob($this->backupPath . '/*.{zip,json}', GLOB_BRACE);
-        
+        $files = glob($this->backupPath . '/*.sql');
+
         if (empty($files)) {
             return [];
         }
 
         // Sắp xếp theo thời gian
-        usort($files, function($a, $b) {
+        usort($files, function ($a, $b) {
             return filemtime($b) - filemtime($a);
         });
 
         $backups = [];
         foreach ($files as $file) {
             $filename = basename($file);
-            
+
             $backups[] = [
                 'filename' => $filename,
                 'size' => filesize($file),
@@ -390,33 +386,20 @@ class BackupController extends Controller
 
     private function getBackupType($filename)
     {
-        if (strpos($filename, 'daily') !== false) return 'daily';
-        if (strpos($filename, 'weekly') !== false) return 'weekly';
-        if (strpos($filename, 'quick') !== false) return 'quick';
-        if (strpos($filename, 'AUTO_BACKUP') !== false) return 'auto';
-        return 'manual';
+        if (strpos($filename, '_daily_') !== false) return 'Tự động';
+        if (strpos($filename, '_manual_') !== false) return 'Thủ công';
+        return 'Không xác định';
     }
 
     private function verifyBackupIntegrity($filePath)
     {
         $extension = pathinfo($filePath, PATHINFO_EXTENSION);
-        
-        if ($extension === 'json') {
-            if (!file_exists($filePath)) return false;
-            $data = json_decode(file_get_contents($filePath), true);
-            return $data && isset($data['backup_info']);
+
+        if ($extension === 'sql') {
+            return file_exists($filePath) && filesize($filePath) > 0;
         }
-        
-        if ($extension === 'zip' && class_exists('ZipArchive')) {
-            $zip = new ZipArchive();
-            $result = $zip->open($filePath, ZipArchive::CHECKCONS);
-            if ($result === TRUE) {
-                $zip->close();
-                return true;
-            }
-        }
-        
-        return true; // Default to true if can't verify
+
+        return false;
     }
 
     private function getBackupTrends()
@@ -454,11 +437,11 @@ class BackupController extends Controller
     private function formatBytes($size, $precision = 2)
     {
         $units = ['B', 'KB', 'MB', 'GB'];
-        
+
         for ($i = 0; $size > 1024 && $i < count($units) - 1; $i++) {
             $size /= 1024;
         }
-        
+
         return round($size, $precision) . ' ' . $units[$i];
     }
 }

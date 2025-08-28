@@ -50,42 +50,30 @@ class RestoreCustomersSeeder extends Seeder
 
             $this->command->info('Đang khôi phục dữ liệu khách hàng từ backup...');
 
-            // Disable foreign key checks
-            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-
-            // Xóa dữ liệu hiện tại
-            CustomerService::truncate();
-            Customer::truncate();
-
-            // Re-enable foreign key checks
-            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+            // Chỉ khôi phục customers, không động vào customer services
+            $existingCustomerIds = Customer::pluck('id')->toArray();
+            $restoredCount = 0;
+            $skippedCount = 0;
 
             // Khôi phục customers
             foreach ($data['customers'] as $customerData) {
-                // Loại bỏ timestamps để tạo mới
-                unset($customerData['created_at'], $customerData['updated_at']);
-                Customer::create($customerData);
-            }
+                if (in_array($customerData['id'], $existingCustomerIds)) {
+                    $skippedCount++;
+                    continue;
+                }
 
-            // Khôi phục customer services
-            if (isset($data['customer_services'])) {
-                foreach ($data['customer_services'] as $serviceData) {
-                    // Loại bỏ timestamps để tạo mới
-                    unset($serviceData['created_at'], $serviceData['updated_at']);
-
-                    // Đảm bảo các trường reminder có giá trị mặc định nếu không tồn tại
-                    $serviceData['reminder_sent'] = $serviceData['reminder_sent'] ?? false;
-                    $serviceData['reminder_sent_at'] = $serviceData['reminder_sent_at'] ?? null;
-                    $serviceData['reminder_count'] = $serviceData['reminder_count'] ?? 0;
-                    $serviceData['reminder_notes'] = $serviceData['reminder_notes'] ?? null;
-
-                    CustomerService::create($serviceData);
+                try {
+                    Customer::create($customerData);
+                    $restoredCount++;
+                } catch (\Exception $e) {
+                    $this->command->warn("Bỏ qua customer ID {$customerData['id']}: " . $e->getMessage());
+                    $skippedCount++;
                 }
             }
 
-            $this->command->info("✅ Khôi phục thành công từ backup {$fileName}!");
-            $this->command->info("- Khách hàng: " . count($data['customers']));
-            $this->command->info("- Dịch vụ: " . (count($data['customer_services'] ?? [])));
+            $this->command->info("✅ Khôi phục customers từ backup {$fileName}!");
+            $this->command->info("- Khôi phục: {$restoredCount} customers");
+            $this->command->info("- Bỏ qua: {$skippedCount} customers (đã tồn tại)");
         } catch (\Exception $e) {
             $this->command->error("❌ Lỗi khi khôi phục từ backup: " . $e->getMessage());
         }

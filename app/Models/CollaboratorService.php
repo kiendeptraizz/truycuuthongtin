@@ -34,7 +34,7 @@ class CollaboratorService extends Model
 
     public function getFormattedPriceAttribute(): string
     {
-        return number_format($this->price, 0, '.', ',') . ' VND';
+        return formatCurrency($this->price);
     }
 
     public function getTotalValueAttribute(): float
@@ -44,7 +44,7 @@ class CollaboratorService extends Model
 
     public function getFormattedTotalValueAttribute(): string
     {
-        return number_format($this->total_value, 0, '.', ',') . ' VND';
+        return formatCurrency($this->total_value);
     }
 
     public function getActiveAccountsCountAttribute(): int

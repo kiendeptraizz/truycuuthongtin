@@ -29,7 +29,13 @@
                     </tr>
                     <tr>
                         <td><strong>Danh mục:</strong></td>
-                        <td><span class="badge bg-info">{{ $servicePackage->category->name }}</span></td>
+                        <td>
+                            @if($servicePackage->category)
+                                <span class="badge bg-info">{{ $servicePackage->category->name }}</span>
+                            @else
+                                <span class="badge bg-secondary">Chưa phân loại</span>
+                            @endif
+                        </td>
                     </tr>
                     <tr>
                         <td><strong>Loại TK:</strong></td>
@@ -41,16 +47,16 @@
                     </tr>
                     <tr>
                         <td><strong>Giá bán:</strong></td>
-                        <td><strong class="text-success">{{ number_format($servicePackage->price) }}đ</strong></td>
+                        <td><strong class="text-success">{{ formatPrice($servicePackage->price) }}</strong></td>
                     </tr>
                     @if($servicePackage->cost_price)
                     <tr>
                         <td><strong>Giá nhập:</strong></td>
-                        <td><strong class="text-danger">{{ number_format($servicePackage->cost_price) }}đ</strong></td>
+                        <td><strong class="text-danger">{{ formatPrice($servicePackage->cost_price) }}</strong></td>
                     </tr>
                     <tr>
                         <td><strong>Lợi nhuận:</strong></td>
-                        <td><strong class="text-primary">{{ number_format($servicePackage->price - $servicePackage->cost_price) }}đ</strong></td>
+                        <td><strong class="text-primary">{{ formatPrice($servicePackage->price - $servicePackage->cost_price) }}</strong></td>
                     </tr>
                     @endif
                     <tr>

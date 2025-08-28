@@ -5,13 +5,22 @@
 
 @section('styles')
 <style>
+    /* Compact table design */
     .table-responsive {
         overflow-x: auto;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .table {
+        font-size: 0.85rem;
+        margin-bottom: 0;
     }
 
     .table th, .table td {
         white-space: nowrap;
         vertical-align: middle;
+        padding: 0.4rem 0.6rem;
     }
 
     .table th {
@@ -19,6 +28,79 @@
         top: 0;
         background-color: var(--bs-dark);
         z-index: 10;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-bottom: 2px solid #495057;
+    }
+
+    /* Compact header styles */
+    .table th {
+        padding: 0.5rem 0.4rem;
+    }
+
+    /* Sticky action column */
+    .action-column {
+        position: sticky;
+        right: 0;
+        background-color: inherit;
+        z-index: 5;
+        box-shadow: -2px 0 4px rgba(0,0,0,0.1);
+    }
+
+    .table-dark .action-column {
+        background-color: var(--bs-dark);
+    }
+
+    /* Compact notes display */
+    .notes-compact {
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.75rem;
+    }
+
+    /* Tooltip styles */
+    .tooltip-trigger {
+        cursor: help;
+        border-bottom: 1px dotted #6c757d;
+    }
+
+    /* Status badges compact */
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25em 0.5em;
+    }
+
+    /* Logout section styles */
+    .logout-section {
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+    }
+
+    .logout-section .card-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border-bottom: none;
+    }
+
+    .btn-logout-primary {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+        transition: all 0.3s ease;
+    }
+
+    .btn-logout-primary:hover {
+        background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+        transform: translateY(-1px);
+    }
+
+    /* Responsive breakpoints */
+    @media (max-width: 576px) {
+        .d-none-sm {
+            display: none !important;
+        }
     }
 
     @media (max-width: 768px) {
@@ -37,6 +119,65 @@
         .d-none-xl {
             display: none !important;
         }
+    }
+
+    @media (max-width: 1400px) {
+        .d-none-xxl {
+            display: none !important;
+        }
+    }
+
+    /* Compact customer info */
+    .customer-info {
+        min-width: 140px;
+    }
+
+    .customer-name {
+        font-weight: 600;
+        font-size: 0.85rem;
+        line-height: 1.2;
+    }
+
+    .customer-details {
+        font-size: 0.7rem;
+        color: #6c757d;
+        line-height: 1.1;
+    }
+
+    /* Compact service package */
+    .service-package {
+        min-width: 90px;
+    }
+
+    /* Compact expiry info */
+    .expiry-info {
+        min-width: 85px;
+        font-size: 0.8rem;
+    }
+
+    .expiry-date {
+        font-weight: 600;
+    }
+
+    .expiry-days {
+        font-size: 0.7rem;
+        line-height: 1.1;
+    }
+
+    /* Logout history compact */
+    .logout-history {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    /* Action buttons compact */
+    .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+    }
+
+    .dropdown-toggle::after {
+        font-size: 0.6rem;
     }
 </style>
 @endsection
@@ -69,7 +210,7 @@
                         <small class="text-muted">Dịch vụ sử dụng chung email này</small>
                     </div>
                     <div class="d-flex gap-1">
-                        <a href="{{ route('admin.shared-accounts.edit', $email) }}" class="btn btn-primary btn-sm">
+                        <a href="{{ route('admin.shared-accounts.edit', $email) }}?source=detail" class="btn btn-primary btn-sm">
                             <i class="fas fa-edit"></i> Sửa
                         </a>
                         <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary btn-sm">
@@ -260,140 +401,191 @@
                 </div>
                 @endif
 
+                <!-- Logout All Devices Section -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card logout-section">
+                            <div class="card-header text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-sign-out-alt me-2"></i>
+                                    Quản lý Logout Devices
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <p class="mb-2">
+                                            <strong>Logout All Devices:</strong> Ghi nhận việc logout tất cả thiết bị của tài khoản dùng chung này.
+                                        </p>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Đây chỉ là tính năng tracking/logging, không thực hiện logout thật trên các platform.
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <a href="{{ route('admin.shared-accounts.logout-form', $email) }}"
+                                           class="btn btn-danger btn-logout-primary text-white">
+                                            <i class="fas fa-sign-out-alt me-2"></i>
+                                            Logout All Devices
+                                        </a>
+                                        <button type="button" class="btn btn-outline-secondary ms-2"
+                                                onclick="loadLogoutHistory()">
+                                            <i class="fas fa-history me-2"></i>
+                                            Lịch sử
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Bảng dịch vụ -->
                 <div class="table-responsive">
                     <!-- Responsive info alert -->
                     <div class="alert alert-info alert-sm d-lg-none mb-2">
                         <i class="fas fa-info-circle me-1"></i>
-                        <small>Một số cột (Ghi chú, Mật khẩu, Kích hoạt, Nhắc nhở, Người PC) được ẩn trên màn hình nhỏ để tối ưu hiển thị.</small>
+                        <small>Một số cột được ẩn trên màn hình nhỏ. Cuộn ngang để xem đầy đủ.</small>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover table-sm">
+                    <table class="table table-striped table-hover table-sm">
                         <thead class="table-dark">
                             <tr>
-                                <th style="min-width: 180px;">Khách hàng</th>
-                                <th style="min-width: 120px;">Gói dịch vụ</th>
-                                <th class="d-none-md" style="min-width: 150px;">Ghi chú</th>
-                                <th class="d-none-lg" style="min-width: 150px;">Mật khẩu</th>
-                                <th class="d-none-xl" style="min-width: 100px;">Kích hoạt</th>
-                                <th style="min-width: 120px;">Hết hạn</th>
-                                <th style="min-width: 100px;">Trạng thái</th>
-                                <th class="d-none-md" style="min-width: 100px;">Nhắc nhở</th>
-                                <th class="d-none-lg" style="min-width: 120px;">Người PC</th>
-                                <th style="min-width: 80px;">Thao tác</th>
+                                <th class="customer-info">KH</th>
+                                <th class="service-package">Gói</th>
+                                <th class="d-none-md notes-compact">Ghi chú</th>
+                                <th class="d-none-lg" style="min-width: 80px;">MK</th>
+                                <th class="d-none-xl" style="min-width: 70px;">KH</th>
+                                <th class="expiry-info">Hết hạn</th>
+                                <th style="min-width: 75px;">TT</th>
+                                <th class="d-none-md" style="min-width: 70px;">Nhắc</th>
+                                <th class="d-none-lg" style="min-width: 80px;">PC</th>
+                                <th class="d-none-xxl logout-history" style="min-width: 80px;">Logout</th>
+                                <th class="action-column" style="min-width: 60px;">TC</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($services as $service)
                             @php
                                 $isExpired = $service->expires_at && $service->expires_at->isPast();
-                                $isExpiring = $service->expires_at && $service->expires_at->isFuture() && $service->expires_at->diffInDays(now()) <= 7;
+                                $isExpiring = $service->expires_at && $service->expires_at->isFuture() && $service->expires_at->diffInDays(now()) <= 5;
                                 $statusClass = $isExpired ? 'table-danger' : ($isExpiring ? 'table-warning' : '');
+
+                                // Tạo ghi chú ngắn gọn
+                                $noteText = $service->internal_notes ?: $service->shared_account_notes;
+                                $noteShort = $noteText ? 'TK' . str_pad($loop->iteration, 2, '0', STR_PAD_LEFT) : '';
                             @endphp
                             <tr class="{{ $statusClass }}">
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div>
-                                            <strong>{{ $service->customer->name }}</strong>
-                                            @if($service->customer->customer_code)
-                                                <span class="badge bg-light text-dark ms-2" 
-                                                      title="Mã khách hàng">
-                                                    <i class="fas fa-id-badge me-1"></i>{{ $service->customer->customer_code }}
-                                                </span>
-                                            @endif
-                                            <br><small class="text-muted">
-                                                <i class="fas fa-phone me-1"></i>{{ $service->customer->phone }}
-                                            </small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="badge bg-primary">{{ $service->servicePackage->name }}</span>
-                                </td>
-                                <td class="d-none-md">
-                                    <div class="text-muted small">
-                                        @if($service->internal_notes)
-                                            {{ Str::limit($service->internal_notes, 50) }}
-                                        @elseif($service->shared_account_notes)
-                                            {{ Str::limit($service->shared_account_notes, 50) }}
-                                        @else
-                                            <em>Không có ghi chú</em>
+                                <td class="customer-info">
+                                    <div class="customer-name">{{ Str::limit($service->customer->name, 15) }}</div>
+                                    <div class="customer-details">
+                                        @if($service->customer->customer_code)
+                                            <span class="badge bg-light text-dark" style="font-size: 0.6rem;">
+                                                {{ $service->customer->customer_code }}
+                                            </span>
                                         @endif
+                                        <div><i class="fas fa-phone" style="font-size: 0.6rem;"></i> {{ Str::limit($service->customer->phone, 12) }}</div>
                                     </div>
+                                </td>
+                                <td class="service-package">
+                                    <span class="badge bg-primary" style="font-size: 0.65rem;">
+                                        {{ Str::limit($service->servicePackage->name, 8) }}
+                                    </span>
+                                </td>
+                                <td class="d-none-md notes-compact">
+                                    @if($noteShort)
+                                        <span class="tooltip-trigger"
+                                              title="{{ $noteText }}"
+                                              data-bs-toggle="tooltip">
+                                            {{ $noteShort }}
+                                        </span>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
                                 </td>
                                 <td class="d-none-lg">
                                     <div class="d-flex align-items-center">
-                                        <code id="password-{{ $service->id }}" style="display: none;">{{ $service->login_password }}</code>
-                                        <span id="masked-{{ $service->id }}">{{ str_repeat('*', strlen($service->login_password)) }}</span>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" 
-                                                onclick="togglePassword({{ $service->id }})">
-                                            <i class="fas fa-eye" id="eye-{{ $service->id }}"></i>
+                                        <code id="password-{{ $service->id }}" style="display: none; font-size: 0.7rem;">{{ $service->login_password }}</code>
+                                        <span id="masked-{{ $service->id }}" style="font-size: 0.7rem;">{{ str_repeat('*', min(6, strlen($service->login_password))) }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1"
+                                                onclick="togglePassword({{ $service->id }})" style="padding: 0.1rem 0.3rem;">
+                                            <i class="fas fa-eye" id="eye-{{ $service->id }}" style="font-size: 0.6rem;"></i>
                                         </button>
                                     </div>
                                 </td>
                                 <td class="d-none-xl">
                                     @if($service->activated_at)
-                                        <small>{{ $service->activated_at->format('d/m/Y') }}</small>
+                                        <small>{{ $service->activated_at->format('d/m') }}</small>
                                     @else
-                                        <span class="text-muted">Chưa kích hoạt</span>
+                                        <span class="text-muted" style="font-size: 0.7rem;">-</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="expiry-info">
                                     @if($service->expires_at)
-                                        <div>
-                                            {{ $service->expires_at->format('d/m/Y') }}
+                                        <div class="expiry-date">{{ $service->expires_at->format('d/m/y') }}</div>
+                                        <div class="expiry-days">
                                             @if($isExpired)
-                                                <br><small class="text-danger">Đã hết hạn {{ $service->expires_at->diffForHumans() }}</small>
+                                                <span class="text-danger">Hết hạn</span>
                                             @elseif($isExpiring)
-                                                <br><small class="text-warning">Còn {{ $service->expires_at->diffInDays(now()) }} ngày</small>
+                                                <span class="text-warning">{{ $service->expires_at->diffInDays(now()) }}d</span>
                                             @else
-                                                <br><small class="text-success">Còn {{ $service->expires_at->diffInDays(now()) }} ngày</small>
+                                                <span class="text-success">{{ $service->expires_at->diffInDays(now()) }}d</span>
                                             @endif
                                         </div>
                                     @else
-                                        <span class="text-muted">Không giới hạn</span>
+                                        <span class="text-muted" style="font-size: 0.7rem;">∞</span>
                                     @endif
                                 </td>
                                 <td>
                                     @if($service->status === 'active')
-                                        <span class="badge bg-success">Hoạt động</span>
+                                        <span class="badge bg-success">ON</span>
                                     @elseif($service->status === 'inactive')
-                                        <span class="badge bg-secondary">Không hoạt động</span>
+                                        <span class="badge bg-secondary">OFF</span>
                                     @elseif($service->status === 'suspended')
-                                        <span class="badge bg-warning">Tạm dừng</span>
+                                        <span class="badge bg-warning">STOP</span>
                                     @else
-                                        <span class="badge bg-danger">Hết hạn</span>
+                                        <span class="badge bg-danger">EXP</span>
                                     @endif
                                 </td>
                                 <td class="d-none-md">
                                     @if($service->reminder_sent)
                                         <div>
-                                            <span class="badge bg-info">Đã nhắc</span>
-                                            <br><small class="text-muted">{{ $service->reminder_sent_at->format('d/m') }}</small>
+                                            <span class="badge bg-info" style="font-size: 0.6rem;">✓</span>
+                                            <div style="font-size: 0.65rem;">{{ $service->reminder_sent_at->format('d/m') }}</div>
                                         </div>
                                     @else
-                                        <span class="text-muted">Chưa</span>
+                                        <span class="text-muted" style="font-size: 0.7rem;">-</span>
                                     @endif
                                 </td>
                                 <td class="d-none-lg">
                                     @if($service->assignedBy)
-                                        {{ $service->assignedBy->name }}
+                                        <span style="font-size: 0.75rem;">{{ Str::limit($service->assignedBy->name, 10) }}</span>
                                     @else
-                                        <span class="text-muted">N/A</span>
+                                        <span class="text-muted" style="font-size: 0.7rem;">-</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="d-none-xxl logout-history">
+                                    @if($latestLogout && $latestLogout->logout_at)
+                                        <div class="tooltip-trigger"
+                                             title="Logout gần nhất: {{ $latestLogout->logout_at->format('d/m/Y H:i') }}"
+                                             data-bs-toggle="tooltip">
+                                            <span class="badge bg-secondary" style="font-size: 0.6rem;">{{ $latestLogout->logout_at->format('d/m') }}</span>
+                                        </div>
+                                    @else
+                                        <span class="text-muted" style="font-size: 0.7rem;">-</span>
+                                    @endif
+                                </td>
+                                <td class="action-column">
                                     <div class="dropdown">
-                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            <i class="fas fa-cog"></i>
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                                data-bs-toggle="dropdown" aria-expanded="false" style="padding: 0.2rem 0.4rem;">
+                                            <i class="fas fa-cog" style="font-size: 0.7rem;"></i>
                                         </button>
-                                        <ul class="dropdown-menu">
+                                        <ul class="dropdown-menu dropdown-menu-end">
                                             <li>
                                                 <a class="dropdown-item" href="{{ route('admin.customers.show', $service->customer) }}">
                                                     <i class="fas fa-user me-2"></i>
-                                                    Xem khách hàng
+                                                    Xem KH
                                                 </a>
                                             </li>
                                             @if($isExpiring || $isExpired)
@@ -402,7 +594,7 @@
                                                         class="dropdown-item"
                                                         onclick="markReminded({{ $service->id }})">
                                                     <i class="fas fa-bell me-2"></i>
-                                                    Đánh dấu đã nhắc
+                                                    Đã nhắc
                                                 </button>
                                             </li>
                                             @endif
@@ -411,7 +603,7 @@
                                                 <a class="dropdown-item text-primary"
                                                    href="mailto:{{ $service->customer->email }}?subject=Thông báo gia hạn dịch vụ {{ $service->servicePackage->name }}">
                                                     <i class="fas fa-envelope me-2"></i>
-                                                    Gửi email
+                                                    Email
                                                 </a>
                                             </li>
                                             <li><hr class="dropdown-divider"></li>
@@ -420,7 +612,7 @@
                                                         class="dropdown-item text-danger"
                                                         onclick="confirmDeleteService('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')">
                                                     <i class="fas fa-trash me-2"></i>
-                                                    Xóa dịch vụ
+                                                    Xóa
                                                 </button>
                                             </li>
                                         </ul>
@@ -496,11 +688,19 @@
 </div>
 
 <script>
+// Khởi tạo tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
 function togglePassword(serviceId) {
     const passwordField = document.getElementById('password-' + serviceId);
     const maskedField = document.getElementById('masked-' + serviceId);
     const eyeIcon = document.getElementById('eye-' + serviceId);
-    
+
     if (passwordField.style.display === 'none') {
         passwordField.style.display = 'inline';
         maskedField.style.display = 'none';
@@ -591,5 +791,84 @@ function confirmDeleteService(serviceName, deleteUrl) {
         form.submit();
     }
 }
+
+// Logout History Functions
+function loadLogoutHistory() {
+    const modal = new bootstrap.Modal(document.getElementById('logoutHistoryModal'));
+    modal.show();
+
+    // Load logout logs
+    fetch(`{{ route('admin.shared-accounts.logout-logs', $email) }}`)
+        .then(response => response.json())
+        .then(data => {
+            displayLogoutHistory(data.logs);
+        })
+        .catch(error => {
+            console.error('Error loading logout history:', error);
+            document.getElementById('logoutHistoryContent').innerHTML =
+                '<div class="alert alert-danger">Không thể tải lịch sử logout.</div>';
+        });
+}
+
+function displayLogoutHistory(logs) {
+    const content = document.getElementById('logoutHistoryContent');
+
+    if (!logs || logs.length === 0) {
+        content.innerHTML = '<div class="alert alert-info">Chưa có lịch sử logout nào.</div>';
+        return;
+    }
+
+    let html = '<div class="table-responsive"><table class="table table-sm">';
+    html += '<thead><tr>';
+    html += '<th>Thời gian</th>';
+    html += '<th>Người thực hiện</th>';
+    html += '<th>Lý do</th>';
+    html += '<th>Khách hàng ảnh hưởng</th>';
+    html += '<th>Ghi chú</th>';
+    html += '</tr></thead><tbody>';
+
+    logs.forEach(log => {
+        const logoutDate = new Date(log.logout_at).toLocaleString('vi-VN');
+        html += '<tr>';
+        html += `<td><small>${logoutDate}</small></td>`;
+        html += `<td>${log.performed_by}</td>`;
+        html += `<td>${log.reason || 'N/A'}</td>`;
+        html += `<td><span class="badge bg-info">${log.affected_count} người</span></td>`;
+        html += `<td><small>${log.notes || 'N/A'}</small></td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
 </script>
+
+<!-- Logout History Modal -->
+<div class="modal fade" id="logoutHistoryModal" tabindex="-1" aria-labelledby="logoutHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logoutHistoryModalLabel">
+                    <i class="fas fa-history me-2"></i>
+                    Lịch sử Logout All Devices
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="logoutHistoryContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Đang tải lịch sử...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection

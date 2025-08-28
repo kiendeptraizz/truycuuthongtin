@@ -3,6 +3,42 @@
    Clean, fast, and responsive design
    ======================================== */
 
+/* Family Account Member Count Styles */
+.quick-select-btn.active,
+.quick-select-max-btn.active {
+    background-color: #0d6efd !important;
+    color: white !important;
+    border-color: #0d6efd !important;
+}
+
+.quick-select-btn:hover,
+.quick-select-max-btn:hover {
+    background-color: #0b5ed7;
+    color: white;
+    border-color: #0a58ca;
+}
+
+#member-count-warning {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.input-group .form-control:focus + .input-group-text {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Member count validation styles */
+.form-control.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+.btn-group-sm .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
 /* CSS Variables */
 :root {
     --primary: #667eea;
@@ -585,5 +621,244 @@ body {
     .card {
         box-shadow: none !important;
         border: 1px solid var(--gray-300) !important;
+    }
+}
+
+/* Advanced Analytics Styles */
+.analysis-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.analysis-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.analysis-card.bg-gradient-success {
+    background: linear-gradient(
+        135deg,
+        rgba(16, 185, 129, 0.1) 0%,
+        rgba(5, 150, 105, 0.05) 100%
+    );
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.analysis-card.bg-gradient-warning {
+    background: linear-gradient(
+        135deg,
+        rgba(245, 158, 11, 0.1) 0%,
+        rgba(217, 119, 6, 0.05) 100%
+    );
+    border-color: rgba(245, 158, 11, 0.2);
+}
+
+.analysis-card.bg-gradient-info {
+    background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.1) 0%,
+        rgba(37, 99, 235, 0.05) 100%
+    );
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+.analysis-card.bg-gradient-primary {
+    background: linear-gradient(
+        135deg,
+        rgba(102, 126, 234, 0.1) 0%,
+        rgba(90, 103, 216, 0.05) 100%
+    );
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
+.analysis-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    color: var(--gray-600);
+}
+
+.analysis-header i {
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+}
+
+.analysis-header h6 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.analysis-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin-bottom: 1rem;
+}
+
+.analysis-details .detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.analysis-details .detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+.detail-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+/* Top Packages Styles */
+.top-package-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.top-package-item:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: var(--primary);
+    transform: translateX(2px);
+}
+
+.top-package-item:last-child {
+    margin-bottom: 0;
+}
+
+.rank-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.rank-1 {
+    background: linear-gradient(135deg, #ffd700, #ffed4a);
+    color: #92400e;
+}
+
+.rank-2 {
+    background: linear-gradient(135deg, #c0c0c0, #e5e7eb);
+    color: #374151;
+}
+
+.rank-3 {
+    background: linear-gradient(135deg, #cd7f32, #92400e);
+    color: #ffffff;
+}
+
+.rank-4,
+.rank-5 {
+    background: linear-gradient(135deg, var(--gray-200), var(--gray-300));
+    color: var(--gray-600);
+}
+
+.package-details {
+    min-width: 0;
+}
+
+.package-name {
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.package-stats {
+    display: flex;
+    gap: 1rem;
+}
+
+.stat-item {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+}
+
+.profit-percentage {
+    margin-left: 1rem;
+}
+
+.percentage-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.profit-positive {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.profit-negative {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+
+.progress-xs {
+    height: 4px;
+}
+
+/* Enhanced Money Display */
+.amount-info .amount-value {
+    font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.amount-info .amount-currency {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+/* Responsive Improvements */
+@media (max-width: 768px) {
+    .analysis-card {
+        margin-bottom: 1rem;
+    }
+
+    .analysis-amount {
+        font-size: 1.25rem;
+    }
+
+    .package-stats {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .profit-percentage {
+        margin-left: 0;
+        margin-top: 0.5rem;
     }
 }

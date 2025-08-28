@@ -182,9 +182,9 @@ class CustomerServiceController extends Controller
             'internal_notes' => 'nullable|string',
         ]);
 
-        CustomerService::create($request->all());
+        $customerService = CustomerService::create($request->all());
 
-        return redirect()->route('admin.customer-services.index')
+        return redirect(route('admin.customer-services.index') . '#service-' . $customerService->id)
             ->with('success', 'Dịch vụ đã được gán thành công!');
     }
 
@@ -248,7 +248,22 @@ class CustomerServiceController extends Controller
 
         $customerService->update($request->all());
 
-        return redirect()->route('admin.customer-services.index')
+        // Kiểm tra source parameter để xác định redirect về đâu
+        $source = $request->query('source');
+        $customerId = $request->query('customer_id');
+
+        if ($source === 'customer' && $customerId) {
+            // Nếu đến từ trang chi tiết khách hàng, redirect về trang đó
+            return redirect()->route('admin.customers.show', $customerId)
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
+        } elseif ($source === 'shared-account') {
+            // Nếu đến từ trang chi tiết tài khoản dùng chung, redirect về trang đó
+            return redirect()->route('admin.shared-accounts.show', urlencode($customerService->login_email))
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
+        }
+
+        // Mặc định redirect về trang danh sách dịch vụ với anchor
+        return redirect(route('admin.customer-services.index') . '#service-' . $customerService->id)
             ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
     }
 

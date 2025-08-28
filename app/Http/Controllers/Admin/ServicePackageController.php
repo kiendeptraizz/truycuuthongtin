@@ -71,13 +71,18 @@ class ServicePackageController extends Controller
             'name' => 'required|string|max:255',
             'account_type' => 'required|string|max:255',
             'default_duration_days' => 'required|integer|min:1',
-            'price' => 'required|numeric|min:0',
-            'cost_price' => 'nullable|numeric|min:0',
+            'price' => 'required|string',
+            'cost_price' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
 
-        ServicePackage::create($request->all());
+        // Parse currency inputs
+        $data = $request->all();
+        $data['price'] = parseCurrency($request->price);
+        $data['cost_price'] = $request->cost_price ? parseCurrency($request->cost_price) : null;
+
+        ServicePackage::create($data);
 
         return redirect()->route('admin.service-packages.index')
             ->with('success', 'Gói dịch vụ đã được tạo thành công!');
@@ -113,15 +118,20 @@ class ServicePackageController extends Controller
             'name' => 'required|string|max:255',
             'account_type' => 'required|string|max:255',
             'default_duration_days' => 'required|integer|min:1',
-            'price' => 'required|numeric|min:0',
-            'cost_price' => 'nullable|numeric|min:0',
+            'price' => 'required|string',
+            'cost_price' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
 
-        $servicePackage->update($request->all());
+        // Parse currency inputs
+        $data = $request->all();
+        $data['price'] = parseCurrency($request->price);
+        $data['cost_price'] = $request->cost_price ? parseCurrency($request->cost_price) : null;
 
-        return redirect()->route('admin.service-packages.index')
+        $servicePackage->update($data);
+
+        return redirect(route('admin.service-packages.index') . '#package-' . $servicePackage->id)
             ->with('success', 'Gói dịch vụ đã được cập nhật!');
     }
 
@@ -153,7 +163,7 @@ class ServicePackageController extends Controller
 
         $status = $servicePackage->is_active ? 'kích hoạt' : 'tạm dừng';
 
-        return redirect()->route('admin.service-packages.index')
+        return redirect(route('admin.service-packages.index') . '#package-' . $servicePackage->id)
             ->with('success', "Gói dịch vụ đã được {$status}!");
     }
 }

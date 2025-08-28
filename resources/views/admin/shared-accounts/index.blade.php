@@ -12,6 +12,8 @@
     .table th, .table td {
         white-space: nowrap;
         vertical-align: middle;
+        padding: 0.4rem 0.3rem; /* Giảm padding */
+        font-size: 0.85rem; /* Giảm font size */
     }
 
     .table th {
@@ -19,10 +21,94 @@
         top: 0;
         background-color: var(--bs-primary);
         z-index: 10;
+        font-size: 0.8rem;
+        font-weight: 600;
     }
 
-    @media (max-width: 768px) {
-        .d-none-md {
+    /* Sticky column styles for actions */
+    .sticky-action-column {
+        position: sticky !important;
+        left: 0 !important;
+        background: white !important;
+        z-index: 15 !important;
+        border-right: 2px solid #dee2e6 !important;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    }
+
+    .table thead .sticky-action-column {
+        background: var(--bs-primary) !important;
+        color: white !important;
+        font-weight: 600;
+    }
+
+    /* Action buttons optimization */
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 70px; /* Giảm từ 90px */
+    }
+
+    .action-buttons .btn-group {
+        width: 100%;
+    }
+
+    .action-buttons .btn {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.3rem;
+    }
+
+    /* Email truncation */
+    .email-truncate {
+        max-width: 140px; /* Giảm từ 200px */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    .email-truncate:hover {
+        overflow: visible;
+        white-space: normal;
+        word-break: break-all;
+        background-color: #f8f9fa;
+        padding: 0.2rem;
+        border-radius: 0.25rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 20;
+        position: relative;
+    }
+
+    /* Compact badges */
+    .badge-compact {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    /* Notes truncation */
+    .notes-compact {
+        max-width: 100px; /* Giảm từ 150px */
+        font-size: 0.75rem;
+    }
+
+    /* Hover effects */
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .table tbody tr:hover .sticky-action-column {
+        background-color: #f8f9fa !important;
+    }
+
+    /* Responsive breakpoints - ẩn nhiều cột hơn */
+    @media (max-width: 1400px) {
+        .d-none-xxl {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .d-none-xl {
             display: none !important;
         }
     }
@@ -33,10 +119,41 @@
         }
     }
 
-    @media (max-width: 1200px) {
-        .d-none-xl {
+    @media (max-width: 768px) {
+        .d-none-md {
             display: none !important;
         }
+
+        .sticky-action-column {
+            min-width: 60px !important;
+        }
+
+        .action-buttons .btn {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.25rem;
+        }
+
+        .email-truncate {
+            max-width: 120px;
+        }
+    }
+
+    /* Compact table styling */
+    .table-compact {
+        margin-bottom: 0;
+    }
+
+    .table-compact th,
+    .table-compact td {
+        border-width: 1px;
+        line-height: 1.2;
+    }
+
+    /* Status badges optimization */
+    .status-badge {
+        font-size: 0.65rem;
+        padding: 0.15rem 0.3rem;
+        border-radius: 0.25rem;
     }
 </style>
 @endsection
@@ -150,23 +267,24 @@
                         <!-- Responsive info alert -->
                         <div class="alert alert-info alert-sm d-lg-none mb-2">
                             <i class="fas fa-info-circle me-1"></i>
-                            <small>Một số cột (Ghi chú, Ngày hết hạn tài khoản, Hoạt động, Sắp hết, Bảo mật) được ẩn trên màn hình nhỏ. Xem trên màn hình lớn hơn để thấy đầy đủ thông tin.</small>
+                            <small>Giao diện đã được tối ưu cho màn hình nhỏ. Một số cột (Ghi chú, Hoạt động, Sắp hết, Bảo mật, Logout) được ẩn để cải thiện trải nghiệm xem.</small>
                         </div>
                         
-                        <table class="table table-hover table-sm">
+                        <table class="table table-hover table-sm table-compact">
                             <thead class="table-primary">
                                 <tr>
-                                    <th style="min-width: 200px;">Email tài khoản</th>
-                                    <th class="d-none-md" style="min-width: 150px;">Ghi chú</th>
-                                    <th class="d-none-lg" style="min-width: 120px;">Ngày hết hạn tài khoản</th>
-                                    <th style="min-width: 80px;">Tổng DV</th>
-                                    <th style="min-width: 80px;">Khách hàng</th>
-                                    <th class="d-none-lg" style="min-width: 80px;">Hoạt động</th>
-                                    <th style="min-width: 80px;">Hết hạn</th>
-                                    <th class="d-none-xl" style="min-width: 80px;">Sắp hết</th>
-                                    <th class="d-none-lg" style="min-width: 100px;">Bảo mật</th>
-                                    <th style="min-width: 100px;">Trạng thái</th>
-                                    <th style="min-width: 80px;">Thao tác</th>
+                                    <th class="sticky-action-column" style="min-width: 70px;">Thao tác</th>
+                                    <th style="min-width: 140px;">Email</th>
+                                    <th class="d-none-lg notes-compact" style="min-width: 60px;">Ghi chú</th>
+                                    <th class="d-none-xl" style="min-width: 90px;">Hết hạn TK</th>
+                                    <th style="min-width: 50px;">DV</th>
+                                    <th style="min-width: 50px;">KH</th>
+                                    <th class="d-none-xxl" style="min-width: 50px;">HĐ</th>
+                                    <th style="min-width: 50px;">HH</th>
+                                    <th class="d-none-lg" style="min-width: 50px;">SH</th>
+                                    <th class="d-none-xl" style="min-width: 70px;">Bảo mật</th>
+                                    <th class="d-none-lg" style="min-width: 80px;">Logout</th>
+                                    <th style="min-width: 80px;">Trạng thái</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -177,97 +295,120 @@
                                     $hasExpiring = $account->expiring_soon_count > 0;
                                     $rowClass = $isProblematic ? 'table-warning' : ($hasExpired ? 'table-danger' : ($hasExpiring ? 'table-warning' : ''));
                                 @endphp
-                                <tr class="{{ $rowClass }}">
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div>
-                                                <strong>{{ $account->login_email }}</strong>
-                                                @if($isProblematic)
-                                                    <br><small class="text-warning">
-                                                        <i class="fas fa-exclamation-triangle"></i>
-                                                        Nhiều khách hàng
-                                                    </small>
-                                                @endif
+                                <tr id="account-{{ md5($account->login_email) }}" class="{{ $rowClass }}">
+                                    <!-- Cột Thao tác - Di chuyển lên đầu và sticky -->
+                                    <td class="sticky-action-column">
+                                        <div class="action-buttons">
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ route('admin.shared-accounts.show', urlencode($account->login_email)) }}"
+                                                   class="btn btn-sm btn-outline-info"
+                                                   title="Xem chi tiết">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{{ route('admin.shared-accounts.edit', urlencode($account->login_email)) }}?source=index"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   title="Chỉnh sửa thông tin">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="d-none-md">
-                                        <div class="text-muted small">
-                                            @if(!empty($account->account_notes))
-                                                {{ Str::limit($account->account_notes, 50) }}
-                                            @elseif(!empty($account->shared_notes))
-                                                {{ Str::limit($account->shared_notes, 50) }}
-                                            @else
-                                                <em>Không có ghi chú</em>
+                                    <!-- Cột Email tài khoản - Tối ưu hóa -->
+                                    <td>
+                                        <div class="email-truncate" title="{{ $account->login_email }}">
+                                            <strong>{{ $account->login_email }}</strong>
+                                            @if($isProblematic)
+                                                <br><small class="text-warning">
+                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                    Nhiều KH
+                                                </small>
                                             @endif
                                         </div>
                                     </td>
-                                    <td class="d-none-lg">
+                                    <!-- Cột Ghi chú - Format ngắn gọn -->
+                                    <td class="d-none-lg notes-compact">
+                                        @php
+                                            // Sử dụng shared_account_notes đã được cập nhật
+                                            $fullNote = $account->account_notes ?: 'Chưa có ghi chú';
+                                            $shortId = $account->account_notes ?: 'TK??';
+                                        @endphp
+                                        <div class="text-muted" style="font-size: 0.7rem;" title="{{ $fullNote }}">
+                                            <strong>{{ $shortId }}</strong>
+                                        </div>
+                                    </td>
+                                    <!-- Cột Hết hạn TK -->
+                                    <td class="d-none-xl">
                                         @if($account->latest_expiry)
-                                            <div class="fw-semibold">{{ \Carbon\Carbon::parse($account->latest_expiry)->format('d/m/Y') }}</div>
+                                            <div style="font-size: 0.75rem;">{{ \Carbon\Carbon::parse($account->latest_expiry)->format('d/m') }}</div>
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">-</span>
                                         @endif
                                     </td>
+                                    <!-- Cột Tổng DV -->
                                     <td>
-                                        <span class="badge bg-primary">{{ $account->total_services }}</span>
+                                        <span class="badge bg-primary badge-compact">{{ $account->total_services }}</span>
                                     </td>
+                                    <!-- Cột Khách hàng -->
                                     <td>
-                                        <span class="badge {{ $account->unique_customers > 1 ? 'bg-warning' : 'bg-info' }}">
+                                        <span class="badge {{ $account->unique_customers > 1 ? 'bg-warning' : 'bg-info' }} badge-compact">
                                             {{ $account->unique_customers }}
                                         </span>
                                     </td>
-                                    <td class="d-none-lg">
-                                        <span class="badge bg-success">{{ $account->active_count }}</span>
+                                    <!-- Cột Hoạt động -->
+                                    <td class="d-none-xxl">
+                                        <span class="badge bg-success badge-compact">{{ $account->active_count }}</span>
                                     </td>
+                                    <!-- Cột Hết hạn -->
                                     <td>
                                         @if($account->expired_count > 0)
-                                            <span class="badge bg-danger">{{ $account->expired_count }}</span>
+                                            <span class="badge bg-danger badge-compact">{{ $account->expired_count }}</span>
                                         @else
-                                            <span class="text-muted">0</span>
+                                            <span class="text-muted" style="font-size: 0.75rem;">0</span>
                                         @endif
                                     </td>
-                                    <td class="d-none-xl">
-                                        @if($account->expiring_soon_count > 0)
-                                            <span class="badge bg-warning">{{ $account->expiring_soon_count }}</span>
-                                        @else
-                                            <span class="text-muted">0</span>
-                                        @endif
-                                    </td>
+                                    <!-- Cột Sắp hết -->
                                     <td class="d-none-lg">
-                                        <div class="d-flex flex-column gap-1">
+                                        @if($account->expiring_soon_count > 0)
+                                            <span class="badge bg-warning badge-compact">{{ $account->expiring_soon_count }}</span>
+                                        @else
+                                            <span class="text-muted" style="font-size: 0.75rem;">0</span>
+                                        @endif
+                                    </td>
+                                    <!-- Cột Bảo mật -->
+                                    <td class="d-none-xl">
+                                        <div class="d-flex flex-wrap gap-1">
                                             @if(!empty($account->shared_password))
-                                                <small class="badge bg-success">Mật khẩu</small>
+                                                <small class="badge bg-success" style="font-size: 0.6rem;">MK</small>
                                             @endif
                                             @if(!empty($account->two_factor_code))
-                                                <small class="badge bg-info">2FA</small>
+                                                <small class="badge bg-info" style="font-size: 0.6rem;">2FA</small>
                                             @endif
                                         </div>
                                     </td>
-                                    <td>
-                                        @if($hasExpired)
-                                            <span class="badge bg-danger">Có hết hạn</span>
-                                        @elseif($hasExpiring)
-                                            <span class="badge bg-warning">Sắp hết hạn</span>
-                                        @elseif($isProblematic)
-                                            <span class="badge bg-warning">Cần chú ý</span>
+                                    <!-- Cột Lịch sử Logout -->
+                                    <td class="d-none-lg">
+                                        @if($account->latest_logout_formatted)
+                                            <div style="font-size: 0.7rem;" title="Logout gần nhất: {{ $account->latest_logout_formatted }}">
+                                                <i class="fas fa-sign-out-alt text-muted me-1"></i>
+                                                {{ $account->latest_logout_at ? \Carbon\Carbon::parse($account->latest_logout_at)->format('d/m') : '-' }}
+                                            </div>
                                         @else
-                                            <span class="badge bg-success">Bình thường</span>
+                                            <span class="text-muted" style="font-size: 0.7rem;" title="Chưa có lịch sử logout">
+                                                <i class="fas fa-minus text-muted"></i>
+                                            </span>
                                         @endif
                                     </td>
+                                    <!-- Cột Trạng thái -->
                                     <td>
-                                        <div class="btn-group" role="group">
-                                            <a href="{{ route('admin.shared-accounts.show', urlencode($account->login_email)) }}" 
-                                               class="btn btn-sm btn-outline-info"
-                                               title="Xem chi tiết">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <a href="{{ route('admin.shared-accounts.edit', urlencode($account->login_email)) }}" 
-                                               class="btn btn-sm btn-outline-primary"
-                                               title="Chỉnh sửa thông tin">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                        </div>
+                                        @if($hasExpired)
+                                            <span class="badge bg-danger status-badge">Hết hạn</span>
+                                        @elseif($hasExpiring)
+                                            <span class="badge bg-warning status-badge">Sắp hết</span>
+                                        @elseif($isProblematic)
+                                            <span class="badge bg-warning status-badge">Cần chú ý</span>
+                                        @else
+                                            <span class="badge bg-success status-badge">OK</span>
+                                        @endif
                                     </td>
                                 </tr>
                                 @endforeach
@@ -294,4 +435,28 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Scroll to specific account if anchor is present in URL
+    if (window.location.hash) {
+        const targetElement = document.querySelector(window.location.hash);
+        if (targetElement) {
+            setTimeout(() => {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                // Add highlight effect
+                targetElement.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                    targetElement.style.backgroundColor = '';
+                }, 3000);
+            }, 100);
+        }
+    }
+});
+</script>
 @endsection

@@ -112,7 +112,7 @@
                         @if($package->category)
                             <small>({{ $package->category->name }})</small>
                         @endif
-                        - {{ number_format($package->price) }}đ
+                        - {{ formatPrice($package->price) }}
                         @if($package->default_duration_days)
                             / {{ $package->default_duration_days }} ngày
                         @endif
@@ -266,14 +266,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const selector = document.getElementById('{{ $id }}');
     if (selector) {
         // Add search functionality (optional enhancement)
+        // Only for single character keys that are not space or special keys
         selector.addEventListener('keydown', function(e) {
-            if (e.key.length === 1) {
+            if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
                 const searchTerm = e.key.toLowerCase();
                 const options = Array.from(this.options);
-                const matchingOption = options.find(option => 
-                    option.text.toLowerCase().includes(searchTerm) && option.value
+                const matchingOption = options.find(option =>
+                    option.text.toLowerCase().startsWith(searchTerm) && option.value
                 );
-                
+
                 if (matchingOption) {
                     this.value = matchingOption.value;
                     this.dispatchEvent(new Event('change'));

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerService;
 use App\Models\ServicePackage;
+use App\Models\SharedAccountLogoutLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Exception;
 
 class SharedAccountController extends Controller
 {
@@ -31,8 +33,8 @@ class SharedAccountController extends Controller
                 DB::raw('MAX(customer_services.login_password) as shared_password'),
                 DB::raw('MAX(customer_services.two_factor_code) as two_factor_code'),
                 DB::raw('MAX(customer_services.password_expires_at) as password_expires_at'),
-                DB::raw('MAX(customer_services.shared_account_notes) as shared_notes'),
-                DB::raw('MAX(customer_services.internal_notes) as account_notes'),
+                DB::raw('MAX(customer_services.shared_account_notes) as account_notes'),
+                DB::raw('MAX(customer_services.internal_notes) as internal_notes'),
                 DB::raw('COUNT(CASE WHEN customer_services.is_password_shared = 1 THEN 1 END) as shared_count')
             ])
             ->where('service_packages.account_type', 'Tài khoản dùng chung')
@@ -95,6 +97,25 @@ class SharedAccountController extends Controller
         // Lấy danh sách gói dịch vụ để filter
         $servicePackages = ServicePackage::orderBy('name')->get();
 
+        // Thêm thông tin logout history cho mỗi shared account
+        $sharedAccounts->getCollection()->transform(function ($account) {
+            try {
+                // Lấy logout log gần nhất cho email này
+                $latestLogout = SharedAccountLogoutLog::where('login_email', $account->login_email)
+                    ->orderBy('logout_at', 'desc')
+                    ->first();
+
+                $account->latest_logout_at = $latestLogout && $latestLogout->logout_at ? $latestLogout->logout_at : null;
+                $account->latest_logout_formatted = $account->latest_logout_at ? $account->latest_logout_at->format('d/m/Y H:i') : null;
+            } catch (Exception $e) {
+                // Nếu có lỗi, set null để tránh crash
+                $account->latest_logout_at = null;
+                $account->latest_logout_formatted = null;
+            }
+
+            return $account;
+        });
+
         return view('admin.shared-accounts.index', compact('sharedAccounts', 'stats', 'servicePackages'));
     }
 
@@ -116,6 +137,11 @@ class SharedAccountController extends Controller
                 ->with('error', 'Không tìm thấy dịch vụ nào với email này.');
         }
 
+        // Lấy logout history gần nhất cho email này
+        $latestLogout = SharedAccountLogoutLog::where('login_email', $email)
+            ->orderBy('logout_at', 'desc')
+            ->first();
+
         // Thống kê cho email này
         $stats = [
             'total_services' => $services->count(),
@@ -127,11 +153,11 @@ class SharedAccountController extends Controller
             'expiring_soon' => $services->filter(function ($service) {
                 return $service->expires_at &&
                     $service->expires_at->isFuture() &&
-                    $service->expires_at->diffInDays(now()) <= 7;
+                    $service->expires_at->diffInDays(now()) <= 5; // Thay đổi từ 7 thành 5 ngày
             })->count(),
         ];
 
-        return view('admin.shared-accounts.show', compact('services', 'email', 'stats'));
+        return view('admin.shared-accounts.show', compact('services', 'email', 'stats', 'latestLogout'));
     }
 
     /**
@@ -320,7 +346,129 @@ class SharedAccountController extends Controller
             $service->update($updateData);
         }
 
+        // Kiểm tra source parameter để xác định redirect về đâu
+        $source = $request->query('source');
+
+        if ($source === 'index') {
+            // Nếu đến từ trang danh sách, redirect về trang đó với anchor
+            return redirect(route('admin.shared-accounts.index') . '#account-' . md5($email))
+                ->with('success', 'Đã cập nhật thông tin tài khoản dùng chung thành công!');
+        } elseif ($source === 'customer-service') {
+            // Nếu đến từ customer-services, redirect về trang đó
+            return redirect()->route('admin.customer-services.index')
+                ->with('success', 'Đã cập nhật thông tin tài khoản dùng chung thành công!');
+        }
+
+        // Mặc định redirect về trang chi tiết tài khoản
         return redirect()->route('admin.shared-accounts.show', $email)
             ->with('success', 'Đã cập nhật thông tin tài khoản dùng chung thành công!');
+    }
+
+    /**
+     * Hiển thị form logout all devices
+     */
+    public function showLogoutForm($email)
+    {
+        $services = CustomerService::with(['customer', 'servicePackage'])
+            ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
+            ->where('customer_services.login_email', $email)
+            ->select('customer_services.*')
+            ->get();
+
+        if ($services->isEmpty()) {
+            return redirect()->route('admin.shared-accounts.index')
+                ->with('error', 'Không tìm thấy tài khoản dùng chung này.');
+        }
+
+        // Lấy thông tin khách hàng bị ảnh hưởng
+        $affectedCustomers = $services->map(function ($service) {
+            return [
+                'id' => $service->customer->id,
+                'name' => $service->customer->name,
+                'email' => $service->customer->email,
+                'phone' => $service->customer->phone,
+                'expires_at' => $service->expires_at,
+                'service_name' => $service->servicePackage->name,
+            ];
+        });
+
+        $servicePackageName = $services->first()->servicePackage->name;
+
+        return view('admin.shared-accounts.logout-form', compact('email', 'affectedCustomers', 'servicePackageName'));
+    }
+
+    /**
+     * Thực hiện logout all devices
+     */
+    public function logoutAllDevices(Request $request, $email)
+    {
+        $request->validate([
+            'reason' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:1000',
+            'confirm_logout' => 'required|accepted',
+        ], [
+            'confirm_logout.required' => 'Bạn phải xác nhận thực hiện logout.',
+            'confirm_logout.accepted' => 'Bạn phải xác nhận thực hiện logout.',
+        ]);
+
+        $services = CustomerService::with(['customer', 'servicePackage'])
+            ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
+            ->where('service_packages.account_type', 'Tài khoản dùng chung')
+            ->where('customer_services.login_email', $email)
+            ->select('customer_services.*')
+            ->get();
+
+        if ($services->isEmpty()) {
+            return redirect()->route('admin.shared-accounts.index')
+                ->with('error', 'Không tìm thấy tài khoản dùng chung này.');
+        }
+
+        // Chuẩn bị thông tin khách hàng bị ảnh hưởng
+        $affectedCustomers = $services->map(function ($service) {
+            return [
+                'id' => $service->customer->id,
+                'name' => $service->customer->name,
+                'email' => $service->customer->email,
+                'phone' => $service->customer->phone,
+                'expires_at' => $service->expires_at->format('Y-m-d H:i:s'),
+                'service_name' => $service->servicePackage->name,
+            ];
+        })->toArray();
+
+        $servicePackageName = $services->first()->servicePackage->name;
+
+        // Tạo log logout
+        SharedAccountLogoutLog::createLogoutLog(
+            $email,
+            $servicePackageName,
+            'Admin', // Có thể thay bằng session hoặc user info nếu có authentication
+            $request->reason,
+            $request->notes,
+            $affectedCustomers
+        );
+
+        return redirect()->route('admin.shared-accounts.show', $email)
+            ->with('success', 'Đã thực hiện logout all devices thành công! Thông tin đã được ghi lại.');
+    }
+
+    /**
+     * Lấy lịch sử logout logs
+     */
+    public function getLogoutLogs($email)
+    {
+        $logs = SharedAccountLogoutLog::forEmail($email)
+            ->orderBy('logout_at', 'desc')
+            ->paginate(10);
+
+        return response()->json([
+            'logs' => $logs->items(),
+            'pagination' => [
+                'current_page' => $logs->currentPage(),
+                'last_page' => $logs->lastPage(),
+                'per_page' => $logs->perPage(),
+                'total' => $logs->total(),
+            ]
+        ]);
     }
 }

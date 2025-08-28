@@ -20,14 +20,14 @@
                     @csrf
 
                     <div class="row">
-                        <div class="col-md-12 mb-3">
-                            <label for="service_package_id" class="form-label">
+                        <div class="col-md-12 mb-4">
+                            <label class="form-label">
                                 <i class="fas fa-box me-1"></i>
                                 Gói dịch vụ <span class="text-danger">*</span>
-                                <small class="text-muted ms-2">(Nhóm theo loại tài khoản)</small>
+                                <small class="text-muted ms-2">(Phân loại theo danh mục và loại tài khoản)</small>
                             </label>
 
-                            <x-service-package-selector
+                            <x-service-package-grid-selector
                                 :service-packages="$servicePackages"
                                 :account-type-priority="$accountTypePriority"
                                 name="service_package_id"
@@ -211,28 +211,42 @@
         const serviceSelection = document.getElementById('service-selection');
         const supplierServiceSelect = document.getElementById('supplier_service_id');
 
-        // Handle service package selection
+        // Handle service package selection (for grid selector)
         serviceSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption.value) {
-                const duration = parseInt(selectedOption.dataset.duration) || 30;
-                const activatedDate = new Date(activatedInput.value);
-                const expiresDate = new Date(activatedDate);
-                expiresDate.setDate(expiresDate.getDate() + duration);
+            if (this.value) {
+                // Find the selected package card to get duration
+                const selectedCard = document.querySelector(`[data-package-id="${this.value}"]`);
+                if (selectedCard) {
+                    // Try to get duration from the card's price text
+                    const priceText = selectedCard.querySelector('.package-price').textContent;
+                    const durationMatch = priceText.match(/(\d+)\s*ngày/);
+                    const duration = durationMatch ? parseInt(durationMatch[1]) : 30;
 
-                expiresInput.value = expiresDate.toISOString().split('T')[0];
+                    const activatedDate = new Date(activatedInput.value);
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + duration);
+
+                    expiresInput.value = expiresDate.toISOString().split('T')[0];
+                }
             }
         });
 
         activatedInput.addEventListener('change', function() {
-            const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
-            if (selectedOption.value) {
-                const duration = parseInt(selectedOption.dataset.duration) || 30;
-                const activatedDate = new Date(this.value);
-                const expiresDate = new Date(activatedDate);
-                expiresDate.setDate(expiresDate.getDate() + duration);
+            if (serviceSelect.value) {
+                // Find the selected package card to get duration
+                const selectedCard = document.querySelector(`[data-package-id="${serviceSelect.value}"]`);
+                if (selectedCard) {
+                    // Try to get duration from the card's price text
+                    const priceText = selectedCard.querySelector('.package-price').textContent;
+                    const durationMatch = priceText.match(/(\d+)\s*ngày/);
+                    const duration = durationMatch ? parseInt(durationMatch[1]) : 30;
 
-                expiresInput.value = expiresDate.toISOString().split('T')[0];
+                    const activatedDate = new Date(this.value);
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + duration);
+
+                    expiresInput.value = expiresDate.toISOString().split('T')[0];
+                }
             }
         });
 

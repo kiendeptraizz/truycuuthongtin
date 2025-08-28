@@ -1,7 +1,6 @@
 @extends('layouts.admin')
 
 @section('title', 'Tạo Family Account')
-@section('page-title', 'Tạo Family Account')
 
 @section('content')
 <div class="container-fluid">
@@ -79,15 +78,13 @@
                                        id="owner_email" 
                                        name="owner_email" 
                                        value="{{ old('owner_email') }}" 
-                                       placeholder="owner@example.com"
+                                       placeholder="email@example.com"
                                        required>
                                 @error('owner_email')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                                 <small class="form-text text-muted">Email đăng nhập chính của family account</small>
                             </div>
-
-
 
                             <!-- Owner Name -->
                             <div class="col-md-6 mb-3">
@@ -100,11 +97,10 @@
                                        id="owner_name" 
                                        name="owner_name" 
                                        value="{{ old('owner_name') }}" 
-                                       placeholder="Nguyễn Văn A">
+                                       placeholder="Tên đầy đủ của chủ gia đình">
                                 @error('owner_name')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="form-text text-muted">Tên thật của chủ gia đình</small>
                             </div>
 
                             <!-- Max Members -->
@@ -113,66 +109,42 @@
                                     <i class="fas fa-users me-1"></i>
                                     Số Thành Viên Tối Đa <span class="text-danger">*</span>
                                 </label>
-                                <select class="form-select @error('max_members') is-invalid @enderror" 
-                                        id="max_members" 
-                                        name="max_members" 
-                                        required>
-                                    <option value="">Chọn số thành viên</option>
-                                    @for($i = 2; $i <= 10; $i++)
-                                        <option value="{{ $i }}" {{ old('max_members') == $i ? 'selected' : '' }}>
-                                            {{ $i }} thành viên
-                                        </option>
-                                    @endfor
-                                    @for($i = 15; $i <= 20; $i += 5)
-                                        <option value="{{ $i }}" {{ old('max_members') == $i ? 'selected' : '' }}>
-                                            {{ $i }} thành viên
-                                        </option>
-                                    @endfor
-                                </select>
+                                <input type="number" 
+                                       class="form-control @error('max_members') is-invalid @enderror" 
+                                       id="max_members" 
+                                       name="max_members" 
+                                       value="{{ old('max_members', 5) }}" 
+                                       min="1" 
+                                       max="20"
+                                       required>
                                 @error('max_members')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="form-text text-muted">Số lượng thành viên tối đa cho phép trong family</small>
-                            </div>
-
-                            <!-- Activated At -->
-                            <div class="col-md-6 mb-3">
-                                <label for="activated_at" class="form-label">
-                                    <i class="fas fa-calendar-check me-1"></i>
-                                    Ngày Kích Hoạt <span class="text-danger">*</span>
-                                </label>
-                                <input type="datetime-local" 
-                                       class="form-control @error('activated_at') is-invalid @enderror" 
-                                       id="activated_at" 
-                                       name="activated_at" 
-                                       value="{{ old('activated_at', now()->format('Y-m-d\TH:i')) }}" 
-                                       required>
-                                @error('activated_at')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
+                                <small class="form-text text-muted">Từ 1 đến 20 thành viên</small>
                             </div>
 
                             <!-- Expires At -->
                             <div class="col-md-6 mb-3">
                                 <label for="expires_at" class="form-label">
-                                    <i class="fas fa-calendar-times me-1"></i>
+                                    <i class="fas fa-calendar me-1"></i>
                                     Ngày Hết Hạn <span class="text-danger">*</span>
                                 </label>
-                                <input type="datetime-local" 
+                                <input type="date" 
                                        class="form-control @error('expires_at') is-invalid @enderror" 
                                        id="expires_at" 
                                        name="expires_at" 
-                                       value="{{ old('expires_at', now()->addMonth()->format('Y-m-d\TH:i')) }}" 
+                                       value="{{ old('expires_at', now()->addDays(30)->format('Y-m-d')) }}"
+                                       min="{{ now()->addDay()->format('Y-m-d') }}"
                                        required>
                                 @error('expires_at')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                        </div>
 
-
-
-                            <!-- Family Notes -->
-                            <div class="col-md-12 mb-3">
+                        <!-- Notes Section -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
                                 <label for="family_notes" class="form-label">
                                     <i class="fas fa-sticky-note me-1"></i>
                                     Ghi Chú Family
@@ -180,29 +152,28 @@
                                 <textarea class="form-control @error('family_notes') is-invalid @enderror" 
                                           id="family_notes" 
                                           name="family_notes" 
-                                          rows="3" 
-                                          placeholder="Ghi chú về family account này...">{{ old('family_notes') }}</textarea>
+                                          rows="3"
+                                          placeholder="Ghi chú dành cho family và thành viên...">{{ old('family_notes') }}</textarea>
                                 @error('family_notes')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="form-text text-muted">Thông tin bổ sung về family account</small>
+                                <small class="form-text text-muted">Ghi chú hiển thị cho thành viên family</small>
                             </div>
 
-                            <!-- Internal Notes -->
-                            <div class="col-md-12 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label for="internal_notes" class="form-label">
-                                    <i class="fas fa-eye-slash me-1"></i>
+                                    <i class="fas fa-lock me-1"></i>
                                     Ghi Chú Nội Bộ
                                 </label>
                                 <textarea class="form-control @error('internal_notes') is-invalid @enderror" 
                                           id="internal_notes" 
                                           name="internal_notes" 
-                                          rows="3" 
-                                          placeholder="Ghi chú nội bộ (chỉ admin thấy)...">{{ old('internal_notes') }}</textarea>
+                                          rows="3"
+                                          placeholder="Ghi chú nội bộ dành cho admin...">{{ old('internal_notes') }}</textarea>
                                 @error('internal_notes')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="form-text text-muted">Ghi chú chỉ dành cho admin</small>
+                                <small class="form-text text-muted">Ghi chú chỉ admin có thể xem</small>
                             </div>
                         </div>
 
@@ -227,28 +198,38 @@
         </div>
     </div>
 </div>
-@endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const serviceSelect = document.getElementById('service_package_id');
-    const activatedInput = document.getElementById('activated_at');
-    const expiresInput = document.getElementById('expires_at');
-
+    // Auto-generate family name based on owner email
+    const ownerEmailInput = document.getElementById('owner_email');
+    const familyNameInput = document.getElementById('family_name');
     
-    // Auto-calculate expires_at based on activated_at
-    activatedInput.addEventListener('change', function() {
-        if (this.value) {
-            const activatedDate = new Date(this.value);
-            const expiresDate = new Date(activatedDate);
-            expiresDate.setMonth(expiresDate.getMonth() + 1);
-            
-            expiresInput.value = expiresDate.toISOString().slice(0, 16);
+    ownerEmailInput.addEventListener('blur', function() {
+        if (!familyNameInput.value && this.value) {
+            const emailPrefix = this.value.split('@')[0];
+            const capitalizedPrefix = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+            familyNameInput.value = `Family ${capitalizedPrefix}`;
         }
     });
-    
 
+    // Auto-calculate expiry date based on service package selection
+    const servicePackageSelect = document.getElementById('service_package_id');
+    const expiresAtInput = document.getElementById('expires_at');
+    
+    servicePackageSelect.addEventListener('change', function() {
+        if (this.value) {
+            // Get selected option's data attributes if available
+            const selectedOption = this.options[this.selectedIndex];
+            const duration = selectedOption.dataset.duration || 30; // Default 30 days
+            
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + parseInt(duration));
+            expiresAtInput.value = futureDate.toISOString().split('T')[0];
+        }
+    });
 });
 </script>
 @endpush
+@endsection

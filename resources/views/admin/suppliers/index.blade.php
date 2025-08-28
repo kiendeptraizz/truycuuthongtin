@@ -265,7 +265,7 @@
                                 </td>
                                 <td class="py-3">
                                     <div class="fw-bold text-success">
-                                        {{ number_format($supplier->total_value, 0, '.', ',') }} VND
+                                        {{ formatCurrency($supplier->total_value) }}
                                     </div>
                                 </td>
                                 <td class="py-3">

@@ -3,6 +3,79 @@
 @section('title', 'Quản lý dịch vụ khách hàng')
 @section('page-title', 'Quản lý dịch vụ khách hàng')
 
+@section('styles')
+<style>
+/* Sticky column styles */
+.sticky-column {
+    position: sticky !important;
+    left: 0 !important;
+    background: white !important;
+    z-index: 10 !important;
+    border-right: 2px solid #dee2e6 !important;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.table thead .sticky-column {
+    background: #f8f9fa !important;
+    font-weight: 600;
+}
+
+/* Responsive table improvements */
+.table-responsive {
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.table {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+    position: relative;
+}
+
+.table td {
+    vertical-align: middle;
+    border-color: #e9ecef;
+}
+
+/* Action buttons optimization */
+.btn-group-vertical .btn-group {
+    margin-bottom: 2px;
+}
+
+.btn-group-vertical .btn-group:last-child {
+    margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sticky-column {
+        min-width: 80px !important;
+    }
+
+    .btn-group-vertical .btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Hover effects */
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.table tbody tr:hover .sticky-column {
+    background-color: #f8f9fa !important;
+}
+</style>
+@endsection
+
 @section('content')
 <div class="row">
     <div class="col-12">
@@ -210,18 +283,18 @@
                 <!-- Customer Services Table -->
                 @if($customerServices->count() > 0)
                     <div class="table-responsive">
-                        <table class="table">
-                            <thead>
+                        <table class="table table-hover">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Khách hàng</th>
-                                    <th>Dịch vụ</th>
-                                    <th>Email đăng nhập</th>
-                                    <th>Kích hoạt</th>
-                                    <th>Hết hạn</th>
-                                    <th>Trạng thái</th>
-                                    <th>Nhắc nhở</th>
-                                    <th>Người nhập hàng</th>
-                                    <th>Thao tác</th>
+                                    <th class="sticky-column" style="position: sticky; left: 0; background: #f8f9fa; z-index: 10; min-width: 120px;">Thao tác</th>
+                                    <th style="min-width: 150px;">Khách hàng</th>
+                                    <th style="min-width: 180px;">Dịch vụ</th>
+                                    <th style="min-width: 200px;">Email đăng nhập</th>
+                                    <th style="min-width: 100px;">Kích hoạt</th>
+                                    <th style="min-width: 100px;">Hết hạn</th>
+                                    <th style="min-width: 100px;">Trạng thái</th>
+                                    <th style="min-width: 120px;">Nhắc nhở</th>
+                                    <th style="min-width: 120px;">Người nhập</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -229,14 +302,13 @@
                                     @php
                                         // Tính toán trạng thái theo logic mới
                                         $daysRemaining = $service->getDaysRemaining();
-                                        $daysUntilExpiry = $service->expires_at ? now()->diffInDays($service->expires_at, false) : null;
 
                                         // Xác định trạng thái
                                         if (!$service->expires_at) {
                                             $status = 'active'; // Không giới hạn thời gian
-                                        } elseif ($service->expires_at->isPast()) {
+                                        } elseif ($service->expires_at->startOfDay()->isPast()) {
                                             $status = 'expired'; // Đã hết hạn
-                                        } elseif ($daysUntilExpiry !== null && $daysUntilExpiry <= 5) {
+                                        } elseif ($service->isExpiringSoon()) {
                                             $status = 'expiring'; // Sắp hết hạn (5 ngày)
                                         } else {
                                             $status = 'active'; // Đang hoạt động bình thường
@@ -251,7 +323,72 @@
                                             }
                                         }
                                     @endphp
-                                    <tr class="{{ $rowClass }}">
+                                    <tr id="service-{{ $service->id }}" class="{{ $rowClass }}">
+                                        <!-- Cột Thao tác - Di chuyển lên đầu và sticky -->
+                                        <td class="sticky-column" style="position: sticky; left: 0; background: white; z-index: 5; border-right: 1px solid #dee2e6;">
+                                            <div class="btn-group-vertical d-flex flex-column gap-1" style="min-width: 100px;">
+                                                <div class="btn-group">
+                                                    <a href="{{ route('admin.customer-services.show', $service) }}"
+                                                       class="btn btn-sm btn-outline-info"
+                                                       title="Xem chi tiết">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <a href="{{ route('admin.customer-services.edit', $service) }}"
+                                                       class="btn btn-sm btn-outline-primary"
+                                                       title="Chỉnh sửa">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                </div>
+
+                                                @php
+                                                    $isExpiringSoon = $service->isExpiringSoon();
+                                                    $isExpired = $service->expires_at && $service->expires_at->startOfDay()->isPast();
+                                                @endphp
+
+                                                <div class="btn-group">
+                                                    @if($isExpiringSoon)
+                                                        @if(!$service->reminder_sent || $service->needsReminderAgain())
+                                                            <button class="btn btn-sm btn-outline-warning"
+                                                                    onclick="markReminded({{ $service->id }})"
+                                                                    title="Đánh dấu đã nhắc nhở">
+                                                                <i class="fas fa-bell"></i>
+                                                            </button>
+                                                        @endif
+
+                                                        @if($service->reminder_sent)
+                                                            <button class="btn btn-sm btn-outline-secondary"
+                                                                    onclick="resetReminder({{ $service->id }})"
+                                                                    title="Reset trạng thái nhắc nhở">
+                                                                <i class="fas fa-undo"></i>
+                                                            </button>
+                                                        @endif
+                                                    @elseif($isExpired)
+                                                        @if(!$service->reminder_sent || $service->needsReminderAgain())
+                                                            <button class="btn btn-sm btn-outline-danger"
+                                                                    onclick="markReminded({{ $service->id }})"
+                                                                    title="Đánh dấu đã nhắc nhở (Đã hết hạn)">
+                                                                <i class="fas fa-bell-slash"></i>
+                                                            </button>
+                                                        @endif
+
+                                                        @if($service->reminder_sent)
+                                                            <button class="btn btn-sm btn-outline-secondary"
+                                                                    onclick="resetReminder({{ $service->id }})"
+                                                                    title="Reset trạng thái nhắc nhở">
+                                                                <i class="fas fa-undo"></i>
+                                                            </button>
+                                                        @endif
+                                                    @endif
+
+                                                    <button class="btn btn-sm btn-outline-danger"
+                                                            onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')"
+                                                            title="Xóa">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <!-- Cột Khách hàng -->
                                         <td>
                                             <div>
                                                 <strong>{{ $service->customer->name }}</strong>
@@ -324,65 +461,12 @@
                                                 @endif
                                             @endif
                                         </td>
+                                        <!-- Cột Người nhập -->
                                         <td>
-                                            <div class="btn-group">
-                                                <a href="{{ route('admin.customer-services.show', $service) }}" 
-                                                   class="btn btn-sm btn-outline-info"
-                                                   title="Xem chi tiết">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                                <a href="{{ route('admin.customer-services.edit', $service) }}" 
-                                                   class="btn btn-sm btn-outline-primary"
-                                                   title="Chỉnh sửa">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                
-                                                @php
-                                                    $daysUntilExpiry = $service->expires_at ? now()->diffInDays($service->expires_at, false) : null;
-                                                    $isExpiringSoon = $daysUntilExpiry !== null && $daysUntilExpiry >= 0 && $daysUntilExpiry <= 5;
-                                                    $isExpired = $service->expires_at && $service->expires_at->isPast();
-                                                @endphp
-
-                                                @if($isExpiringSoon)
-                                                    @if(!$service->reminder_sent || $service->needsReminderAgain())
-                                                        <button class="btn btn-sm btn-outline-warning"
-                                                                onclick="markReminded({{ $service->id }})"
-                                                                title="Đánh dấu đã nhắc nhở">
-                                                            <i class="fas fa-bell"></i>
-                                                        </button>
-                                                    @endif
-
-                                                    @if($service->reminder_sent)
-                                                        <button class="btn btn-sm btn-outline-secondary"
-                                                                onclick="resetReminder({{ $service->id }})"
-                                                                title="Reset trạng thái nhắc nhở">
-                                                            <i class="fas fa-undo"></i>
-                                                        </button>
-                                                    @endif
-                                                @elseif($isExpired)
-                                                    @if(!$service->reminder_sent || $service->needsReminderAgain())
-                                                        <button class="btn btn-sm btn-outline-danger"
-                                                                onclick="markReminded({{ $service->id }})"
-                                                                title="Đánh dấu đã nhắc nhở (Đã hết hạn)">
-                                                            <i class="fas fa-bell-slash"></i>
-                                                        </button>
-                                                    @endif
-
-                                                    @if($service->reminder_sent)
-                                                        <button class="btn btn-sm btn-outline-secondary"
-                                                                onclick="resetReminder({{ $service->id }})"
-                                                                title="Reset trạng thái nhắc nhở">
-                                                            <i class="fas fa-undo"></i>
-                                                        </button>
-                                                    @endif
-                                                @endif
-                                                
-                                                <button class="btn btn-sm btn-outline-danger" 
-                                                        onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')"
-                                                        title="Xóa">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
+                                            <small class="text-muted">
+                                                {{ $service->created_by ? $service->createdBy->name : 'N/A' }}
+                                                <br>{{ $service->created_at->format('d/m/Y') }}
+                                            </small>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -500,5 +584,25 @@ function resetReminder(serviceId) {
         alert('Có lỗi xảy ra!');
     });
 }
+
+// Scroll to specific service if anchor is present in URL
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.hash) {
+        const targetElement = document.querySelector(window.location.hash);
+        if (targetElement) {
+            setTimeout(() => {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                // Add highlight effect
+                targetElement.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                    targetElement.style.backgroundColor = '';
+                }, 3000);
+            }, 100);
+        }
+    }
+});
 </script>
 @endsection

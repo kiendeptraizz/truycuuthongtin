@@ -4,31 +4,24 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\FamilyAccount;
+use App\Models\ServicePackage;
 use App\Models\FamilyMember;
 use App\Models\Customer;
-use App\Models\ServicePackage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class FamilyAccountController extends Controller
 {
     /**
-     * Display a listing of family accounts
+     * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $query = FamilyAccount::with(['servicePackage', 'activeMembers', 'createdBy', 'managedBy']);
+        $query = FamilyAccount::with(['servicePackage', 'members']);
 
-        // Filters
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('service_package_id')) {
-            $query->where('service_package_id', $request->service_package_id);
-        }
-
+        // Search filters
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -39,51 +32,51 @@ class FamilyAccountController extends Controller
             });
         }
 
-        if ($request->filled('expiring_soon')) {
-            $query->expiringSoon($request->expiring_soon ?: 7);
+        // Status filter
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
         }
 
-        // Sorting
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
-        $query->orderBy($sortBy, $sortOrder);
+        // Service package filter
+        if ($request->filled('service_package_id')) {
+            $query->where('service_package_id', $request->service_package_id);
+        }
 
-        $familyAccounts = $query->paginate(15)->withQueryString();
+        $familyAccounts = $query->latest()->paginate(15)->withQueryString();
 
         // Get service packages for filter
         $servicePackages = ServicePackage::where('account_type', 'Tài khoản add family')
+            ->orWhere('account_type', 'like', '%family%')
             ->active()
             ->orderBy('name')
             ->get();
 
         // Statistics
         $stats = [
-            'total_families' => FamilyAccount::count(),
-            'active_families' => FamilyAccount::where('status', 'active')->count(),
-            'expiring_soon' => FamilyAccount::expiringSoon()->count(),
-            'total_members' => FamilyMember::where('status', 'active')->count(),
-            'avg_members_per_family' => FamilyAccount::active()->avg('current_members'),
-            'total_revenue' => FamilyAccount::sum('total_paid'),
+            'total' => FamilyAccount::count(),
+            'active' => FamilyAccount::where('status', 'active')->count(),
+            'expired' => FamilyAccount::where('status', 'expired')->count(),
+            'suspended' => FamilyAccount::where('status', 'suspended')->count(),
         ];
 
-        return view('admin.family-accounts.index', compact(
-            'familyAccounts',
-            'servicePackages',
-            'stats'
-        ));
+        return view('admin.family-accounts.index', compact('familyAccounts', 'servicePackages', 'stats'));
     }
 
     /**
-     * Show the form for creating a new family account
+     * Show the form for creating a new resource.
      */
     public function create()
     {
+        // Get family-type service packages
         $servicePackages = ServicePackage::with('category')
-            ->where('account_type', 'Tài khoản add family')
+            ->where(function ($query) {
+                $query->where('account_type', 'Tài khoản add family')
+                    ->orWhere('account_type', 'like', '%family%');
+            })
             ->active()
             ->get();
 
-        // Define account type priority for the selector
+        // Define account type priority
         $accountTypePriority = [
             'Tài khoản add family' => 1,
             'Tài khoản dùng chung' => 2,
@@ -101,7 +94,7 @@ class FamilyAccountController extends Controller
     }
 
     /**
-     * Store a newly created family account
+     * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
@@ -111,85 +104,66 @@ class FamilyAccountController extends Controller
             'owner_email' => 'required|email|max:255',
             'owner_name' => 'nullable|string|max:255',
             'max_members' => 'required|integer|min:1|max:20',
-            'activated_at' => 'required|date',
-            'expires_at' => 'required|date|after:activated_at',
+            'expires_at' => 'required|date|after:today',
             'family_notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
         ]);
 
-        // Verify service package is family type
-        $servicePackage = ServicePackage::findOrFail($request->service_package_id);
-        if ($servicePackage->account_type !== 'Tài khoản add family') {
-            return back()->withErrors(['service_package_id' => 'Gói dịch vụ phải là loại "Tài khoản add family"']);
+        DB::beginTransaction();
+        try {
+            $familyAccount = FamilyAccount::create([
+                'family_name' => $request->family_name,
+                'service_package_id' => $request->service_package_id,
+                'owner_email' => $request->owner_email,
+                'owner_name' => $request->owner_name,
+                'max_members' => $request->max_members,
+                'current_members' => 0,
+                'expires_at' => Carbon::parse($request->expires_at),
+                'status' => 'active',
+                'family_notes' => $request->family_notes,
+                'internal_notes' => $request->internal_notes,
+                'created_by' => 1, // TODO: Replace with actual admin ID when auth is implemented
+                'managed_by' => 1,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('success', 'Family Account đã được tạo thành công!');
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Có lỗi xảy ra khi tạo Family Account: ' . $e->getMessage());
         }
-
-        $familyAccount = FamilyAccount::create([
-            'family_name' => $request->family_name,
-            'service_package_id' => $request->service_package_id,
-            'owner_email' => $request->owner_email,
-            'owner_name' => $request->owner_name,
-            'max_members' => $request->max_members,
-            'activated_at' => $request->activated_at,
-            'expires_at' => $request->expires_at,
-            'family_notes' => $request->family_notes,
-            'internal_notes' => $request->internal_notes,
-            'created_by' => auth('admin')->id(),
-            'managed_by' => auth('admin')->id(),
-        ]);
-
-        return redirect()->route('admin.family-accounts.show', $familyAccount)
-            ->with('success', 'Family Account đã được tạo thành công!');
     }
 
     /**
-     * Display the specified family account
+     * Display the specified resource.
      */
     public function show(FamilyAccount $familyAccount)
     {
-        $familyAccount->load([
-            'servicePackage.category',
-            'members.customer',
-            'members.addedBy',
-            'members.removedBy',
-            'createdBy',
-            'managedBy'
-        ]);
+        $familyAccount->load(['servicePackage', 'members.customer']);
 
-        // Get members with different statuses
-        $activeMembers = $familyAccount->members()->active()->with('customer')->get();
-        $inactiveMembers = $familyAccount->members()->inactive()->with('customer')->get();
-        $removedMembers = $familyAccount->members()->removed()->with('customer')->get();
-
-        // Statistics for this family
-        $memberStats = [
-            'total_members' => $familyAccount->members()->count(),
-            'active_members' => $activeMembers->count(),
-            'inactive_members' => $inactiveMembers->count(),
-            'removed_members' => $removedMembers->count(),
-            'available_slots' => $familyAccount->available_slots,
-            'usage_percentage' => $familyAccount->usage_percentage,
-        ];
-
-        return view('admin.family-accounts.show', compact(
-            'familyAccount',
-            'activeMembers',
-            'inactiveMembers',
-            'removedMembers',
-            'memberStats'
-        ));
+        return view('admin.family-accounts.show', compact('familyAccount'));
     }
 
     /**
-     * Show the form for editing the specified family account
+     * Show the form for editing the specified resource.
      */
     public function edit(FamilyAccount $familyAccount)
     {
+        // Get family-type service packages
         $servicePackages = ServicePackage::with('category')
-            ->where('account_type', 'Tài khoản add family')
+            ->where(function ($query) {
+                $query->where('account_type', 'Tài khoản add family')
+                    ->orWhere('account_type', 'like', '%family%');
+            })
             ->active()
             ->get();
 
-        // Define account type priority for the selector
+        // Define account type priority
         $accountTypePriority = [
             'Tài khoản add family' => 1,
             'Tài khoản dùng chung' => 2,
@@ -207,7 +181,7 @@ class FamilyAccountController extends Controller
     }
 
     /**
-     * Update the specified family account
+     * Update the specified resource in storage.
      */
     public function update(Request $request, FamilyAccount $familyAccount)
     {
@@ -217,57 +191,69 @@ class FamilyAccountController extends Controller
             'owner_email' => 'required|email|max:255',
             'owner_name' => 'nullable|string|max:255',
             'max_members' => 'required|integer|min:1|max:20',
-            'activated_at' => 'required|date',
-            'expires_at' => 'required|date|after:activated_at',
-            'status' => ['required', Rule::in(['active', 'expired', 'suspended', 'cancelled'])],
+            'expires_at' => 'required|date',
+            'status' => 'required|in:active,expired,suspended,cancelled',
             'family_notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
         ]);
 
-        // Verify service package is family type
-        $servicePackage = ServicePackage::findOrFail($request->service_package_id);
-        if ($servicePackage->account_type !== 'Tài khoản add family') {
-            return back()->withErrors(['service_package_id' => 'Gói dịch vụ phải là loại "Tài khoản add family"']);
+        DB::beginTransaction();
+        try {
+            $familyAccount->update([
+                'family_name' => $request->family_name,
+                'service_package_id' => $request->service_package_id,
+                'owner_email' => $request->owner_email,
+                'owner_name' => $request->owner_name,
+                'max_members' => $request->max_members,
+                'expires_at' => Carbon::parse($request->expires_at),
+                'status' => $request->status,
+                'family_notes' => $request->family_notes,
+                'internal_notes' => $request->internal_notes,
+                'managed_by' => 1, // TODO: Replace with actual admin ID
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('success', 'Family Account đã được cập nhật thành công!');
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Có lỗi xảy ra khi cập nhật Family Account: ' . $e->getMessage());
         }
-
-        // Check if reducing max_members would exceed current members
-        if ($request->max_members < $familyAccount->current_members) {
-            return back()->withErrors(['max_members' => 'Không thể giảm số thành viên tối đa xuống dưới số thành viên hiện tại (' . $familyAccount->current_members . ')']);
-        }
-
-        $familyAccount->update([
-            'family_name' => $request->family_name,
-            'service_package_id' => $request->service_package_id,
-            'owner_email' => $request->owner_email,
-            'owner_name' => $request->owner_name,
-            'max_members' => $request->max_members,
-            'activated_at' => $request->activated_at,
-            'expires_at' => $request->expires_at,
-            'status' => $request->status,
-            'family_notes' => $request->family_notes,
-            'internal_notes' => $request->internal_notes,
-            'managed_by' => auth('admin')->id(),
-        ]);
-
-        return redirect()->route('admin.family-accounts.show', $familyAccount)
-            ->with('success', 'Family Account đã được cập nhật thành công!');
     }
 
     /**
-     * Remove the specified family account
+     * Remove the specified resource from storage.
      */
     public function destroy(FamilyAccount $familyAccount)
     {
-        // Check if family has active members
-        if ($familyAccount->activeMembers()->count() > 0) {
-            return back()->with('error', 'Không thể xóa Family Account có thành viên đang hoạt động. Vui lòng xóa tất cả thành viên trước.');
+        DB::beginTransaction();
+        try {
+            // Check if family has active members
+            if ($familyAccount->members()->where('status', 'active')->exists()) {
+                return redirect()->route('admin.family-accounts.index')
+                    ->with('error', 'Không thể xóa Family Account còn có thành viên đang hoạt động!');
+            }
+
+            // Delete all family members first
+            $familyAccount->members()->delete();
+
+            // Delete family account
+            $familyAccount->delete();
+
+            DB::commit();
+
+            return redirect()->route('admin.family-accounts.index')
+                ->with('success', 'Family Account đã được xóa thành công!');
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            return redirect()->route('admin.family-accounts.index')
+                ->with('error', 'Có lỗi xảy ra khi xóa Family Account: ' . $e->getMessage());
         }
-
-        $familyName = $familyAccount->family_name;
-        $familyAccount->delete();
-
-        return redirect()->route('admin.family-accounts.index')
-            ->with('success', "Family Account '{$familyName}' đã được xóa thành công!");
     }
 
     /**
@@ -275,17 +261,21 @@ class FamilyAccountController extends Controller
      */
     public function addMemberForm(FamilyAccount $familyAccount)
     {
-        if (!$familyAccount->canAddMember()) {
-            return back()->with('error', 'Không thể thêm thành viên: Family đã đầy hoặc không hoạt động.');
+        // Check if family is full
+        if ($familyAccount->current_members >= $familyAccount->max_members) {
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('error', 'Family Account đã đầy. Không thể thêm thành viên mới!');
         }
 
-        // Get customers not already in this family
-        $existingCustomerIds = $familyAccount->members()->pluck('customer_id')->toArray();
-        $availableCustomers = Customer::whereNotIn('id', $existingCustomerIds)
-            ->orderBy('name')
-            ->get();
+        // Get available customers (not already in any active family)
+        $customers = Customer::whereDoesntHave('familyMemberships', function ($query) {
+            $query->where('status', 'active');
+        })->orderBy('name')->get();
 
-        return view('admin.family-accounts.add-member', compact('familyAccount', 'availableCustomers'));
+        // Load service package information
+        $familyAccount->load('servicePackage');
+
+        return view('admin.family-accounts.add-member', compact('familyAccount', 'customers'));
     }
 
     /**
@@ -293,152 +283,223 @@ class FamilyAccountController extends Controller
      */
     public function addMember(Request $request, FamilyAccount $familyAccount)
     {
-        $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'member_email' => 'nullable|email|max:255',
-            'member_role' => 'required|in:member,admin',
+        // Validate based on member type (existing or new)
+        $rules = [
+            'member_type' => 'required|in:existing,new',
+            'member_email' => 'required|email|max:255',
+            'start_date' => 'required|date|after_or_equal:today',
             'member_notes' => 'nullable|string',
-        ]);
+        ];
 
-        if (!$familyAccount->canAddMember()) {
-            return back()->with('error', 'Không thể thêm thành viên: Family đã đầy hoặc không hoạt động.');
+        if ($request->member_type === 'existing') {
+            $rules['customer_id'] = 'required|exists:customers,id';
+        } else {
+            $rules['customer_name'] = 'required|string|max:255';
+            $rules['customer_phone'] = 'nullable|string|max:20';
         }
 
-        $customer = Customer::findOrFail($request->customer_id);
-
-        // Check if customer is already in this family
-        if ($familyAccount->members()->where('customer_id', $customer->id)->exists()) {
-            return back()->with('error', 'Khách hàng này đã là thành viên của family.');
+        // Calculate end_date based on service package if not provided
+        if (!$request->end_date && $familyAccount->servicePackage) {
+            $duration = $familyAccount->servicePackage->duration_months ?? 1;
+            $calculatedEndDate = Carbon::parse($request->start_date)->addMonths($duration);
+        } else {
+            $rules['end_date'] = 'required|date|after:start_date';
+            $calculatedEndDate = Carbon::parse($request->end_date);
         }
 
-        // Check if customer is in another active family
-        $existingMembership = FamilyMember::where('customer_id', $customer->id)
-            ->where('status', 'active')
-            ->whereHas('familyAccount', function ($q) {
-                $q->where('status', 'active');
-            })
-            ->first();
+        $request->validate($rules);
 
-        if ($existingMembership) {
-            return back()->with('error', 'Khách hàng này đã là thành viên của family khác: ' . $existingMembership->familyAccount->family_name);
+        // Check if family is full
+        if ($familyAccount->current_members >= $familyAccount->max_members) {
+            return redirect()->back()
+                ->with('error', 'Family Account đã đầy. Không thể thêm thành viên mới!');
         }
 
+        DB::beginTransaction();
         try {
-            $familyAccount->addMember($customer, [
-                'member_email' => $request->member_email ?: $customer->email,
-                'member_role' => $request->member_role,
+            $customerId = null;
+
+            if ($request->member_type === 'existing') {
+                $customerId = $request->customer_id;
+
+                // Check if customer is already in an active family
+                $existingMembership = FamilyMember::where('customer_id', $customerId)
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($existingMembership) {
+                    return redirect()->back()
+                        ->with('error', 'Khách hàng này đã là thành viên của một Family Account khác!');
+                }
+            } else {
+                // Create new customer
+                $customerCode = $this->generateCustomerCode();
+
+                $customer = Customer::create([
+                    'name' => $request->customer_name,
+                    'email' => $request->member_email,
+                    'phone' => $request->customer_phone,
+                    'customer_code' => $customerCode,
+                    'status' => 'active',
+                    'created_at' => now(),
+                ]);
+
+                $customerId = $customer->id;
+            }
+
+            // Add member
+            FamilyMember::create([
+                'family_account_id' => $familyAccount->id,
+                'customer_id' => $customerId,
+                'member_name' => $request->member_type === 'new' ? $request->customer_name : null,
+                'member_email' => $request->member_email,
+                'member_role' => 'member',
+                'status' => 'active',
                 'member_notes' => $request->member_notes,
+                'start_date' => Carbon::parse($request->start_date),
+                'end_date' => $calculatedEndDate,
+                'first_usage_at' => now(),
+                'added_by' => null, // Set to null for now
             ]);
 
+            // Update current members count
+            $familyAccount->increment('current_members');
+
+            DB::commit();
+
+            $message = $request->member_type === 'new'
+                ? 'Khách hàng mới và thành viên đã được tạo thành công!'
+                : 'Thành viên đã được thêm vào Family Account thành công!';
+
             return redirect()->route('admin.family-accounts.show', $familyAccount)
-                ->with('success', "Đã thêm {$customer->name} vào family thành công!");
+                ->with('success', $message);
         } catch (\Exception $e) {
-            return back()->with('error', 'Lỗi khi thêm thành viên: ' . $e->getMessage());
+            DB::rollback();
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Có lỗi xảy ra khi thêm thành viên: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Generate unique customer code
+     */
+    private function generateCustomerCode()
+    {
+        do {
+            $code = 'FAM' . str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
+        } while (Customer::where('customer_code', $code)->exists());
+
+        return $code;
     }
 
     /**
      * Remove member from family account
      */
-    public function removeMember(Request $request, FamilyAccount $familyAccount, FamilyMember $member)
+    public function removeMember(FamilyAccount $familyAccount, FamilyMember $member)
     {
-        $request->validate([
-            'reason' => 'nullable|string|max:500',
-        ]);
-
         if ($member->family_account_id !== $familyAccount->id) {
-            return back()->with('error', 'Thành viên không thuộc family này.');
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('error', 'Thành viên không thuộc Family Account này!');
         }
 
-        if ($member->status === 'removed') {
-            return back()->with('error', 'Thành viên đã được xóa trước đó.');
-        }
-
+        DB::beginTransaction();
         try {
-            $memberName = $member->member_name;
-            $familyAccount->removeMember($member, $request->reason);
+            // Update member status
+            $member->update([
+                'status' => 'removed',
+                'removed_at' => now(),
+                'removed_by' => 1, // TODO: Replace with actual admin ID
+            ]);
 
-            return back()->with('success', "Đã xóa {$memberName} khỏi family thành công!");
+            // Update current members count
+            $familyAccount->decrement('current_members');
+
+            DB::commit();
+
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('success', 'Thành viên đã được xóa khỏi Family Account thành công!');
         } catch (\Exception $e) {
-            return back()->with('error', 'Lỗi khi xóa thành viên: ' . $e->getMessage());
+            DB::rollback();
+
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('error', 'Có lỗi xảy ra khi xóa thành viên: ' . $e->getMessage());
         }
     }
 
     /**
-     * Update member status or role
+     * Update member information
      */
     public function updateMember(Request $request, FamilyAccount $familyAccount, FamilyMember $member)
     {
         $request->validate([
-            'status' => 'required|in:active,inactive',
-            'member_role' => 'required|in:member,admin',
+            'member_email' => 'required|email|max:255',
+            'status' => 'required|in:active,suspended,removed',
             'member_notes' => 'nullable|string',
         ]);
 
         if ($member->family_account_id !== $familyAccount->id) {
-            return back()->with('error', 'Thành viên không thuộc family này.');
+            return response()->json(['error' => 'Thành viên không thuộc Family Account này!'], 400);
         }
 
-        $member->update([
-            'status' => $request->status,
-            'member_role' => $request->member_role,
-            'member_notes' => $request->member_notes,
-        ]);
+        DB::beginTransaction();
+        try {
+            $oldStatus = $member->status;
 
-        // Update family member count
-        $familyAccount->updateMemberCount();
+            $member->update([
+                'member_email' => $request->member_email,
+                'status' => $request->status,
+                'member_notes' => $request->member_notes,
+            ]);
 
-        return back()->with('success', 'Đã cập nhật thông tin thành viên thành công!');
+            // Update current members count if status changed
+            if ($oldStatus !== $request->status) {
+                if ($oldStatus === 'active' && $request->status !== 'active') {
+                    $familyAccount->decrement('current_members');
+                } elseif ($oldStatus !== 'active' && $request->status === 'active') {
+                    $familyAccount->increment('current_members');
+                }
+            }
+
+            DB::commit();
+
+            return response()->json(['success' => true, 'message' => 'Thông tin thành viên đã được cập nhật!']);
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            return response()->json(['error' => 'Có lỗi xảy ra: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
-     * Family accounts report
+     * Generate report for family accounts
      */
-    public function report(Request $request)
+    public function report()
     {
-        // Top family accounts by member count
-        $topFamilies = FamilyAccount::with('servicePackage')
-            ->where('status', 'active')
-            ->orderBy('current_members', 'desc')
-            ->limit(10)
-            ->get();
-
-        // Family accounts expiring soon
-        $expiringSoon = FamilyAccount::with('servicePackage')
-            ->expiringSoon(30)
-            ->orderBy('expires_at', 'asc')
-            ->get();
-
-        // Overall statistics
-        $overallStats = [
+        $stats = [
             'total_families' => FamilyAccount::count(),
             'active_families' => FamilyAccount::where('status', 'active')->count(),
             'total_members' => FamilyMember::where('status', 'active')->count(),
-            'avg_members_per_family' => round(FamilyAccount::active()->avg('current_members'), 2),
-            'total_revenue' => FamilyAccount::sum('total_paid'),
-            'monthly_revenue' => FamilyAccount::where('status', 'active')->sum('monthly_cost'),
-            'families_near_full' => FamilyAccount::active()
-                ->whereRaw('current_members >= max_members * 0.8')
-                ->count(),
-            'underutilized_families' => FamilyAccount::active()
-                ->whereRaw('current_members <= max_members * 0.3')
+            'expired_families' => FamilyAccount::where('status', 'expired')->count(),
+            'expiring_soon' => FamilyAccount::where('status', 'active')
+                ->where('expires_at', '<=', now()->addDays(7))
                 ->count(),
         ];
 
-        // Service package distribution
-        $packageStats = DB::table('family_accounts')
-            ->join('service_packages', 'family_accounts.service_package_id', '=', 'service_packages.id')
-            ->select('service_packages.name', DB::raw('COUNT(*) as count'))
-            ->where('family_accounts.status', 'active')
-            ->groupBy('service_packages.id', 'service_packages.name')
+        // Family accounts by service package
+        $packageStats = FamilyAccount::join('service_packages', 'family_accounts.service_package_id', '=', 'service_packages.id')
+            ->select('service_packages.name', DB::raw('count(*) as count'))
+            ->groupBy('service_packages.name')
             ->orderBy('count', 'desc')
             ->get();
 
-        return view('admin.family-accounts.report', compact(
-            'topFamilies',
-            'expiringSoon',
-            'overallStats',
-            'packageStats'
-        ));
+        // Recent activity
+        $recentFamilies = FamilyAccount::with('servicePackage')
+            ->latest()
+            ->limit(10)
+            ->get();
+
+        return view('admin.family-accounts.report', compact('stats', 'packageStats', 'recentFamilies'));
     }
 }

@@ -164,6 +164,12 @@
                     <hr class="text-white-50 mx-3">
 
                     <!-- Service Management -->
+                    <a class="nav-link {{ request()->routeIs('admin.service-categories.*') ? 'active' : '' }}"
+                        href="{{ route('admin.service-categories.index') }}">
+                        <i class="fas fa-tags me-3"></i>
+                        Danh mục dịch vụ
+                    </a>
+
                     <a class="nav-link {{ request()->routeIs('admin.service-packages.*') ? 'active' : '' }}"
                         href="{{ route('admin.service-packages.index') }}">
                         <i class="fas fa-cube me-3"></i>
@@ -344,6 +350,9 @@
             // Navigation handling is now done by page-navigation-fix.js
         });
     </script>
+
+    <!-- Currency Formatter -->
+    <script src="{{ asset('js/currency-formatter.js') }}"></script>
 
     <!-- Page-specific scripts -->
     @yield('scripts')

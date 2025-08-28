@@ -324,7 +324,7 @@
                     </thead>
                     <tbody>
                         @foreach($servicePackages as $package)
-                            <tr>
+                            <tr id="package-{{ $package->id }}">
                                 <td>
                                     <div class="d-flex align-items-start">
                                         <div class="icon-wrapper me-3" style="width: 40px; height: 40px; background: var(--success-gradient); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -345,7 +345,7 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="badge bg-primary">{{ $package->category->name }}</span>
+                                    <span class="badge bg-primary">{{ $package->category->name ?? 'Chưa phân loại' }}</span>
                                 </td>
                                 <td>
                                     <span class="badge bg-secondary">{{ $package->account_type }}</span>
@@ -354,17 +354,17 @@
                                     <div>
                                         <div class="fw-bold text-success mb-1">
                                             <i class="fas fa-money-bill-wave me-1"></i>
-                                            {{ number_format($package->price) }}đ
+                                            {{ formatPrice($package->price) }}
                                         </div>
                                         @if($package->cost_price)
                                             <small class="text-muted d-block">
                                                 <i class="fas fa-shopping-cart me-1"></i>
-                                                Nhập: {{ number_format($package->cost_price) }}đ
+                                                Nhập: {{ formatPrice($package->cost_price) }}
                                             </small>
                                             <div class="mt-1">
                                                 <span class="badge bg-success">
                                                     <i class="fas fa-chart-line me-1"></i>
-                                                    +{{ number_format($package->getProfit()) }}đ ({{ $package->getProfitMargin() }}%)
+                                                    +{{ formatPrice($package->getProfit()) }} ({{ $package->getProfitMargin() }}%)
                                                 </span>
                                             </div>
                                         @endif
@@ -535,6 +535,24 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Scroll to specific package if anchor is present in URL
+    if (window.location.hash) {
+        const targetElement = document.querySelector(window.location.hash);
+        if (targetElement) {
+            setTimeout(() => {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                // Add highlight effect
+                targetElement.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                    targetElement.style.backgroundColor = '';
+                }, 3000);
+            }, 100);
+        }
+    }
+
     // Auto-validation for date inputs
     const dateFromInput = document.querySelector('input[name="date_from"]');
     const dateToInput = document.querySelector('input[name="date_to"]');

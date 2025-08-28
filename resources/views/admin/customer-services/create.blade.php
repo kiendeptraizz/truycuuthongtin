@@ -36,39 +36,25 @@
                         <!-- Customer Selection -->
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <label for="customer_id" class="form-label font-weight-bold">
-                                    <i class="fas fa-user text-primary me-2"></i>
-                                    Khách hàng <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select @error('customer_id') is-invalid @enderror"
-                                        id="customer_id"
-                                        name="customer_id"
-                                        required>
-                                    <option value="">-- Chọn khách hàng --</option>
-                                    @foreach($customers as $customer)
-                                        <option value="{{ $customer->id }}"
-                                                {{ old('customer_id') == $customer->id ? 'selected' : '' }}>
-                                            {{ $customer->name }} ({{ $customer->customer_code }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('customer_id')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                                <small class="form-text text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Tìm kiếm theo tên hoặc mã khách hàng
-                                </small>
+                                <x-customer-search-selector
+                                    name="customer_id"
+                                    id="customer_id"
+                                    :customers="$customers"
+                                    label="Khách hàng"
+                                    placeholder="Tìm kiếm khách hàng theo tên, mã KH hoặc email..."
+                                    :required="true"
+                                    help-text="Tìm kiếm theo tên hoặc mã khách hàng ({{ $customers->count() }} khách hàng)"
+                                />
                             </div>
                         
-                        <div class="col-md-6 mb-3">
-                            <label for="service_package_id" class="form-label">
+                        <div class="col-md-12 mb-4">
+                            <label class="form-label">
                                 <i class="fas fa-box me-1"></i>
                                 Gói dịch vụ <span class="text-danger">*</span>
-                                <small class="text-muted ms-2">(Nhóm theo loại tài khoản)</small>
+                                <small class="text-muted ms-2">(Phân loại theo danh mục và loại tài khoản)</small>
                             </label>
 
-                            <x-service-package-selector
+                            <x-service-package-grid-selector
                                 :service-packages="$servicePackages"
                                 :account-type-priority="$accountTypePriority"
                                 name="service_package_id"

@@ -224,7 +224,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
-                    body: JSON.stringify({ query: query })
+                    body: JSON.stringify({ code: query })
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -238,13 +238,13 @@
             }
 
             function displayResults(data) {
-                if (!data.success || !data.customer) {
+                if (!data.success || !data.data.customer) {
                     displayError('Không tìm thấy thông tin khách hàng.');
                     return;
                 }
 
-                const customer = data.customer;
-                const services = data.services || [];
+                const customer = data.data.customer;
+                const services = data.data.services || [];
 
                 let html = `
                     <div class="lookup-card p-4 mb-4">

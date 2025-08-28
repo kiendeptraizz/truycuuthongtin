@@ -76,8 +76,8 @@
                             <i class="fas fa-plus me-1"></i> Thêm nhanh
                         </button>
                         <a href="{{ route('admin.customers.create', ['page' => request('page', 1), 'search' => request('search')]) }}"
-                            class="btn btn-success btn-sm shadow-sm fw-bold">
-                            <i class="fas fa-user-plus me-1"></i> Thêm khách hàng
+                            class="btn btn-outline-secondary btn-sm shadow-sm">
+                            <i class="fas fa-user-plus me-1"></i> Thêm đầy đủ
                         </a>
                     </div>
                 </div>
@@ -236,10 +236,10 @@
                 <i class="fas fa-file-csv me-1"></i>
                 Xuất CSV
             </button>
-            <a href="{{ route('admin.customers.create') }}" class="btn btn-success">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#quickAddModal">
                 <i class="fas fa-plus me-2"></i>
-                Thêm khách hàng
-            </a>
+                Thêm nhanh
+            </button>
         </div>
     </div>
 </div>
@@ -279,7 +279,7 @@
                 </thead>
                 <tbody>
                     @foreach($customers as $customer)
-                    <tr style="border-bottom: 1px solid #e9ecef;">
+                    <tr id="customer-{{ $customer->id }}" style="border-bottom: 1px solid #e9ecef;">
                         <td class="py-2 px-2">
                             <span class="badge bg-primary px-1 py-1 small">{{ $customer->customer_code }}</span>
                         </td>
@@ -437,7 +437,7 @@
                     @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'login_email', 'date_from', 'date_to']))
                     Không có khách hàng nào khớp với tiêu chí tìm kiếm của bạn.
                     @else
-                    Hệ thống chưa có khách hàng nào. Hãy thêm khách hàng đầu tiên!
+                    Hệ thống chưa có khách hàng nào. Hãy thêm nhanh khách hàng đầu tiên!
                     @endif
                 </p>
                 <div class="d-flex gap-3 justify-content-center">
@@ -446,9 +446,9 @@
                         <i class="fas fa-refresh me-2"></i>Xem tất cả
                     </a>
                     @endif
-                    <a href="{{ route('admin.customers.create') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-user-plus me-2"></i>Thêm khách hàng mới
-                    </a>
+                    <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        <i class="fas fa-user-plus me-2"></i>Thêm nhanh
+                    </button>
                 </div>
             </div>
             @endif
@@ -462,7 +462,7 @@
                 <div class="modal-header bg-primary text-white py-4">
                     <h4 class="modal-title fw-bold" id="quickAddModalLabel">
                         <i class="fas fa-user-plus me-3"></i>
-                        Thêm khách hàng nhanh
+                        Thêm nhanh
                     </h4>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
@@ -507,9 +507,13 @@
                             <i class="fas fa-times me-2"></i>
                             Hủy
                         </button>
-                        <button type="submit" class="btn btn-primary btn-lg px-4">
+                        <button type="submit" class="btn btn-primary btn-lg px-4" name="action" value="save">
                             <i class="fas fa-save me-2"></i>
                             Lưu khách hàng
+                        </button>
+                        <button type="submit" class="btn btn-success btn-lg px-4" name="action" value="save_and_assign">
+                            <i class="fas fa-plus me-2"></i>
+                            Lưu & Gán dịch vụ
                         </button>
                     </div>
                 </form>
@@ -586,18 +590,7 @@
                 });
             });
 
-            // Quick add form validation
-            const quickAddForm = document.getElementById('quickAddForm');
-            if (quickAddForm) {
-                quickAddForm.addEventListener('submit', function(e) {
-                    const nameInput = document.getElementById('quick_name');
-                    if (!nameInput.value.trim()) {
-                        e.preventDefault();
-                        nameInput.focus();
-                        nameInput.classList.add('is-invalid');
-                    }
-                });
-            }
+            // Quick add form validation - REMOVED (duplicate)
 
             // THÊM: Filter improvement và thông báo khi không có kết quả
             const servicePackageSelect = document.querySelector('select[name="service_package_id"]');
@@ -698,5 +691,95 @@
             link.download = `customers_selected_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
         };
+
+        // Quick Add Form handling
+        const quickAddForm = document.getElementById('quickAddForm');
+        const quickAddModal = document.getElementById('quickAddModal');
+
+        if (quickAddForm && quickAddModal) {
+            console.log('✅ Quick Add Form and Modal found');
+
+            // Reset form when modal is shown
+            quickAddModal.addEventListener('show.bs.modal', function() {
+                console.log('📂 Modal opening, resetting form');
+                quickAddForm.reset();
+                // Clear any previous error states
+                quickAddForm.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                // Focus on name field
+                setTimeout(() => {
+                    document.getElementById('quick_name')?.focus();
+                }, 300);
+            });
+
+            // Add error handling
+            quickAddForm.addEventListener('error', function(e) {
+                console.error('❌ Form error:', e);
+            });
+
+            // Form validation
+            quickAddForm.addEventListener('submit', function(e) {
+                console.log('🚀 Quick Add Form submitted!');
+
+                const nameField = document.getElementById('quick_name');
+                const emailField = document.getElementById('quick_email');
+                const phoneField = document.getElementById('quick_phone');
+
+                const name = nameField?.value.trim();
+                const email = emailField?.value.trim();
+                const phone = phoneField?.value.trim();
+
+                console.log('📝 Form data:', { name, email, phone });
+
+                // Check CSRF token
+                const csrfToken = quickAddForm.querySelector('input[name="_token"]');
+                console.log('🔐 CSRF Token:', csrfToken ? csrfToken.value : 'NOT FOUND');
+
+                // Check form action
+                console.log('🎯 Form action:', quickAddForm.action);
+
+                if (!name || name.length < 2) {
+                    e.preventDefault();
+                    nameField?.focus();
+                    alert('Vui lòng nhập tên khách hàng (ít nhất 2 ký tự)');
+                    console.log('❌ Validation failed: Name too short');
+                    return false;
+                }
+
+                console.log('✅ Validation passed, submitting form...');
+
+                // Show loading state
+                const submitButtons = quickAddForm.querySelectorAll('button[type="submit"]');
+                submitButtons.forEach(btn => {
+                    btn.disabled = true;
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Đang xử lý...';
+
+                    // Restore button after 10 seconds (fallback)
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        console.log('🔄 Button restored after timeout');
+                    }, 10000);
+                });
+            });
+        }
+
+        // Scroll to specific customer if anchor is present in URL
+        if (window.location.hash) {
+            const targetElement = document.querySelector(window.location.hash);
+            if (targetElement) {
+                setTimeout(() => {
+                    targetElement.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                    // Add highlight effect
+                    targetElement.style.backgroundColor = '#fff3cd';
+                    setTimeout(() => {
+                        targetElement.style.backgroundColor = '';
+                    }, 3000);
+                }, 100);
+            }
+        }
     </script>
 @endsection

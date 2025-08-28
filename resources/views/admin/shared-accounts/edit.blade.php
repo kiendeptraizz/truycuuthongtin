@@ -14,9 +14,19 @@
                         <small class="text-muted">Email: {{ $email }}</small>
                     </div>
                     <div>
-                        <a href="{{ route('admin.shared-accounts.show', $email) }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Quay lại
-                        </a>
+                        @if(request('source') === 'index')
+                            <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Quay lại danh sách
+                            </a>
+                        @elseif(request('source') === 'customer-service')
+                            <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Quay lại dịch vụ
+                            </a>
+                        @else
+                            <a href="{{ route('admin.shared-accounts.show', $email) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Quay lại chi tiết
+                            </a>
+                        @endif
                     </div>
                 </div>
 
@@ -67,7 +77,7 @@
                         </div>
                     </div>
 
-                    <form action="{{ route('admin.shared-accounts.update', $email) }}" method="POST">
+                    <form action="{{ route('admin.shared-accounts.update', $email) }}{{ request()->has('source') ? '?' . http_build_query(request()->only(['source'])) : '' }}" method="POST">
                         @csrf
                         @method('PUT')
 
@@ -215,9 +225,19 @@
                         <div class="row mt-4">
                             <div class="col-12">
                                 <div class="d-flex justify-content-between">
-                                    <a href="{{ route('admin.shared-accounts.show', $email) }}" class="btn btn-secondary">
-                                        <i class="fas fa-times"></i> Hủy
-                                    </a>
+                                    @if(request('source') === 'index')
+                                        <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary">
+                                            <i class="fas fa-times"></i> Hủy
+                                        </a>
+                                    @elseif(request('source') === 'customer-service')
+                                        <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
+                                            <i class="fas fa-times"></i> Hủy
+                                        </a>
+                                    @else
+                                        <a href="{{ route('admin.shared-accounts.show', $email) }}" class="btn btn-secondary">
+                                            <i class="fas fa-times"></i> Hủy
+                                        </a>
+                                    @endif
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-save"></i> Lưu thông tin
                                     </button>

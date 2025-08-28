@@ -63,6 +63,11 @@ class CustomerService extends Model
         return $this->belongsTo(Admin::class, 'assigned_by');
     }
 
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'assigned_by'); // Sử dụng assigned_by làm created_by
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
@@ -76,12 +81,19 @@ class CustomerService extends Model
     // Kiểm tra xem dịch vụ có sắp hết hạn không (trong vòng 5 ngày)
     public function isExpiringSoon(): bool
     {
-        if (!$this->expires_at || $this->expires_at->isPast()) {
+        if (!$this->expires_at) {
+            return false;
+        }
+
+        // Sử dụng startOfDay() để so sánh theo ngày lịch
+        $expiryDate = $this->expires_at->startOfDay();
+
+        if ($expiryDate->isPast()) {
             return false;
         }
 
         $daysRemaining = $this->getDaysRemaining();
-        return $daysRemaining > 0 && $daysRemaining <= 5;
+        return $daysRemaining >= 0 && $daysRemaining <= 5;
     }
 
     // Lấy số ngày còn lại
@@ -91,12 +103,16 @@ class CustomerService extends Model
             return 0;
         }
 
-        if ($this->expires_at->isPast()) {
+        // Sử dụng startOfDay() để so sánh theo ngày lịch, không phải giờ
+        $today = now()->startOfDay();
+        $expiryDate = $this->expires_at->startOfDay();
+
+        if ($expiryDate->isPast()) {
             return 0;
         }
 
-        // Tính số ngày còn lại từ hôm nay đến ngày hết hạn
-        return (int) now()->diffInDays($this->expires_at, false);
+        // Tính số ngày còn lại từ hôm nay đến ngày hết hạn (theo ngày lịch)
+        return $today->diffInDays($expiryDate, false);
     }
 
     // Kiểm tra xem dịch vụ đã hết hạn chưa

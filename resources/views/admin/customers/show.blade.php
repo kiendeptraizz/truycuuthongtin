@@ -91,9 +91,9 @@
                         <i class="fas fa-edit me-1"></i>
                         Chỉnh sửa
                     </a>
-                    <a href="{{ route('admin.customers.create') }}" class="btn btn-success">
+                    <a href="{{ route('admin.customers.create') }}" class="btn btn-outline-success">
                         <i class="fas fa-user-plus me-1"></i>
-                        Thêm khách hàng mới
+                        Thêm đầy đủ
                     </a>
                     <a href="{{ route('admin.customers.assign-service', $customer) }}" class="btn btn-info">
                         <i class="fas fa-plus me-1"></i>
@@ -145,7 +145,7 @@
                                     <div>
                                         <strong>{{ $service->servicePackage->name }}</strong>
                                         <br>
-                                        <small class="text-muted">{{ $service->servicePackage->category->name }}</small>
+                                        <small class="text-muted">{{ $service->servicePackage->category ? $service->servicePackage->category->name : 'Chưa phân loại' }}</small>
                                     </div>
                                 </td>
                                 <td>
@@ -201,7 +201,7 @@
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="{{ route('admin.customer-services.edit', $service) }}"
+                                        <a href="{{ route('admin.customer-services.edit', $service) }}?source=customer&customer_id={{ $customer->id }}"
                                             class="btn btn-sm btn-outline-warning"
                                             title="Chỉnh sửa">
                                             <i class="fas fa-edit"></i>

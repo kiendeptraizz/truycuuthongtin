@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Rules\ValidCustomerName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -71,9 +72,15 @@ class CustomerController extends Controller
      */
     public function store(Request $request)
     {
+        // Debug logging
+        Log::info('Customer Store Request', [
+            'request_data' => $request->all(),
+            'user_id' => auth('admin')->id()
+        ]);
+
         // Validation rules
         $rules = [
-            'name' => 'required|string|max:255',
+            'name' => ['required', 'string', 'max:255'],
             'email' => 'nullable|email|max:255|unique:customers,email',
             'phone' => 'nullable|string|max:20',
             'notes' => 'nullable|string|max:1000',
@@ -116,7 +123,16 @@ class CustomerController extends Controller
 
             $customer = Customer::create($data);
 
-            return redirect()->route('admin.customers.index')
+            // Kiểm tra action từ form
+            $action = $request->input('action', 'save');
+
+            if ($action === 'save_and_assign') {
+                // Chuyển hướng đến trang gán dịch vụ
+                return redirect()->route('admin.customers.assign-service', $customer)
+                    ->with('success', "Khách hàng {$customer->name} (Mã: {$customer->customer_code}) đã được tạo thành công! Hãy gán dịch vụ cho khách hàng.");
+            }
+
+            return redirect(route('admin.customers.index') . '#customer-' . $customer->id)
                 ->with('success', "Khách hàng {$customer->name} (Mã: {$customer->customer_code}) đã được tạo thành công!");
         } catch (\Exception $e) {
             Log::error('Error creating customer: ' . $e->getMessage());
@@ -151,14 +167,14 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => ['required', 'string', 'max:255'],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
         ]);
 
         $customer->update($request->only(['name', 'email', 'phone']));
 
-        return redirect()->route('admin.customers.index')
+        return redirect(route('admin.customers.index') . '#customer-' . $customer->id)
             ->with('success', 'Thông tin khách hàng đã được cập nhật!');
     }
 

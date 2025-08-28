@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'Thêm khách hàng mới')
-@section('page-title', 'Thêm khách hàng mới')
+@section('title', 'Thêm đầy đủ thông tin khách hàng')
+@section('page-title', 'Thêm đầy đủ thông tin khách hàng')
 
 @section('content')
 <div class="row justify-content-center">
@@ -13,8 +13,8 @@
                         <i class="fas fa-user-plus fa-lg text-white"></i>
                     </div>
                     <div>
-                        <h1 class="form-title">Thêm khách hàng mới</h1>
-                        <p class="form-subtitle">Nhập thông tin để tạo khách hàng mới trong hệ thống</p>
+                        <h1 class="form-title">Thêm đầy đủ thông tin khách hàng</h1>
+                        <p class="form-subtitle">Nhập thông tin chi tiết để tạo khách hàng mới trong hệ thống</p>
                     </div>
                 </div>
             </div>
@@ -166,9 +166,13 @@
                         <i class="fas fa-arrow-left me-1"></i>
                         Quay lại
                     </a>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" name="action" value="save">
                         <i class="fas fa-save me-1"></i>
                         Lưu khách hàng
+                    </button>
+                    <button type="submit" class="btn btn-success" name="action" value="save_and_assign">
+                        <i class="fas fa-plus me-1"></i>
+                        Lưu & Gán dịch vụ
                     </button>
                 </div>
             </form>

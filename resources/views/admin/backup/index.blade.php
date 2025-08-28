@@ -138,9 +138,8 @@
                                 Phân Loại
                             </div>
                             <div class="small text-gray-800">
-                                <div>Daily: {{ $backupStats['daily_count'] }}</div>
-                                <div>Weekly: {{ $backupStats['weekly_count'] }}</div>
-                                <div>Quick: {{ $backupStats['quick_count'] }}</div>
+                                <div>Tự động: {{ $backupStats['daily_count'] }}</div>
+                                <div>Thủ công: {{ $backupStats['manual_count'] }}</div>
                             </div>
                         </div>
                         <div class="col-auto">
@@ -187,28 +186,12 @@
                                     @foreach($recentBackups as $backup)
                                         <tr>
                                             <td>
-                                                <i class="fas fa-file-{{ $backup['extension'] === 'json' ? 'code' : 'archive' }} text-muted mr-1"></i>
+                                                <i class="fas fa-database text-muted mr-1"></i>
                                                 {{ $backup['filename'] }}
                                             </td>
                                             <td>
-                                                @php
-                                                    $typeColors = [
-                                                        'daily' => 'primary',
-                                                        'weekly' => 'success', 
-                                                        'quick' => 'info',
-                                                        'auto' => 'secondary',
-                                                        'manual' => 'warning'
-                                                    ];
-                                                    $typeLabels = [
-                                                        'daily' => 'Hàng Ngày',
-                                                        'weekly' => 'Hàng Tuần',
-                                                        'quick' => 'Nhanh',
-                                                        'auto' => 'Tự Động',
-                                                        'manual' => 'Thủ Công'
-                                                    ];
-                                                @endphp
-                                                <span class="badge badge-{{ $typeColors[$backup['type']] ?? 'secondary' }}">
-                                                    {{ $typeLabels[$backup['type']] ?? ucfirst($backup['type']) }}
+                                                <span class="badge badge-{{ $backup['type'] === 'Tự động' ? 'primary' : 'warning' }}">
+                                                    {{ $backup['type'] }}
                                                 </span>
                                             </td>
                                             <td>{{ $backup['size_formatted'] }}</td>
@@ -283,53 +266,7 @@
     </div>
 </div>
 
-<!-- Create Backup Modal -->
-<div class="modal fade" id="createBackupModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">🔄 Tạo Backup Mới</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <form id="createBackupForm">
-                    <div class="form-group">
-                        <label for="backupType">Loại Backup:</label>
-                        <select class="form-control" id="backupType" name="type">
-                            <option value="manual">Thủ Công</option>
-                            <option value="daily">Hàng Ngày</option>
-                            <option value="weekly">Hàng Tuần</option>
-                            <option value="quick">Nhanh</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="backupFormat">Định Dạng:</label>
-                        <select class="form-control" id="backupFormat" name="format">
-                            <option value="json">JSON</option>
-                            <option value="sql">SQL</option>
-                            <option value="both">Cả Hai</option>
-                        </select>
-                    </div>
-                </form>
-                <div id="backupProgress" style="display: none;">
-                    <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 100%"></div>
-                    </div>
-                    <p class="text-center text-muted">Đang tạo backup...</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Hủy</button>
-                <button type="button" class="btn btn-primary" id="confirmCreateBackup">
-                    <i class="fas fa-play"></i> Tạo Backup
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+
 @endsection
 
 @section('scripts')
@@ -341,11 +278,6 @@ $(document).ready(function() {
     
     // Create backup button handlers
     $('#createBackupBtn, #createFirstBackupBtn').click(function() {
-        $('#createBackupModal').modal('show');
-    });
-    
-    // Confirm create backup
-    $('#confirmCreateBackup').click(function() {
         createBackup();
     });
     
@@ -411,20 +343,14 @@ function getHealthColor(status) {
 }
 
 function createBackup() {
-    const formData = {
-        type: $('#backupType').val(),
-        format: $('#backupFormat').val(),
-        _token: '{{ csrf_token() }}'
-    };
-    
-    $('#confirmCreateBackup').prop('disabled', true);
-    $('#backupProgress').show();
-    
-    $.post('{{ route("admin.backup.create") }}', formData)
+    const btn = $('#createBackupBtn');
+    const originalHtml = btn.html();
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang tạo...');
+
+    $.post('{{ route("admin.backup.create") }}', { _token: '{{ csrf_token() }}' })
         .done(function(response) {
             if (response.success) {
                 showAlert('success', 'Backup được tạo thành công: ' + response.backup_name);
-                $('#createBackupModal').modal('hide');
                 setTimeout(() => location.reload(), 1500);
             } else {
                 showAlert('danger', 'Lỗi: ' + response.message);
@@ -432,11 +358,10 @@ function createBackup() {
         })
         .fail(function(xhr) {
             const response = xhr.responseJSON;
-            showAlert('danger', 'Lỗi khi tạo backup: ' + (response?.message || 'Unknown error'));
+            showAlert('danger', 'Lỗi khi tạo backup: ' + (response?.message || 'Lỗi không xác định'));
         })
         .always(function() {
-            $('#confirmCreateBackup').prop('disabled', false);
-            $('#backupProgress').hide();
+            btn.prop('disabled', false).html(originalHtml);
         });
 }
 

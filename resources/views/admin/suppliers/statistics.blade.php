@@ -99,7 +99,7 @@
                                 Tổng giá trị
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ number_format($currentStats['total_value']) }} VNĐ
+                                {{ formatCurrency($currentStats['total_value']) }}
                             </div>
                         </div>
                         <div class="col-auto">
@@ -294,7 +294,7 @@
                 <div class="card-body">
                     <div class="text-center">
                         <div class="h2 mb-3 font-weight-bold text-success">
-                            {{ number_format($potentialStats['total_estimated_value']) }} VNĐ
+                            {{ formatCurrency($potentialStats['total_estimated_value']) }}
                         </div>
                         <p class="text-muted">Tổng giá trị ước tính từ các nhà cung cấp tiềm năng</p>
                         <div class="mt-3">

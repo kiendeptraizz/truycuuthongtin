@@ -49,7 +49,7 @@
                                 <h6 class="mb-1">Dịch vụ kích hoạt</h6>
                                 <small>{{ $stats['activated']['unique_customers'] }} khách hàng</small>
                                 <hr class="my-2">
-                                <strong>{{ number_format($stats['activated']['revenue_estimate']) }}₫</strong>
+                                <strong>{{ formatPrice($stats['activated']['revenue_estimate']) }}</strong>
                                 <br><small>Doanh thu ước tính</small>
                             </div>
                         </div>
@@ -108,7 +108,7 @@
                                                             <br><small class="text-muted">{{ $service->customer->customer_code }}</small>
                                                         </td>
                                                         <td>{{ $service->servicePackage->name }}</td>
-                                                        <td>{{ number_format($service->servicePackage->price ?? 0) }}₫</td>
+                                                        <td>{{ formatPrice($service->servicePackage->price ?? 0) }}</td>
                                                         <td>{{ $service->expires_at ? $service->expires_at->format('d/m/Y') : 'Không giới hạn' }}</td>
                                                     </tr>
                                                 @endforeach

@@ -103,13 +103,14 @@
                             <label for="price" class="form-label">
                                 Giá bán (VNĐ) <span class="text-danger">*</span>
                             </label>
-                            <input type="number"
+                            <input type="text"
                                    class="form-control @error('price') is-invalid @enderror"
                                    id="price"
                                    name="price"
-                                   value="{{ old('price', $servicePackage->price) }}"
-                                   min="0"
-                                   step="1000"
+                                   value="{{ old('price', formatMoney($servicePackage->price)) }}"
+                                   data-currency="VND"
+                                   data-show-currency="false"
+                                   placeholder="0"
                                    required>
                             @error('price')
                                 <div class="invalid-feedback">{{ $message }}</div>
@@ -120,13 +121,14 @@
                             <label for="cost_price" class="form-label">
                                 Giá nhập (VNĐ)
                             </label>
-                            <input type="number"
+                            <input type="text"
                                    class="form-control @error('cost_price') is-invalid @enderror"
                                    id="cost_price"
                                    name="cost_price"
-                                   value="{{ old('cost_price', $servicePackage->cost_price) }}"
-                                   min="0"
-                                   step="1000">
+                                   value="{{ old('cost_price', $servicePackage->cost_price ? formatMoney($servicePackage->cost_price) : '') }}"
+                                   data-currency="VND"
+                                   data-show-currency="false"
+                                   placeholder="0">
                             @error('cost_price')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror

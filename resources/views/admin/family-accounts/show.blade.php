@@ -1,254 +1,291 @@
 @extends('layouts.admin')
 
 @section('title', 'Chi tiết Family Account')
-@section('page-title', $familyAccount->family_name)
 
 @section('content')
 <div class="container-fluid">
-    <!-- Header Actions -->
+    <!-- Header Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1">{{ $familyAccount->family_name }}</h4>
-                    <div class="text-muted">
-                        <i class="fas fa-code me-1"></i>{{ $familyAccount->family_code }}
-                        <span class="mx-2">•</span>
-                        <i class="fas fa-envelope me-1"></i>{{ $familyAccount->owner_email }}
-                    </div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-home me-2"></i>
+                        {{ $familyAccount->family_name }}
+                    </h1>
+                    <p class="text-muted mb-0">
+                        <code class="bg-light px-2 py-1 rounded">{{ $familyAccount->family_code }}</code>
+                        •
+                        <span class="badge bg-{{ $familyAccount->status === 'active' ? 'success' : 'warning' }} ms-2">
+                            {{ ucfirst($familyAccount->status) }}
+                        </span>
+                    </p>
                 </div>
-                <div class="btn-group" role="group">
-                    <a href="{{ route('admin.family-accounts.index') }}" class="btn btn-outline-secondary">
+                <div>
+                    <a href="{{ route('admin.family-accounts.index') }}" class="btn btn-secondary me-2">
                         <i class="fas fa-arrow-left me-1"></i>
-                        Quay lại
+                        Quay lại danh sách
                     </a>
-                    <a href="{{ route('admin.family-accounts.edit', $familyAccount) }}" class="btn btn-outline-primary">
+                    <a href="{{ route('admin.family-accounts.edit', $familyAccount) }}" class="btn btn-primary">
                         <i class="fas fa-edit me-1"></i>
                         Chỉnh sửa
                     </a>
-                    @if($familyAccount->canAddMember())
-                        <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                            <i class="fas fa-user-plus me-1"></i>
-                            Thêm thành viên
-                        </a>
-                    @endif
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Status Cards -->
+    <!-- Family Info Cards -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="card bg-primary text-white h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h6 class="card-title mb-0">Thành viên</h6>
-                            <h4 class="mb-0">{{ $memberStats['active_members'] }}/{{ $familyAccount->max_members }}</h4>
-                        </div>
-                        <div class="ms-2">
-                            <i class="fas fa-users fa-2x opacity-75"></i>
-                        </div>
-                    </div>
-                    <div class="progress mt-2" style="height: 4px;">
-                        <div class="progress-bar bg-white" 
-                             style="width: {{ $familyAccount->usage_percentage }}%"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-3">
-            <div class="card bg-success text-white h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h6 class="card-title mb-0">Slot Còn Lại</h6>
-                            <h4 class="mb-0">{{ $familyAccount->available_slots }}</h4>
-                        </div>
-                        <div class="ms-2">
-                            <i class="fas fa-plus-circle fa-2x opacity-75"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-3">
-            <div class="card bg-info text-white h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h6 class="card-title mb-0">Ngày Hết Hạn</h6>
-                            <h4 class="mb-0">{{ $familyAccount->days_until_expiry }} ngày</h4>
-                        </div>
-                        <div class="ms-2">
-                            <i class="fas fa-calendar-times fa-2x opacity-75"></i>
-                        </div>
-                    </div>
-                    <small>{{ $familyAccount->expires_at->format('d/m/Y H:i') }}</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3 mb-3">
-            <div class="card bg-dark text-white h-100">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h6 class="card-title mb-0">Gói Dịch Vụ</h6>
-                            <h4 class="mb-0">{{ number_format($familyAccount->servicePackage->price) }}đ</h4>
-                        </div>
-                        <div class="ms-2">
-                            <i class="fas fa-box fa-2x opacity-75"></i>
-                        </div>
-                    </div>
-                    <small>{{ $familyAccount->servicePackage->name }}</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- Family Information -->
-        <div class="col-md-4 mb-4">
+        <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">
                     <h6 class="mb-0">
                         <i class="fas fa-info-circle me-2"></i>
-                        Thông tin Family
+                        Thông tin cơ bản
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Trạng thái</label>
-                        <div>{!! $familyAccount->status_badge !!}</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Gói dịch vụ</label>
-                        <div>
-                            <strong>{{ $familyAccount->servicePackage->name }}</strong><br>
-                            <small class="text-muted">{{ $familyAccount->servicePackage->category->name ?? 'N/A' }}</small>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Tên Family:</small><br>
+                            <strong>{{ $familyAccount->family_name }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Mã Family:</small><br>
+                            <code class="bg-light px-2 py-1 rounded">{{ $familyAccount->family_code }}</code>
                         </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Chủ gia đình</label>
-                        <div>
-                            @if($familyAccount->owner_name)
-                                <strong>{{ $familyAccount->owner_name }}</strong><br>
-                            @endif
-                            <small class="text-muted">{{ $familyAccount->owner_email }}</small>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Email chủ:</small><br>
+                            <a href="mailto:{{ $familyAccount->owner_email }}">{{ $familyAccount->owner_email }}</a>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Tên chủ gia đình:</small><br>
+                            <strong>{{ $familyAccount->owner_name ?: 'Chưa cập nhật' }}</strong>
                         </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Thời gian</label>
-                        <div>
-                            <small>
-                                <strong>Kích hoạt:</strong> {{ $familyAccount->activated_at->format('d/m/Y H:i') }}<br>
-                                <strong>Hết hạn:</strong> {{ $familyAccount->expires_at->format('d/m/Y H:i') }}<br>
-                                <strong>Tạo:</strong> {{ $familyAccount->created_at->format('d/m/Y H:i') }}
-                            </small>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Gói dịch vụ:</small><br>
+                            <span class="badge bg-info">{{ $familyAccount->servicePackage->name ?? 'N/A' }}</span>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Trạng thái:</small><br>
+                            @php
+                                $statusColors = [
+                                    'active' => 'success',
+                                    'expired' => 'warning',
+                                    'suspended' => 'danger',
+                                    'cancelled' => 'secondary',
+                                ];
+                                $statusLabels = [
+                                    'active' => 'Hoạt động',
+                                    'expired' => 'Hết hạn',
+                                    'suspended' => 'Tạm ngưng',
+                                    'cancelled' => 'Đã hủy',
+                                ];
+                            @endphp
+                            <span class="badge bg-{{ $statusColors[$familyAccount->status] ?? 'secondary' }}">
+                                {{ $statusLabels[$familyAccount->status] ?? $familyAccount->status }}
+                            </span>
                         </div>
                     </div>
-
-                    @if($familyAccount->family_notes)
-                        <div class="mb-3">
-                            <label class="form-label text-muted">Ghi chú</label>
-                            <div class="text-sm">{{ $familyAccount->family_notes }}</div>
-                        </div>
-                    @endif
-
-                    @if($familyAccount->createdBy)
-                        <div class="mb-0">
-                            <label class="form-label text-muted">Quản lý</label>
-                            <div>
-                                <small>
-                                    <strong>Tạo bởi:</strong> {{ $familyAccount->createdBy->name ?? 'N/A' }}<br>
-                                    @if($familyAccount->managedBy && $familyAccount->managedBy->id !== $familyAccount->createdBy->id)
-                                        <strong>Quản lý bởi:</strong> {{ $familyAccount->managedBy->name ?? 'N/A' }}
-                                    @endif
-                                </small>
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
         </div>
 
-        <!-- Active Members -->
-        <div class="col-md-8 mb-4">
+        <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-calendar me-2"></i>
+                        Thông tin thời gian
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Ngày tạo:</small><br>
+                            <strong>{{ $familyAccount->created_at->format('d/m/Y H:i') }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Cập nhật cuối:</small><br>
+                            <strong>{{ $familyAccount->updated_at->format('d/m/Y H:i') }}</strong>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Ngày hết hạn:</small><br>
+                            @if($familyAccount->expires_at)
+                                <strong class="{{ $familyAccount->expires_at->isPast() ? 'text-danger' : ($familyAccount->expires_at->diffInDays() <= 7 ? 'text-warning' : 'text-success') }}">
+                                    {{ $familyAccount->expires_at->format('d/m/Y') }}
+                                </strong>
+                                <br>
+                                <small class="text-muted">{{ $familyAccount->expires_at->diffForHumans() }}</small>
+                            @else
+                                <span class="text-muted">Chưa thiết lập</span>
+                            @endif
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Thành viên:</small><br>
+                            <span class="badge {{ $familyAccount->current_members >= $familyAccount->max_members ? 'bg-danger' : 'bg-success' }} fs-6">
+                                {{ $familyAccount->current_members }}/{{ $familyAccount->max_members }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Members Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">
+                        <h5 class="mb-0">
                             <i class="fas fa-users me-2"></i>
-                            Thành viên đang hoạt động ({{ $activeMembers->count() }})
-                        </h6>
-                        @if($familyAccount->canAddMember())
-                            <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" 
-                               class="btn btn-sm btn-success">
+                            Danh sách thành viên 
+                            <span class="badge bg-secondary ms-2">{{ $familyAccount->members->count() }}</span>
+                        </h5>
+                        @if($familyAccount->current_members < $familyAccount->max_members)
+                            <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
                                 <i class="fas fa-user-plus me-1"></i>
                                 Thêm thành viên
                             </a>
+                        @else
+                            <span class="badge bg-warning">Family đã đầy</span>
                         @endif
                     </div>
                 </div>
                 <div class="card-body">
-                    @if($activeMembers->count() > 0)
+                    @if($familyAccount->members->count() > 0)
                         <div class="table-responsive">
-                            <table class="table table-sm">
+                            <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>Thành viên</th>
-                                        <th>Vai trò</th>
-                                        <th>Ngày thêm</th>
-                                        <th>Sử dụng</th>
-                                        <th>Thao tác</th>
+                                        <th>ID</th>
+                                        <th>Khách hàng</th>
+                                        <th>Email thành viên</th>
+                                        <th>Thời gian hiệu lực</th>
+                                        <th>Trạng thái</th>
+                                        <th>Ngày tham gia</th>
+                                        <th>Hành động</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($activeMembers as $member)
+                                    @foreach ($familyAccount->members as $member)
                                         <tr>
                                             <td>
-                                                <div class="d-flex align-items-center">
-                                                    <div class="avatar-sm bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
-                                                        <i class="fas fa-user"></i>
+                                                <span class="fw-bold">#{{ $member->id }}</span>
+                                            </td>
+                                            <td>
+                                                @if($member->customer)
+                                                    <div>
+                                                        <strong>{{ $member->customer->name }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">{{ $member->customer->email }}</small>
+                                                        @if($member->customer->phone)
+                                                            <br>
+                                                            <small class="text-muted">{{ $member->customer->phone }}</small>
+                                                        @endif
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">Khách hàng đã bị xóa</span>
+                                                @endif
+                                            </td>
+                                            <td>{{ $member->member_email }}</td>
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <div class="mb-1">
+                                                        <small class="text-muted">Bắt đầu:</small>
+                                                        <span class="fw-bold">
+                                                            {{ $member->start_date ? $member->start_date->format('d/m/Y') : 'Chưa xác định' }}
+                                                        </span>
                                                     </div>
                                                     <div>
-                                                        <strong>{{ $member->customer->name }}</strong><br>
-                                                        <small class="text-muted">{{ $member->customer->customer_code }}</small>
+                                                        <small class="text-muted">Kết thúc:</small>
+                                                        <span class="fw-bold {{ $member->end_date && $member->end_date->isPast() ? 'text-danger' : 'text-success' }}">
+                                                            {{ $member->end_date ? $member->end_date->format('d/m/Y') : 'Không giới hạn' }}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>{!! $member->role_badge !!}</td>
                                             <td>
-                                                <small>
-                                                    {{ $member->created_at->format('d/m/Y') }}<br>
-                                                    <span class="text-muted">{{ $member->days_in_family }} ngày</span>
-                                                </small>
+                                                @if($member->start_date && $member->end_date)
+                                                    @php
+                                                        $now = now();
+                                                        $isActive = $now->between($member->start_date, $member->end_date);
+                                                        $isExpired = $now->gt($member->end_date);
+                                                        $isUpcoming = $now->lt($member->start_date);
+                                                    @endphp
+                                                    
+                                                    @if($isActive)
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check-circle me-1"></i>
+                                                            Đang hoạt động
+                                                        </span>
+                                                    @elseif($isExpired)
+                                                        <span class="badge bg-danger">
+                                                            <i class="fas fa-times-circle me-1"></i>
+                                                            Đã hết hạn
+                                                        </span>
+                                                    @elseif($isUpcoming)
+                                                        <span class="badge bg-warning">
+                                                            <i class="fas fa-clock me-1"></i>
+                                                            Sắp hoạt động
+                                                        </span>
+                                                    @endif
+                                                @else
+                                                    @php
+                                                        $memberStatusColors = [
+                                                            'active' => 'success',
+                                                            'suspended' => 'warning',
+                                                            'removed' => 'danger',
+                                                        ];
+                                                        $memberStatusLabels = [
+                                                            'active' => 'Hoạt động',
+                                                            'suspended' => 'Tạm ngưng',
+                                                            'removed' => 'Đã xóa',
+                                                        ];
+                                                    @endphp
+                                                    <span class="badge bg-{{ $memberStatusColors[$member->status] ?? 'secondary' }}">
+                                                        {{ $memberStatusLabels[$member->status] ?? $member->status }}
+                                                    </span>
+                                                @endif
                                             </td>
-                                            <td>{!! $member->usage_badge !!}</td>
                                             <td>
-                                                <div class="btn-group" role="group">
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-primary" 
-                                                            data-bs-toggle="modal" 
-                                                            data-bs-target="#editMemberModal{{ $member->id }}"
-                                                            title="Chỉnh sửa">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-danger" 
-                                                            data-bs-toggle="modal" 
-                                                            data-bs-target="#removeMemberModal{{ $member->id }}"
-                                                            title="Xóa khỏi family">
-                                                        <i class="fas fa-user-minus"></i>
-                                                    </button>
-                                                </div>
+                                                @if($member->first_usage_at)
+                                                    <div>
+                                                        {{ $member->first_usage_at->format('d/m/Y') }}
+                                                        <br>
+                                                        <small class="text-muted">{{ $member->first_usage_at->diffForHumans() }}</small>
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">{{ $member->created_at->format('d/m/Y') }}</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($member->status === 'active')
+                                                    <form method="POST" 
+                                                          action="{{ route('admin.family-accounts.remove-member', [$familyAccount, $member]) }}" 
+                                                          class="d-inline"
+                                                          onsubmit="return confirm('Bạn có chắc muốn xóa thành viên này?')">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                            <i class="fas fa-trash"></i> Xóa
+                                                        </button>
+                                                    </form>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -256,187 +293,20 @@
                             </table>
                         </div>
                     @else
-                        <div class="text-center py-4">
+                        <div class="text-center py-5">
                             <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">Chưa có thành viên nào trong family.</p>
-                            @if($familyAccount->canAddMember())
-                                <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" 
-                                   class="btn btn-success">
-                                    <i class="fas fa-user-plus me-1"></i>
-                                    Thêm thành viên đầu tiên
-                                </a>
-                            @endif
+                            <h5 class="text-muted">Chưa có thành viên nào</h5>
+                            <p class="text-muted mb-4">Family account này chưa có thành viên nào</p>
+                            <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
+                                <i class="fas fa-user-plus me-1"></i>
+                                Thêm thành viên đầu tiên
+                            </a>
                         </div>
                     @endif
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Inactive/Removed Members -->
-    @if($inactiveMembers->count() > 0 || $removedMembers->count() > 0)
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-user-slash me-2"></i>
-                            Thành viên không hoạt động / đã xóa
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Thành viên</th>
-                                        <th>Trạng thái</th>
-                                        <th>Ngày thêm</th>
-                                        <th>Thay đổi cuối</th>
-                                        <th>Ghi chú</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($inactiveMembers->concat($removedMembers) as $member)
-                                        <tr class="text-muted">
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    <div class="avatar-sm bg-light text-dark rounded-circle d-flex align-items-center justify-content-center me-2">
-                                                        <i class="fas fa-user"></i>
-                                                    </div>
-                                                    <div>
-                                                        <strong>{{ $member->customer->name }}</strong><br>
-                                                        <small>{{ $member->customer->customer_code }}</small>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>{!! $member->status_badge !!}</td>
-                                            <td>
-                                                <small>{{ $member->created_at->format('d/m/Y') }}</small>
-                                            </td>
-                                            <td>
-                                                <small>
-                                                    @if($member->removed_at)
-                                                        {{ $member->removed_at->format('d/m/Y') }}
-                                                    @else
-                                                        {{ $member->updated_at->format('d/m/Y') }}
-                                                    @endif
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <small>{{ $member->member_notes ?: 'Không có ghi chú' }}</small>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
 </div>
-
-<!-- Modals for Edit/Remove Members -->
-@foreach($activeMembers as $member)
-    <!-- Edit Member Modal -->
-    <div class="modal fade" id="editMemberModal{{ $member->id }}" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" action="{{ route('admin.family-accounts.update-member', [$familyAccount, $member]) }}">
-                    @csrf
-                    @method('PUT')
-                    <div class="modal-header">
-                        <h5 class="modal-title">Chỉnh sửa thành viên: {{ $member->customer->name }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Trạng thái</label>
-                            <select class="form-select" name="status" required>
-                                <option value="active" {{ $member->status === 'active' ? 'selected' : '' }}>Hoạt động</option>
-                                <option value="inactive" {{ $member->status === 'inactive' ? 'selected' : '' }}>Không hoạt động</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Vai trò</label>
-                            <select class="form-select" name="member_role" required>
-                                <option value="member" {{ $member->member_role === 'member' ? 'selected' : '' }}>Thành viên</option>
-                                <option value="admin" {{ $member->member_role === 'admin' ? 'selected' : '' }}>Quản trị viên</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Ghi chú</label>
-                            <textarea class="form-control" name="member_notes" rows="3">{{ $member->member_notes }}</textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-                        <button type="submit" class="btn btn-primary">Cập nhật</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Remove Member Modal -->
-    <div class="modal fade" id="removeMemberModal{{ $member->id }}" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form method="POST" action="{{ route('admin.family-accounts.remove-member', [$familyAccount, $member]) }}">
-                    @csrf
-                    @method('DELETE')
-                    <div class="modal-header">
-                        <h5 class="modal-title">Xóa thành viên: {{ $member->customer->name }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Bạn có chắc chắn muốn xóa <strong>{{ $member->customer->name }}</strong> khỏi family này?
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Lý do xóa</label>
-                            <textarea class="form-control" name="reason" rows="3" placeholder="Nhập lý do xóa thành viên..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-                        <button type="submit" class="btn btn-danger">Xóa thành viên</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-@endforeach
 @endsection
 
-@push('styles')
-<style>
-.avatar-sm {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-}
-
-.progress {
-    background-color: rgba(255,255,255,0.2);
-}
-
-.card-body .table th {
-    border-top: none;
-    font-weight: 600;
-    font-size: 0.875rem;
-}
-
-.btn-group .btn {
-    border-radius: 0.25rem;
-    margin-right: 2px;
-}
-
-.btn-group .btn:last-child {
-    margin-right: 0;
-}
-</style>
-@endpush

@@ -13,16 +13,38 @@ class ServicePackage extends Model
         'name',
         'account_type',
         'default_duration_days',
+        'custom_duration',
         'price',
         'cost_price',
         'description',
+        'detailed_notes',
+        'warranty_type',
         'is_active',
+        'is_renewable',
+        'device_limit',
+        'shared_users_limit',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
         'is_active' => 'boolean',
+        'is_renewable' => 'boolean',
+        'device_limit' => 'integer',
+        'shared_users_limit' => 'integer',
     ];
+
+    // Accessor for backward compatibility
+    public function getDurationMonthsAttribute()
+    {
+        return round($this->default_duration_days / 30);
+    }
+
+    // Accessor for package name compatibility
+    public function getPackageNameAttribute()
+    {
+        return $this->name;
+    }
 
     public function category(): BelongsTo
     {
