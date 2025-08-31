@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerService extends Model
 {
@@ -76,6 +77,11 @@ class CustomerService extends Model
     public function supplierService(): BelongsTo
     {
         return $this->belongsTo(SupplierProduct::class, 'supplier_service_id');
+    }
+
+    public function profit(): HasOne
+    {
+        return $this->hasOne(Profit::class);
     }
 
     // Kiểm tra xem dịch vụ có sắp hết hạn không (trong vòng 5 ngày)

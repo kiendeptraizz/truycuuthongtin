@@ -29,6 +29,26 @@
                                    readonly>
                             <div class="form-text">Mã khách hàng không thể thay đổi</div>
                         </div>
+
+                        <!-- Collaborator Status -->
+                        <div class="col-md-12 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="is_collaborator" 
+                                       name="is_collaborator"
+                                       value="1"
+                                       {{ old('is_collaborator', $customer->is_collaborator) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="is_collaborator">
+                                    <i class="fas fa-handshake text-primary"></i>
+                                    Đây là cộng tác viên
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle text-info"></i>
+                                Trạng thái cộng tác viên (mã {{ $customer->customer_code }} sẽ không thay đổi)
+                            </div>
+                        </div>
                         
                         <div class="col-md-12 mb-3">
                             <label for="name" class="form-label">

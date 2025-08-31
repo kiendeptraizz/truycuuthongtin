@@ -134,7 +134,7 @@
                         <div class="col-6">
                             <small class="text-muted">Thành viên:</small><br>
                             <span class="badge {{ $familyAccount->current_members >= $familyAccount->max_members ? 'bg-danger' : 'bg-success' }} fs-6">
-                                {{ $familyAccount->current_members }}/{{ $familyAccount->max_members }}
+                                {{ $activeMembers->count() }}/{{ $familyAccount->max_members }}
                             </span>
                         </div>
                     </div>
@@ -149,12 +149,15 @@
             <div class="card">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
+                        <h6 class="mb-0">
                             <i class="fas fa-users me-2"></i>
-                            Danh sách thành viên 
-                            <span class="badge bg-secondary ms-2">{{ $familyAccount->members->count() }}</span>
-                        </h5>
-                        @if($familyAccount->current_members < $familyAccount->max_members)
+                            Danh sách thành viên
+                            <span class="badge bg-primary">{{ $activeMembers->count() }}</span>
+                            @if($inactiveMembers->count() > 0)
+                                <span class="badge bg-secondary ms-2">{{ $inactiveMembers->count() }} đã xóa</span>
+                            @endif
+                        </h6>
+                        @if($activeMembers->count() < $familyAccount->max_members)
                             <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
                                 <i class="fas fa-user-plus me-1"></i>
                                 Thêm thành viên
@@ -165,22 +168,43 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    @if($familyAccount->members->count() > 0)
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Khách hàng</th>
-                                        <th>Email thành viên</th>
-                                        <th>Thời gian hiệu lực</th>
-                                        <th>Trạng thái</th>
-                                        <th>Ngày tham gia</th>
-                                        <th>Hành động</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($familyAccount->members as $member)
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs" id="memberTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">
+                                <i class="fas fa-check-circle text-success me-1"></i>
+                                Thành viên hoạt động ({{ $activeMembers->count() }})
+                            </button>
+                        </li>
+                        @if($inactiveMembers->count() > 0)
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="inactive-tab" data-bs-toggle="tab" data-bs-target="#inactive" type="button" role="tab">
+                                <i class="fas fa-times-circle text-muted me-1"></i>
+                                Đã xóa/Tạm dừng ({{ $inactiveMembers->count() }})
+                            </button>
+                        </li>
+                        @endif
+                    </ul>
+
+                    <div class="tab-content" id="memberTabsContent">
+                        <!-- Active Members Tab -->
+                        <div class="tab-pane fade show active" id="active" role="tabpanel">
+                            @if($activeMembers->count() > 0)
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Khách hàng</th>
+                                                <th>Email thành viên</th>
+                                                <th>Thời gian hiệu lực</th>
+                                                <th>Trạng thái</th>
+                                                <th>Ngày tham gia</th>
+                                                <th>Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($activeMembers as $member)
                                         <tr>
                                             <td>
                                                 <span class="fw-bold">#{{ $member->id }}</span>
@@ -206,13 +230,24 @@
                                                     <div class="mb-1">
                                                         <small class="text-muted">Bắt đầu:</small>
                                                         <span class="fw-bold">
-                                                            {{ $member->start_date ? $member->start_date->format('d/m/Y') : 'Chưa xác định' }}
+                                                            @if($member->start_date)
+                                                                {{ \Carbon\Carbon::parse($member->start_date)->format('d/m/Y') }}
+                                                            @else
+                                                                Chưa xác định
+                                                            @endif
                                                         </span>
                                                     </div>
                                                     <div>
                                                         <small class="text-muted">Kết thúc:</small>
-                                                        <span class="fw-bold {{ $member->end_date && $member->end_date->isPast() ? 'text-danger' : 'text-success' }}">
-                                                            {{ $member->end_date ? $member->end_date->format('d/m/Y') : 'Không giới hạn' }}
+                                                        @php
+                                                            $endDate = $member->end_date ? \Carbon\Carbon::parse($member->end_date) : null;
+                                                        @endphp
+                                                        <span class="fw-bold {{ $endDate && $endDate->isPast() ? 'text-danger' : 'text-success' }}">
+                                                            @if($endDate)
+                                                                {{ $endDate->format('d/m/Y') }}
+                                                            @else
+                                                                Không giới hạn
+                                                            @endif
                                                         </span>
                                                     </div>
                                                 </div>
@@ -221,9 +256,11 @@
                                                 @if($member->start_date && $member->end_date)
                                                     @php
                                                         $now = now();
-                                                        $isActive = $now->between($member->start_date, $member->end_date);
-                                                        $isExpired = $now->gt($member->end_date);
-                                                        $isUpcoming = $now->lt($member->start_date);
+                                                        $startDate = \Carbon\Carbon::parse($member->start_date);
+                                                        $endDate = \Carbon\Carbon::parse($member->end_date);
+                                                        $isActive = $now->between($startDate, $endDate);
+                                                        $isExpired = $now->gt($endDate);
+                                                        $isUpcoming = $now->lt($startDate);
                                                     @endphp
                                                     
                                                     @if($isActive)
@@ -273,18 +310,29 @@
                                             </td>
                                             <td>
                                                 @if($member->status === 'active')
-                                                    <form method="POST" 
-                                                          action="{{ route('admin.family-accounts.remove-member', [$familyAccount, $member]) }}" 
-                                                          class="d-inline"
-                                                          onsubmit="return confirm('Bạn có chắc muốn xóa thành viên này?')">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                            <i class="fas fa-trash"></i> Xóa
-                                                        </button>
-                                                    </form>
+                                                    <div class="btn-group" role="group">
+                                                        <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
+                                                           class="btn btn-sm btn-outline-primary" 
+                                                           title="Chỉnh sửa thành viên">
+                                                            <i class="fas fa-edit"></i> Sửa
+                                                        </a>
+                                                        <form method="POST" 
+                                                              action="{{ route('admin.family-accounts.remove-member', [$familyAccount, $member]) }}" 
+                                                              class="d-inline"
+                                                              onsubmit="return confirm('Bạn có chắc muốn xóa thành viên này?')">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thành viên">
+                                                                <i class="fas fa-trash"></i> Xóa
+                                                            </button>
+                                                        </form>
+                                                    </div>
                                                 @else
-                                                    <span class="text-muted">-</span>
+                                                    <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
+                                                       class="btn btn-sm btn-outline-secondary" 
+                                                       title="Xem/Chỉnh sửa thành viên">
+                                                        <i class="fas fa-edit"></i> Sửa
+                                                    </a>
                                                 @endif
                                             </td>
                                         </tr>
@@ -292,17 +340,121 @@
                                 </tbody>
                             </table>
                         </div>
-                    @else
-                        <div class="text-center py-5">
-                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">Chưa có thành viên nào</h5>
-                            <p class="text-muted mb-4">Family account này chưa có thành viên nào</p>
-                            <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                                <i class="fas fa-user-plus me-1"></i>
-                                Thêm thành viên đầu tiên
-                            </a>
+                            @else
+                                <div class="text-center py-5">
+                                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">Chưa có thành viên hoạt động</h5>
+                                    <p class="text-muted mb-4">Family account này chưa có thành viên hoạt động nào</p>
+                                    <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
+                                        <i class="fas fa-user-plus me-1"></i>
+                                        Thêm thành viên đầu tiên
+                                    </a>
+                                </div>
+                            @endif
                         </div>
-                    @endif
+
+                        <!-- Inactive Members Tab -->
+                        @if($inactiveMembers->count() > 0)
+                        <div class="tab-pane fade" id="inactive" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Khách hàng</th>
+                                            <th>Email thành viên</th>
+                                            <th>Thời gian hiệu lực</th>
+                                            <th>Trạng thái</th>
+                                            <th>Ngày xóa</th>
+                                            <th>Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($inactiveMembers as $member)
+                                        <tr class="table-secondary">
+                                            <td>
+                                                <span class="fw-bold">#{{ $member->id }}</span>
+                                            </td>
+                                            <td>
+                                                @if($member->customer)
+                                                    <div>
+                                                        <strong>{{ $member->customer->name }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">{{ $member->customer->email }}</small>
+                                                        @if($member->customer->phone)
+                                                            <br>
+                                                            <small class="text-muted">{{ $member->customer->phone }}</small>
+                                                        @endif
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">Khách hàng đã bị xóa</span>
+                                                @endif
+                                            </td>
+                                            <td>{{ $member->member_email }}</td>
+                                            <td>
+                                                <div class="d-flex flex-column">
+                                                    <div class="mb-1">
+                                                        <small class="text-muted">Bắt đầu:</small>
+                                                        <span class="fw-bold">
+                                                            @if($member->start_date)
+                                                                {{ \Carbon\Carbon::parse($member->start_date)->format('d/m/Y') }}
+                                                            @else
+                                                                Chưa xác định
+                                                            @endif
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <small class="text-muted">Kết thúc:</small>
+                                                        @php
+                                                            $endDate = $member->end_date ? \Carbon\Carbon::parse($member->end_date) : null;
+                                                        @endphp
+                                                        <span class="fw-bold text-muted">
+                                                            @if($endDate)
+                                                                {{ $endDate->format('d/m/Y') }}
+                                                            @else
+                                                                Không giới hạn
+                                                            @endif
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if($member->status === 'removed')
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-times me-1"></i>Đã xóa
+                                                    </span>
+                                                @elseif($member->status === 'suspended')
+                                                    <span class="badge bg-warning">
+                                                        <i class="fas fa-pause me-1"></i>Tạm dừng
+                                                    </span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($member->removed_at)
+                                                    <div>
+                                                        {{ \Carbon\Carbon::parse($member->removed_at)->format('d/m/Y') }}
+                                                        <br>
+                                                        <small class="text-muted">{{ \Carbon\Carbon::parse($member->removed_at)->diffForHumans() }}</small>
+                                                    </div>
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
+                                                   class="btn btn-sm btn-outline-secondary" 
+                                                   title="Xem chi tiết">
+                                                    <i class="fas fa-eye"></i> Xem
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>

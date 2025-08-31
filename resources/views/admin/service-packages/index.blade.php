@@ -198,6 +198,62 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Account Type Filter -->
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body py-2">
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <span class="small text-muted fw-semibold me-2">
+                                            <i class="fas fa-filter me-1"></i>Loại tài khoản:
+                                        </span>
+                                        <a href="{{ route('admin.service-packages.index', ['account_type' => 'Tài khoản chính chủ']) }}" 
+                                           class="btn btn-sm {{ request('account_type') === 'Tài khoản chính chủ' ? 'btn-primary' : 'btn-outline-primary' }}">
+                                            <i class="fas fa-user me-1"></i>Chính chủ
+                                            @if(isset($accountTypeStats['Tài khoản chính chủ']))
+                                                <span class="badge {{ request('account_type') === 'Tài khoản chính chủ' ? 'bg-light text-dark' : 'bg-primary text-white' }} ms-1">{{ $accountTypeStats['Tài khoản chính chủ'] }}</span>
+                                            @endif
+                                        </a>
+                                        <a href="{{ route('admin.service-packages.index', ['account_type' => 'Tài khoản dùng chung']) }}" 
+                                           class="btn btn-sm {{ request('account_type') === 'Tài khoản dùng chung' ? 'btn-info' : 'btn-outline-info' }}">
+                                            <i class="fas fa-users me-1"></i>Dùng chung
+                                            @if(isset($accountTypeStats['Tài khoản dùng chung']))
+                                                <span class="badge {{ request('account_type') === 'Tài khoản dùng chung' ? 'bg-light text-dark' : 'bg-info text-white' }} ms-1">{{ $accountTypeStats['Tài khoản dùng chung'] }}</span>
+                                            @endif
+                                        </a>
+                                        <a href="{{ route('admin.service-packages.index', ['account_type' => 'Tài khoản add family']) }}" 
+                                           class="btn btn-sm {{ request('account_type') === 'Tài khoản add family' ? 'btn-secondary' : 'btn-outline-secondary' }}">
+                                            <i class="fas fa-user-plus me-1"></i>Add Fam
+                                            @if(isset($accountTypeStats['Tài khoản add family']))
+                                                <span class="badge {{ request('account_type') === 'Tài khoản add family' ? 'bg-light text-dark' : 'bg-secondary text-white' }} ms-1">{{ $accountTypeStats['Tài khoản add family'] }}</span>
+                                            @endif
+                                        </a>
+                                        <a href="{{ route('admin.service-packages.index', ['account_type' => 'Tài khoản cấp (dùng riêng)']) }}" 
+                                           class="btn btn-sm {{ request('account_type') === 'Tài khoản cấp (dùng riêng)' ? 'btn-success' : 'btn-outline-success' }}">
+                                            <i class="fas fa-crown me-1"></i>Cấp riêng
+                                            @if(isset($accountTypeStats['Tài khoản cấp (dùng riêng)']))
+                                                <span class="badge {{ request('account_type') === 'Tài khoản cấp (dùng riêng)' ? 'bg-light text-dark' : 'bg-success text-white' }} ms-1">{{ $accountTypeStats['Tài khoản cấp (dùng riêng)'] }}</span>
+                                            @endif
+                                        </a>
+                                        <a href="{{ route('admin.service-packages.index', ['account_type' => 'family']) }}" 
+                                           class="btn btn-sm {{ request('account_type') === 'family' ? 'btn-warning' : 'btn-outline-warning' }}">
+                                            <i class="fas fa-home me-1"></i>Family
+                                            @if(isset($accountTypeStats['family']))
+                                                <span class="badge {{ request('account_type') === 'family' ? 'bg-light text-dark' : 'bg-warning text-white' }} ms-1">{{ $accountTypeStats['family'] }}</span>
+                                            @endif
+                                        </a>
+                                        <div class="vr mx-2"></div>
+                                        <a href="{{ route('admin.service-packages.index') }}" 
+                                           class="btn btn-sm {{ !request('account_type') ? 'btn-dark' : 'btn-outline-dark' }}">
+                                            <i class="fas fa-list me-1"></i>Tất cả
+                                            <span class="badge {{ !request('account_type') ? 'bg-light text-dark' : 'bg-dark text-white' }} ms-1">{{ $servicePackages->total() }}</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>
@@ -402,7 +458,7 @@
                                                     class="btn btn-sm {{ $package->is_active ? 'btn-outline-warning' : 'btn-outline-success' }}"
                                                     title="{{ $package->is_active ? 'Tạm dừng' : 'Kích hoạt' }}"
                                                     onclick="return confirm('Bạn có chắc muốn {{ $package->is_active ? 'tạm dừng' : 'kích hoạt' }} gói dịch vụ này?')">
-                                                <i class="fas {{ $package->is_active ? 'fa-pause' : 'fa-play' }}"></i>
+                                                <i class="fas {{ $package->is_active ? 'fa-pause' : 'fa-play' }}" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">{{ $package->is_active ? '⏸️' : '▶️' }}</i>
                                             </button>
                                         </form>
                                     </div>
@@ -413,13 +469,13 @@
                                            class="btn btn-sm btn-info text-white"
                                            title="Xem chi tiết"
                                            style="min-width: 40px;">
-                                            <i class="fas fa-eye"></i>
+                                            <i class="fas fa-eye" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">👁️</i>
                                         </a>
                                         <a href="{{ route('admin.service-packages.edit', $package) }}"
                                            class="btn btn-sm btn-warning text-white"
                                            title="Chỉnh sửa"
                                            style="min-width: 40px;">
-                                            <i class="fas fa-edit"></i>
+                                            <i class="fas fa-edit" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">✏️</i>
                                         </a>
                                         <form method="POST"
                                               action="{{ route('admin.service-packages.destroy', $package) }}"
@@ -431,7 +487,7 @@
                                                     class="btn btn-sm btn-danger text-white"
                                                     title="Xóa"
                                                     style="min-width: 40px;">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">🗑️</i>
                                             </button>
                                         </form>
                                     </div>

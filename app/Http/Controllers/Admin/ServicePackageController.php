@@ -26,6 +26,11 @@ class ServicePackageController extends Controller
             $query->where('is_active', $request->status === 'active');
         }
 
+        // Filter by account type
+        if ($request->filled('account_type')) {
+            $query->where('account_type', $request->account_type);
+        }
+
         // Filter by date range
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);
@@ -48,7 +53,14 @@ class ServicePackageController extends Controller
         $servicePackages = $query->orderBy('created_at', 'desc')->paginate(15);
         $categories = ServiceCategory::orderBy('name')->get();
 
-        return view('admin.service-packages.index', compact('servicePackages', 'categories'));
+        // Get statistics for account types
+        $accountTypeStats = ServicePackage::selectRaw('account_type, COUNT(*) as count')
+            ->groupBy('account_type')
+            ->get()
+            ->pluck('count', 'account_type')
+            ->toArray();
+
+        return view('admin.service-packages.index', compact('servicePackages', 'categories', 'accountTypeStats'));
     }
 
     /**

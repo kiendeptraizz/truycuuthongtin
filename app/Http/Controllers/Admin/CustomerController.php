@@ -85,6 +85,7 @@ class CustomerController extends Controller
             'phone' => 'nullable|string|max:20',
             'notes' => 'nullable|string|max:1000',
             'customer_code' => 'nullable|string|max:20|unique:customers,customer_code',
+            'is_collaborator' => 'nullable|boolean',
         ];
 
         // Custom validation messages
@@ -105,15 +106,22 @@ class CustomerController extends Controller
             // Prepare data for creation
             $data = $request->only(['name', 'email', 'phone', 'notes']);
 
+            // Handle collaborator flag
+            $isCollaborator = $request->boolean('is_collaborator');
+            $data['is_collaborator'] = $isCollaborator;
+
             // Handle customer code
             if ($request->filled('customer_code')) {
                 // Validate format if provided
                 $customerCode = strtoupper(trim($request->customer_code));
 
-                // Check if it follows KUN##### format
-                if (!preg_match('/^KUN\d{5}$/', $customerCode)) {
+                // Check format based on collaborator status
+                $expectedPrefix = $isCollaborator ? 'CTV' : 'KUN';
+                $pattern = $isCollaborator ? '/^CTV\d{5}$/' : '/^KUN\d{5}$/';
+
+                if (!preg_match($pattern, $customerCode)) {
                     return back()->withErrors([
-                        'customer_code' => 'Mã khách hàng phải theo định dạng KUN##### (ví dụ: KUN12345)'
+                        'customer_code' => "Mã khách hàng phải theo định dạng {$expectedPrefix}##### (ví dụ: {$expectedPrefix}12345)"
                     ])->withInput();
                 }
 
@@ -170,9 +178,10 @@ class CustomerController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
+            'is_collaborator' => 'nullable|boolean',
         ]);
 
-        $customer->update($request->only(['name', 'email', 'phone']));
+        $customer->update($request->only(['name', 'email', 'phone', 'is_collaborator']));
 
         return redirect(route('admin.customers.index') . '#customer-' . $customer->id)
             ->with('success', 'Thông tin khách hàng đã được cập nhật!');

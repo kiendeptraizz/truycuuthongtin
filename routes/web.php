@@ -16,6 +16,8 @@ use App\Http\Controllers\LookupController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\PotentialSupplierController;
 use App\Http\Controllers\Admin\CollaboratorController;
+use App\Http\Controllers\Admin\RevenueController;
+use App\Http\Controllers\ProfitController;
 
 
 
@@ -36,6 +38,11 @@ Route::get('/demo/customer-search', function () {
 Route::get('/demo/search-spacebar-test', function () {
     return view('demo.search-spacebar-test');
 })->name('demo.search-spacebar-test');
+
+// Icon test route
+Route::get('/icon-test', function () {
+    return view('icon-test');
+})->name('icon-test');
 
 // Test route để tạo dữ liệu tra cứu
 Route::get('/test/create-lookup-data', function () {
@@ -77,13 +84,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
 Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.caching'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Icon demo page
+    Route::get('icon-demo', function () {
+        return view('admin.icon-demo');
+    })->name('icon-demo');
+
     // Quản lý khách hàng
     Route::resource('customers', CustomerController::class);
-
-    // Test route
-    Route::get('test-quick-add', function () {
-        return view('test-quick-add');
-    })->name('test.quick.add');
     Route::get('customers/check-code/{code}', [CustomerController::class, 'checkCustomerCode'])
         ->name('customers.check-code');
 
@@ -201,6 +208,8 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
         ->name('family-accounts.add-member-form');
     Route::post('family-accounts/{familyAccount}/add-member', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'addMember'])
         ->name('family-accounts.add-member');
+    Route::get('family-accounts/{familyAccount}/members/{member}/edit', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'editMemberForm'])
+        ->name('family-accounts.edit-member-form');
     Route::delete('family-accounts/{familyAccount}/members/{member}', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'removeMember'])
         ->name('family-accounts.remove-member');
     Route::put('family-accounts/{familyAccount}/members/{member}', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'updateMember'])
@@ -210,23 +219,34 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
     Route::get('family-accounts-report', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'report'])
         ->name('family-accounts.report');
 
-    // Test route for debugging
-    Route::post('test-update-member', function (\Illuminate\Http\Request $request) {
-        Log::info('Test update member request', $request->all());
-        return response()->json(['success' => true, 'message' => 'Test successful']);
-    })->name('test.update-member');
+    // Revenue Statistics Routes (thay thế Profit Management)
+    Route::prefix('revenue')->name('revenue.')->group(function () {
+        Route::get('/', [RevenueController::class, 'index'])->name('index');
+        Route::get('/data', [RevenueController::class, 'getRevenueData'])->name('data');
+        Route::get('/service-stats', [RevenueController::class, 'getServiceStats'])->name('service-stats');
+        Route::get('/export', [RevenueController::class, 'exportReport'])->name('export');
+        Route::post('/update-profit', [RevenueController::class, 'updateProfit'])->name('update-profit');
+        Route::delete('/delete-profit', [RevenueController::class, 'deleteProfit'])->name('delete-profit');
+    });
 
-    // Test route with model binding
-    Route::put('test-family-accounts/{familyAccount}/members/{member}', function (\Illuminate\Http\Request $request, \App\Models\FamilyAccount $familyAccount, \App\Models\FamilyMember $member) {
-        Log::info('Test model binding', [
-            'family_account_id' => $familyAccount->id,
-            'member_id' => $member->id,
-            'request_data' => $request->all()
-        ]);
-        return response()->json(['success' => true, 'message' => 'Model binding test successful']);
-    })->name('test.family-member-update');
-    Route::get('family-accounts-report', [\App\Http\Controllers\Admin\FamilyAccountController::class, 'report'])
-        ->name('family-accounts.report');
+    // Giữ lại Profit Management Routes cũ cho compatibility (deprecated)
+    Route::prefix('profits')->name('profits.')->group(function () {
+        Route::get('/', [ProfitController::class, 'index'])->name('index');
+        Route::get('/today-orders', [ProfitController::class, 'getTodayOrders'])->name('today-orders');
+        Route::get('/today-statistics', [ProfitController::class, 'getTodayStatistics'])->name('today-statistics');
+        Route::post('/store', [ProfitController::class, 'storeProfit'])->name('store');
+        Route::delete('/delete', [ProfitController::class, 'deleteProfit'])->name('delete');
+    });
+
+    // Test route for debugging
+    Route::get('test-profits', function () {
+        return view('test-profits');
+    })->name('test-profits');
+
+    // Direct test route
+    Route::get('test-profits-direct', function () {
+        return view('test-profits-direct');
+    })->name('test-profits-direct');
 
     // Account Conversion Routes (commented out - controller not found)
     // Route::get('account-conversion', [\App\Http\Controllers\Admin\AccountConversionController::class, 'index'])

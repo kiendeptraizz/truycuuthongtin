@@ -122,8 +122,8 @@ class FamilyAccountController extends Controller
                 'status' => 'active',
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'created_by' => 1, // TODO: Replace with actual admin ID when auth is implemented
-                'managed_by' => 1,
+                'created_by' => auth('admin')->id() ?? 1,
+                'managed_by' => auth('admin')->id() ?? 1,
             ]);
 
             DB::commit();
@@ -146,7 +146,11 @@ class FamilyAccountController extends Controller
     {
         $familyAccount->load(['servicePackage', 'members.customer']);
 
-        return view('admin.family-accounts.show', compact('familyAccount'));
+        // Group members by status
+        $activeMembers = $familyAccount->members->where('status', 'active');
+        $inactiveMembers = $familyAccount->members->whereIn('status', ['suspended', 'removed']);
+
+        return view('admin.family-accounts.show', compact('familyAccount', 'activeMembers', 'inactiveMembers'));
     }
 
     /**
@@ -209,7 +213,7 @@ class FamilyAccountController extends Controller
                 'status' => $request->status,
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'managed_by' => 1, // TODO: Replace with actual admin ID
+                'managed_by' => auth('admin')->id() ?? 1,
             ]);
 
             DB::commit();
@@ -232,16 +236,14 @@ class FamilyAccountController extends Controller
     {
         DB::beginTransaction();
         try {
-            // Check if family has active members
-            if ($familyAccount->members()->where('status', 'active')->exists()) {
-                return redirect()->route('admin.family-accounts.index')
-                    ->with('error', 'Không thể xóa Family Account còn có thành viên đang hoạt động!');
-            }
+            // Optional: Check if family has active members
+            // Uncomment the lines below if you want to prevent deletion of families with active members
+            // if ($familyAccount->members()->where('status', 'active')->exists()) {
+            //     return redirect()->route('admin.family-accounts.index')
+            //         ->with('error', 'Không thể xóa Family Account còn có thành viên đang hoạt động!');
+            // }
 
-            // Delete all family members first
-            $familyAccount->members()->delete();
-
-            // Delete family account
+            // Delete family account (cascade will automatically delete members)
             $familyAccount->delete();
 
             DB::commit();
@@ -348,7 +350,7 @@ class FamilyAccountController extends Controller
             }
 
             // Add member
-            FamilyMember::create([
+            $familyMember = FamilyMember::create([
                 'family_account_id' => $familyAccount->id,
                 'customer_id' => $customerId,
                 'member_name' => $request->member_type === 'new' ? $request->customer_name : null,
@@ -360,6 +362,19 @@ class FamilyAccountController extends Controller
                 'end_date' => $calculatedEndDate,
                 'first_usage_at' => now(),
                 'added_by' => null, // Set to null for now
+            ]);
+
+            // Create corresponding Customer Service
+            \App\Models\CustomerService::create([
+                'customer_id' => $customerId,
+                'service_package_id' => $familyAccount->service_package_id,
+                'login_email' => $request->member_email,
+                'login_password' => null, // Family member doesn't have individual password
+                'activated_at' => Carbon::parse($request->start_date),
+                'expires_at' => $calculatedEndDate,
+                'status' => 'active',
+                'assigned_by' => Auth::guard('admin')->id(),
+                'internal_notes' => 'Dịch vụ được tạo tự động từ Family Account: ' . $familyAccount->family_name . ' (ID: ' . $familyAccount->id . '). Thành viên Family Member ID: ' . $familyMember->id,
             ]);
 
             // Update current members count
@@ -410,8 +425,17 @@ class FamilyAccountController extends Controller
             $member->update([
                 'status' => 'removed',
                 'removed_at' => now(),
-                'removed_by' => 1, // TODO: Replace with actual admin ID
+                'removed_by' => auth('admin')->id() ?? 1,
             ]);
+
+            // Update corresponding Customer Service status
+            \App\Models\CustomerService::where('customer_id', $member->customer_id)
+                ->where('service_package_id', $familyAccount->service_package_id)
+                ->where('login_email', $member->member_email)
+                ->update([
+                    'status' => 'cancelled',
+                    'internal_notes' => DB::raw("CONCAT(COALESCE(internal_notes, ''), '\n[" . now()->format('d/m/Y H:i') . "] Dịch vụ bị hủy do thành viên bị xóa khỏi Family Account.')"),
+                ]);
 
             // Update current members count
             $familyAccount->decrement('current_members');
@@ -429,6 +453,22 @@ class FamilyAccountController extends Controller
     }
 
     /**
+     * Show form to edit member
+     */
+    public function editMemberForm(FamilyAccount $familyAccount, FamilyMember $member)
+    {
+        if ($member->family_account_id !== $familyAccount->id) {
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('error', 'Thành viên không thuộc Family Account này!');
+        }
+
+        // Load service package information for duration calculation
+        $familyAccount->load('servicePackage');
+
+        return view('admin.family-accounts.edit-member', compact('familyAccount', 'member'));
+    }
+
+    /**
      * Update member information
      */
     public function updateMember(Request $request, FamilyAccount $familyAccount, FamilyMember $member)
@@ -436,20 +476,34 @@ class FamilyAccountController extends Controller
         $request->validate([
             'member_email' => 'required|email|max:255',
             'status' => 'required|in:active,suspended,removed',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
             'member_notes' => 'nullable|string',
         ]);
 
         if ($member->family_account_id !== $familyAccount->id) {
-            return response()->json(['error' => 'Thành viên không thuộc Family Account này!'], 400);
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Thành viên không thuộc Family Account này!'], 400);
+            }
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('error', 'Thành viên không thuộc Family Account này!');
         }
 
         DB::beginTransaction();
         try {
             $oldStatus = $member->status;
 
+            // Auto calculate end_date if not provided
+            $startDate = Carbon::parse($request->start_date);
+            $endDate = $request->end_date ?
+                Carbon::parse($request->end_date) :
+                $this->calculateEndDate($familyAccount, $startDate);
+
             $member->update([
                 'member_email' => $request->member_email,
                 'status' => $request->status,
+                'start_date' => $startDate->format('Y-m-d'),
+                'end_date' => $endDate->format('Y-m-d'),
                 'member_notes' => $request->member_notes,
             ]);
 
@@ -464,12 +518,42 @@ class FamilyAccountController extends Controller
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Thông tin thành viên đã được cập nhật!']);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Thông tin thành viên đã được cập nhật!',
+                    'data' => [
+                        'start_date' => $startDate->format('d/m/Y'),
+                        'end_date' => $endDate->format('d/m/Y'),
+                        'calculated_end_date' => !$request->end_date
+                    ]
+                ]);
+            }
+
+            return redirect()->route('admin.family-accounts.show', $familyAccount)
+                ->with('success', 'Thông tin thành viên đã được cập nhật thành công!');
         } catch (\Exception $e) {
             DB::rollback();
 
-            return response()->json(['error' => 'Có lỗi xảy ra: ' . $e->getMessage()], 500);
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Có lỗi xảy ra: ' . $e->getMessage()], 500);
+            }
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Calculate end date based on service package duration
+     */
+    private function calculateEndDate(FamilyAccount $familyAccount, Carbon $startDate)
+    {
+        $servicePackage = $familyAccount->servicePackage;
+        $durationDays = $servicePackage->duration_days ?? 30; // Default 30 days if null
+
+        return $startDate->copy()->addDays($durationDays);
     }
 
     /**

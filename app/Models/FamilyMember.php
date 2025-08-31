@@ -18,6 +18,7 @@ class FamilyMember extends Model
         'member_role',
         'status',
         'permissions',
+        'joined_at',
         'last_active_at',
         'removed_at',
         'usage_count',
@@ -34,6 +35,7 @@ class FamilyMember extends Model
 
     protected $casts = [
         'permissions' => 'array',
+        'joined_at' => 'datetime',
         'last_active_at' => 'datetime',
         'removed_at' => 'datetime',
         'first_usage_at' => 'datetime',

@@ -155,6 +155,58 @@
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
+
+                        <!-- Thông tin lợi nhuận -->
+                        <div class="col-md-12 mb-4">
+                            <div class="card border-success">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0 text-success">
+                                        <i class="fas fa-money-bill-wave me-2"></i>
+                                        Thông tin lợi nhuận (Tùy chọn)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_amount" class="form-label">
+                                                <i class="fas fa-dollar-sign me-1"></i>
+                                                Số tiền lãi
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" 
+                                                       class="form-control @error('profit_amount') is-invalid @enderror" 
+                                                       id="profit_amount" 
+                                                       name="profit_amount" 
+                                                       min="0" 
+                                                       step="1000" 
+                                                       placeholder="Nhập số tiền lãi"
+                                                       value="{{ old('profit_amount') }}">
+                                                <span class="input-group-text">VNĐ</span>
+                                            </div>
+                                            @error('profit_amount')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                            <div class="form-text">Nhập số tiền lãi thu được từ đơn hàng này (để trống nếu chưa xác định)</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_notes" class="form-label">
+                                                <i class="fas fa-sticky-note me-1"></i>
+                                                Ghi chú lợi nhuận
+                                            </label>
+                                            <textarea class="form-control @error('profit_notes') is-invalid @enderror"
+                                                      id="profit_notes"
+                                                      name="profit_notes"
+                                                      rows="3"
+                                                      placeholder="Ghi chú về lợi nhuận...">{{ old('profit_notes') }}</textarea>
+                                            @error('profit_notes')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="d-flex justify-content-between">
@@ -204,7 +256,34 @@ document.addEventListener('DOMContentLoaded', function() {
             expiresInput.value = expiresDate.toISOString().split('T')[0];
         }
     });
+
+    // Format profit amount input with thousand separators
+    const profitAmountInput = document.getElementById('profit_amount');
+    if (profitAmountInput) {
+        // Format existing value on page load
+        if (profitAmountInput.value) {
+            profitAmountInput.value = formatNumberInput(profitAmountInput.value);
+        }
+
+        // Format as user types
+        profitAmountInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\./g, ''); // Remove existing dots
+            if (value && !isNaN(value)) {
+                e.target.value = formatNumberInput(value);
+            }
+        });
+
+        // Clean value before form submission (remove dots for proper validation)
+        profitAmountInput.closest('form').addEventListener('submit', function() {
+            profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+        });
+    }
 });
+
+// Function to format number with thousand separators
+function formatNumberInput(number) {
+    return parseInt(number).toLocaleString('vi-VN');
+}
 </script>
 @endpush
 @endsection

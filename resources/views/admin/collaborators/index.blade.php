@@ -167,7 +167,7 @@
                                 <small class="text-muted">{{ $collaborator->total_accounts }} tài khoản</small>
                             </td>
                             <td>
-                                <strong class="text-success">{{ number_format($collaborator->total_value, 0, '.', ',') }} VND</strong>
+                                <strong class="text-success">{{ number_format($collaborator->total_value, 0, ',', '.') }} VND</strong>
                             </td>
                             <td>
                                 @if($collaborator->status === 'active')

@@ -119,7 +119,7 @@
                                 Tổng giá trị ước tính
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ number_format($stats['total_estimated_value'], 0, '.', ',') }} VND
+                                {{ number_format($stats['total_estimated_value'], 0, ',', '.') }} VND
                             </div>
                         </div>
                         <div class="col-auto">
@@ -286,7 +286,7 @@
                             </td>
                             <td class="py-3">
                                 <span class="fw-bold text-success">
-                                    {{ number_format($supplier->total_estimated_value, 0, '.', ',') }} VND
+                                    {{ number_format($supplier->total_estimated_value, 0, ',', '.') }} VND
                                 </span>
                             </td>
                             <td class="py-3">

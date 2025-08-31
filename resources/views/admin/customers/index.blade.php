@@ -1,6 +1,44 @@
 @extends('layouts.admin')
 
-@section('title', 'Quản lý khách hàng')
+@section('titl    @media (max-width: 768px) {
+        .customers-table th:nth-child(5),
+        .customers-table td:nth-child(5) {
+            display: none;
+        }
+    }
+
+    /* Icon fallback styles */
+    .btn .fas, .btn .fa {
+        display: inline-block;
+        width: 1em;
+        text-align: center;
+        font-size: 14px;
+    }
+    
+    /* Khi Font Awesome load được, ẩn emoji */
+    .fas:before, .fa:before {
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+    }
+    
+    /* Fallback: hiện emoji khi Font Awesome không load */
+    .fas, .fa {
+        font-family: "Font Awesome 6 Free", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    }
+    
+    /* Đảm bảo icons hiển thị chính xác */
+    .fas.fa-eye:before { content: "\f06e"; }
+    .fas.fa-edit:before { content: "\f044"; }
+    .fas.fa-plus:before { content: "\f067"; }
+    .fas.fa-trash:before { content: "\f2ed"; }
+    
+    /* Ensure icons are visible */
+    .btn-group .btn {
+        min-width: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }uản lý khách hàng')
 @section('page-title', 'Quản lý khách hàng')
 
 @push('styles')
@@ -281,7 +319,14 @@
                     @foreach($customers as $customer)
                     <tr id="customer-{{ $customer->id }}" style="border-bottom: 1px solid #e9ecef;">
                         <td class="py-2 px-2">
-                            <span class="badge bg-primary px-1 py-1 small">{{ $customer->customer_code }}</span>
+                            <div class="d-flex flex-column gap-1">
+                                <span class="badge bg-primary px-1 py-1 small">{{ $customer->customer_code }}</span>
+                                @if($customer->is_collaborator)
+                                <span class="badge bg-success px-1 py-1 small">
+                                    <i class="fas fa-handshake me-1"></i>CTV
+                                </span>
+                                @endif
+                            </div>
                         </td>
                         <td>
                             <div class="d-flex align-items-center">
@@ -376,22 +421,22 @@
                             <div class="btn-group" role="group">
                                 <a href="{{ route('admin.customers.show', $customer) }}"
                                     class="btn btn-outline-info btn-sm" title="Xem chi tiết">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">👁️</i>
                                 </a>
                                 <a href="{{ route('admin.customers.edit', $customer) }}"
                                     class="btn btn-outline-warning btn-sm" title="Chỉnh sửa">
-                                    <i class="fas fa-edit"></i>
+                                    <i class="fas fa-edit" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">✏️</i>
                                 </a>
                                 <a href="{{ route('admin.customers.assign-service', $customer) }}"
                                     class="btn btn-outline-success btn-sm" title="Gán dịch vụ">
-                                    <i class="fas fa-plus"></i>
+                                    <i class="fas fa-plus" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">➕</i>
                                 </a>
                                 <button type="button"
                                     class="btn btn-outline-danger btn-sm delete-btn"
                                     title="Xóa khách hàng"
                                     data-customer-name="{{ $customer->name }}"
                                     data-delete-url="{{ route('admin.customers.destroy', $customer) }}">
-                                    <i class="fas fa-trash"></i>
+                                    <i class="fas fa-trash" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">🗑️</i>
                                 </button>
                             </div>
                         </td>

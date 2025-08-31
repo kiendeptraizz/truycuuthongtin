@@ -35,6 +35,88 @@
                                 :required="true"
                                 placeholder="Chọn gói dịch vụ cho khách hàng..."
                             />
+
+                            <!-- Family Account Warning -->
+                            <div id="family-warning" class="alert alert-warning mt-3" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                    <div>
+                                        <strong>Yêu cầu Family Account!</strong><br>
+                                        <small>Gói dịch vụ "Add Family" yêu cầu khách hàng phải có Family Account trước. 
+                                        @if(!$hasFamilyMembership)
+                                            Khách hàng này chưa có Family Account.
+                                        @endif
+                                        </small>
+                                    </div>
+                                </div>
+                                @if(!$hasFamilyMembership)
+                                <div class="mt-2">
+                                    <a href="{{ route('admin.family-accounts.create', ['customer_id' => $customer->id]) }}" 
+                                       class="btn btn-sm btn-warning">
+                                        <i class="fas fa-plus me-1"></i>Tạo Family Account trước
+                                    </a>
+                                </div>
+                                @endif
+                            </div>
+
+                            <!-- Family Selection for Add Team Services -->
+                            <div id="family-selection" class="mt-3" style="display: none;">
+                                <div class="card border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-users me-2"></i>
+                                            Chọn Family Account để thêm vào
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-12 mb-3">
+                                                <label for="family_account_id" class="form-label">
+                                                    <i class="fas fa-home me-2 text-primary"></i>
+                                                    Family Account <span class="text-danger">*</span>
+                                                </label>
+                                                <select class="form-select @error('family_account_id') is-invalid @enderror"
+                                                    id="family_account_id"
+                                                    name="family_account_id">
+                                                    <option value="">Chọn Family Account</option>
+                                                    @foreach($availableFamilyAccounts as $family)
+                                                    <option value="{{ $family->id }}"
+                                                        data-family-code="{{ $family->family_code }}"
+                                                        data-primary-email="{{ $family->owner_email }}"
+                                                        data-service-name="{{ $family->servicePackage->name ?? 'N/A' }}"
+                                                        data-members-count="{{ $family->family_members_count }}"
+                                                        data-members-limit="{{ $family->max_members }}"
+                                                        {{ old('family_account_id') == $family->id ? 'selected' : '' }}>
+                                                        {{ $family->family_code }} - {{ $family->family_name }}
+                                                        ({{ $family->family_members_count }}/{{ $family->max_members }} thành viên)
+                                                    </option>
+                                                    @endforeach
+                                                </select>
+                                                @error('family_account_id')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
+                                                <div class="form-text">Chọn Family Account để thêm khách hàng này vào</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Family Details Display -->
+                                        <div id="family-details" style="display: none;">
+                                            <div class="alert alert-info">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong>Mã Family:</strong> <span id="family-code-display"></span><br>
+                                                        <strong>Email chính:</strong> <span id="family-email-display"></span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <strong>Dịch vụ:</strong> <span id="family-service-display"></span><br>
+                                                        <strong>Thành viên:</strong> <span id="family-members-display"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
 
@@ -51,7 +133,7 @@
                                 <option value="{{ $supplier->id }}"
                                     data-supplier-name="{{ $supplier->supplier_name }}"
                                     data-supplier-code="{{ $supplier->supplier_code }}"
-                                    data-products="{{ $supplier->products->map(function($p) { return $p->product_name . ' - ' . number_format($p->price) . ' VND'; })->implode('|') }}"
+                                    data-products="{{ $supplier->products->map(function($p) { return $p->product_name . ' - ' . number_format($p->price, 0, ',', '.') . ' VND'; })->implode('|') }}"
                                     data-services="{{ $supplier->products->map(function($p) { return $p->id . ':' . $p->product_name . ':' . $p->price; })->implode('|') }}"
                                     {{ old('supplier_id') == $supplier->id ? 'selected' : '' }}>
                                     {{ $supplier->supplier_code }} - {{ $supplier->supplier_name }}
@@ -178,6 +260,58 @@
                             <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
+
+                        <!-- Thông tin lợi nhuận -->
+                        <div class="col-md-12 mb-4">
+                            <div class="card border-success">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0 text-success">
+                                        <i class="fas fa-money-bill-wave me-2"></i>
+                                        Thông tin lợi nhuận (Tùy chọn)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_amount" class="form-label">
+                                                <i class="fas fa-dollar-sign me-1"></i>
+                                                Số tiền lãi
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" 
+                                                       class="form-control @error('profit_amount') is-invalid @enderror" 
+                                                       id="profit_amount" 
+                                                       name="profit_amount" 
+                                                       min="0" 
+                                                       step="any" 
+                                                       placeholder="Nhập số tiền lãi"
+                                                       value="{{ old('profit_amount') }}">
+                                                <span class="input-group-text">VNĐ</span>
+                                            </div>
+                                            @error('profit_amount')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                            <div class="form-text">Nhập số tiền lãi thu được từ đơn hàng này (để trống nếu chưa xác định)</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_notes" class="form-label">
+                                                <i class="fas fa-sticky-note me-1"></i>
+                                                Ghi chú lợi nhuận
+                                            </label>
+                                            <textarea class="form-control @error('profit_notes') is-invalid @enderror"
+                                                      id="profit_notes"
+                                                      name="profit_notes"
+                                                      rows="3"
+                                                      placeholder="Ghi chú về lợi nhuận...">{{ old('profit_notes') }}</textarea>
+                                            @error('profit_notes')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="d-flex justify-content-between">
@@ -213,10 +347,38 @@
 
         // Handle service package selection (for grid selector)
         serviceSelect.addEventListener('change', function() {
+            const familyWarning = document.getElementById('family-warning');
+            const familySelection = document.getElementById('family-selection');
+            const submitBtn = document.querySelector('button[type="submit"]');
+            const hasFamilyMembership = {{ $hasFamilyMembership ? 'true' : 'false' }};
+            
             if (this.value) {
-                // Find the selected package card to get duration
+                // Find the selected package card to get account type and duration
                 const selectedCard = document.querySelector(`[data-package-id="${this.value}"]`);
                 if (selectedCard) {
+                    // Check if this is an "add family" service
+                    const accountType = selectedCard.getAttribute('data-account-type') || '';
+                    
+                    if (accountType.includes('add family')) {
+                        // Show family selection
+                        familySelection.style.display = 'block';
+                        familyWarning.style.display = 'none'; // Hide warning in favor of selection
+                        
+                        // Enable submit button
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>Gán dịch vụ';
+                        submitBtn.classList.remove('btn-danger');
+                        submitBtn.classList.add('btn-primary');
+                    } else {
+                        // Hide family selection for non-add-family services
+                        familySelection.style.display = 'none';
+                        familyWarning.style.display = 'none';
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>Gán dịch vụ';
+                        submitBtn.classList.remove('btn-danger');
+                        submitBtn.classList.add('btn-primary');
+                    }
+
                     // Try to get duration from the card's price text
                     const priceText = selectedCard.querySelector('.package-price').textContent;
                     const durationMatch = priceText.match(/(\d+)\s*ngày/);
@@ -228,6 +390,14 @@
 
                     expiresInput.value = expiresDate.toISOString().split('T')[0];
                 }
+            } else {
+                // Hide selections when no service selected
+                familyWarning.style.display = 'none';
+                familySelection.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>Gán dịch vụ';
+                submitBtn.classList.remove('btn-danger');
+                submitBtn.classList.add('btn-primary');
             }
         });
 
@@ -328,7 +498,65 @@
                 }, 100);
             }
         }
+
+        // Handle family account selection
+        const familyAccountSelect = document.getElementById('family_account_id');
+        const familyDetails = document.getElementById('family-details');
+        const familyCodeDisplay = document.getElementById('family-code-display');
+        const familyEmailDisplay = document.getElementById('family-email-display');
+        const familyServiceDisplay = document.getElementById('family-service-display');
+        const familyMembersDisplay = document.getElementById('family-members-display');
+
+        if (familyAccountSelect) {
+            familyAccountSelect.addEventListener('change', function() {
+                if (this.value) {
+                    const selectedOption = this.options[this.selectedIndex];
+                    
+                    // Fill family information
+                    familyCodeDisplay.textContent = selectedOption.dataset.familyCode;
+                    familyEmailDisplay.textContent = selectedOption.dataset.primaryEmail;
+                    familyServiceDisplay.textContent = selectedOption.dataset.serviceName;
+                    familyMembersDisplay.textContent = selectedOption.dataset.membersCount + '/' + selectedOption.dataset.membersLimit + ' thành viên';
+                    
+                    familyDetails.style.display = 'block';
+                } else {
+                    familyDetails.style.display = 'none';
+                }
+            });
+
+            // Show family details if already selected
+            if (familyAccountSelect.value) {
+                familyAccountSelect.dispatchEvent(new Event('change'));
+            }
+        }
+
+        // Format profit amount input with thousand separators
+        const profitAmountInput = document.getElementById('profit_amount');
+        if (profitAmountInput) {
+            // Format existing value on page load
+            if (profitAmountInput.value) {
+                profitAmountInput.value = formatNumberInput(profitAmountInput.value);
+            }
+
+            // Format as user types
+            profitAmountInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\./g, ''); // Remove existing dots
+                if (value && !isNaN(value)) {
+                    e.target.value = formatNumberInput(value);
+                }
+            });
+
+            // Clean value before form submission (remove dots for proper validation)
+            profitAmountInput.closest('form').addEventListener('submit', function() {
+                profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+            });
+        }
     });
+
+    // Function to format number with thousand separators
+    function formatNumberInput(number) {
+        return parseInt(number).toLocaleString('vi-VN');
+    }
 </script>
 @endpush
 @endsection

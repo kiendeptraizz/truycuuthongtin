@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Test AJAX</title>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
+    <body>
+        <h1>Test AJAX</h1>
+        <div id="result"></div>
+
+        <script>
+            $(document).ready(function () {
+                console.log("jQuery loaded");
+
+                $.ajax({
+                    url: "/admin/profits/today-orders",
+                    method: "GET",
+                    success: function (response) {
+                        console.log("Success:", response);
+                        $("#result").html(
+                            "<pre>" +
+                                JSON.stringify(response, null, 2) +
+                                "</pre>"
+                        );
+                    },
+                    error: function (xhr) {
+                        console.log("Error:", xhr);
+                        $("#result").html(
+                            "Error: " + xhr.status + " " + xhr.statusText
+                        );
+                    },
+                });
+            });
+        </script>
+    </body>
+</html>

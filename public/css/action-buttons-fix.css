@@ -1,0 +1,223 @@
+/* Action Buttons Fix - Đảm bảo icons hiển thị đúng trong buttons */
+
+/* Đảm bảo Font Awesome load đúng */
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css");
+
+/* Font face declaration cho Font Awesome */
+@font-face {
+    font-family: 'Font Awesome 6 Free';
+    font-style: normal;
+    font-weight: 900;
+    font-display: block;
+    src: url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/webfonts/fa-solid-900.woff2") format("woff2");
+}
+
+/* Base icon styles */
+.fas, .fa {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+    font-style: normal !important;
+    display: inline-block !important;
+    width: 1em !important;
+    height: 1em !important;
+    text-align: center !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+}
+
+/* Action button specific styles */
+.btn .fas,
+.btn .fa {
+    margin-right: 4px !important;
+    font-size: 14px !important;
+    width: auto !important;
+}
+
+/* Button group icons */
+.btn-group .btn .fas,
+.btn-group .btn .fa {
+    margin-right: 0 !important;
+}
+
+/* Table action buttons */
+.table .btn .fas,
+.table .btn .fa {
+    font-size: 12px !important;
+    margin-right: 2px !important;
+}
+
+/* Navigation icons */
+.nav-link .fas,
+.nav-link .fa {
+    width: 16px !important;
+    margin-right: 12px !important;
+    font-size: 14px !important;
+}
+
+/* Specific icon content definitions */
+.fa-home:before { content: "\f015" !important; }
+.fa-dashboard:before { content: "\f015" !important; }
+.fa-users:before { content: "\f0c0" !important; }
+.fa-user:before { content: "\f007" !important; }
+.fa-user-plus:before { content: "\f234" !important; }
+.fa-link:before { content: "\f0c1" !important; }
+.fa-eye:before { content: "\f06e" !important; }
+.fa-edit:before { content: "\f044" !important; }
+.fa-trash:before { content: "\f2ed" !important; }
+.fa-plus:before { content: "\f067" !important; }
+.fa-minus:before { content: "\f068" !important; }
+.fa-save:before { content: "\f0c7" !important; }
+.fa-times:before { content: "\f00d" !important; }
+.fa-check:before { content: "\f00c" !important; }
+.fa-box:before { content: "\f466" !important; }
+.fa-cube:before { content: "\f1b2" !important; }
+.fa-tags:before { content: "\f02c" !important; }
+.fa-tag:before { content: "\f02b" !important; }
+.fa-truck:before { content: "\f0d1" !important; }
+.fa-search:before { content: "\f002" !important; }
+.fa-filter:before { content: "\f0b0" !important; }
+.fa-check-circle:before { content: "\f058" !important; }
+.fa-pause-circle:before { content: "\f28b" !important; }
+.fa-exclamation-circle:before { content: "\f06a" !important; }
+.fa-info-circle:before { content: "\f05a" !important; }
+.fa-calendar:before { content: "\f073" !important; }
+.fa-chart-line:before { content: "\f201" !important; }
+.fa-chart-bar:before { content: "\f080" !important; }
+.fa-chart-pie:before { content: "\f200" !important; }
+.fa-shield-alt:before { content: "\f3ed" !important; }
+.fa-download:before { content: "\f019" !important; }
+.fa-upload:before { content: "\f093" !important; }
+.fa-arrow-left:before { content: "\f060" !important; }
+.fa-arrow-right:before { content: "\f061" !important; }
+.fa-arrow-up:before { content: "\f062" !important; }
+.fa-arrow-down:before { content: "\f063" !important; }
+.fa-share-alt:before { content: "\f1e0" !important; }
+.fa-external-link-alt:before { content: "\f35d" !important; }
+.fa-toggle-on:before { content: "\f205" !important; }
+.fa-toggle-off:before { content: "\f204" !important; }
+.fa-list:before { content: "\f03a" !important; }
+.fa-cogs:before { content: "\f085" !important; }
+.fa-cog:before { content: "\f013" !important; }
+.fa-clock:before { content: "\f017" !important; }
+.fa-pause:before { content: "\f04c" !important; }
+.fa-play:before { content: "\f04b" !important; }
+.fa-stop:before { content: "\f04d" !important; }
+.fa-spinner:before { content: "\f110" !important; }
+
+/* Emergency emoji fallbacks */
+.fa-fallback-enabled .fa-home:before { content: "🏠" !important; }
+.fa-fallback-enabled .fa-dashboard:before { content: "🏠" !important; }
+.fa-fallback-enabled .fa-users:before { content: "👥" !important; }
+.fa-fallback-enabled .fa-user:before { content: "👤" !important; }
+.fa-fallback-enabled .fa-user-plus:before { content: "➕" !important; }
+.fa-fallback-enabled .fa-link:before { content: "🔗" !important; }
+.fa-fallback-enabled .fa-eye:before { content: "👁️" !important; }
+.fa-fallback-enabled .fa-edit:before { content: "✏️" !important; }
+.fa-fallback-enabled .fa-trash:before { content: "🗑️" !important; }
+.fa-fallback-enabled .fa-plus:before { content: "➕" !important; }
+.fa-fallback-enabled .fa-minus:before { content: "➖" !important; }
+.fa-fallback-enabled .fa-save:before { content: "💾" !important; }
+.fa-fallback-enabled .fa-times:before { content: "❌" !important; }
+.fa-fallback-enabled .fa-check:before { content: "✅" !important; }
+.fa-fallback-enabled .fa-box:before { content: "📦" !important; }
+.fa-fallback-enabled .fa-cube:before { content: "🧊" !important; }
+.fa-fallback-enabled .fa-tags:before { content: "🏷️" !important; }
+.fa-fallback-enabled .fa-tag:before { content: "🏷️" !important; }
+.fa-fallback-enabled .fa-truck:before { content: "🚚" !important; }
+.fa-fallback-enabled .fa-search:before { content: "🔍" !important; }
+.fa-fallback-enabled .fa-filter:before { content: "🔧" !important; }
+.fa-fallback-enabled .fa-check-circle:before { content: "✅" !important; }
+.fa-fallback-enabled .fa-pause-circle:before { content: "⏸️" !important; }
+.fa-fallback-enabled .fa-exclamation-circle:before { content: "⚠️" !important; }
+.fa-fallback-enabled .fa-info-circle:before { content: "ℹ️" !important; }
+.fa-fallback-enabled .fa-calendar:before { content: "📅" !important; }
+.fa-fallback-enabled .fa-chart-line:before { content: "📈" !important; }
+.fa-fallback-enabled .fa-chart-bar:before { content: "📊" !important; }
+.fa-fallback-enabled .fa-chart-pie:before { content: "🥧" !important; }
+.fa-fallback-enabled .fa-shield-alt:before { content: "🛡️" !important; }
+.fa-fallback-enabled .fa-download:before { content: "⬇️" !important; }
+.fa-fallback-enabled .fa-upload:before { content: "⬆️" !important; }
+.fa-fallback-enabled .fa-arrow-left:before { content: "⬅️" !important; }
+.fa-fallback-enabled .fa-arrow-right:before { content: "➡️" !important; }
+.fa-fallback-enabled .fa-arrow-up:before { content: "⬆️" !important; }
+.fa-fallback-enabled .fa-arrow-down:before { content: "⬇️" !important; }
+.fa-fallback-enabled .fa-share-alt:before { content: "📤" !important; }
+.fa-fallback-enabled .fa-external-link-alt:before { content: "🔗" !important; }
+.fa-fallback-enabled .fa-toggle-on:before { content: "🔛" !important; }
+.fa-fallback-enabled .fa-toggle-off:before { content: "⭕" !important; }
+.fa-fallback-enabled .fa-list:before { content: "📋" !important; }
+.fa-fallback-enabled .fa-cogs:before { content: "⚙️" !important; }
+.fa-fallback-enabled .fa-cog:before { content: "⚙️" !important; }
+.fa-fallback-enabled .fa-clock:before { content: "🕐" !important; }
+.fa-fallback-enabled .fa-pause:before { content: "⏸️" !important; }
+.fa-fallback-enabled .fa-play:before { content: "▶️" !important; }
+.fa-fallback-enabled .fa-stop:before { content: "⏹️" !important; }
+.fa-fallback-enabled .fa-spinner:before { content: "🔄" !important; }
+
+/* Loading animation */
+.fa-spinner {
+    animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Button hover effects */
+.btn:hover .fas,
+.btn:hover .fa {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* Table action column styling */
+.table-action-column {
+    width: 160px !important;
+    min-width: 160px !important;
+    white-space: nowrap !important;
+}
+
+.table-action-column .btn {
+    margin: 0 2px !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn .fas,
+    .btn .fa {
+        font-size: 12px !important;
+        margin-right: 2px !important;
+    }
+    
+    .nav-link .fas,
+    .nav-link .fa {
+        font-size: 12px !important;
+        margin-right: 8px !important;
+    }
+}
+
+/* Debug styles */
+.icon-debug .fas,
+.icon-debug .fa {
+    border: 1px solid red !important;
+    background: rgba(255, 0, 0, 0.1) !important;
+    position: relative !important;
+}
+
+.icon-debug .fas::after,
+.icon-debug .fa::after {
+    content: attr(class) !important;
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    background: red !important;
+    color: white !important;
+    font-size: 10px !important;
+    padding: 2px 4px !important;
+    border-radius: 2px !important;
+    white-space: nowrap !important;
+    z-index: 9999 !important;
+}

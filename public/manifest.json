@@ -1,0 +1,25 @@
+{
+    "name": "Truy Cứu Thông Tin",
+    "short_name": "TraCuu",
+    "description": "Hệ thống quản lý và tra cứu thông tin tài khoản số",
+    "start_url": "/admin/dashboard",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#667eea",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        },
+        {
+            "src": "apple-touch-icon.svg",
+            "sizes": "180x180",
+            "type": "image/svg+xml"
+        }
+    ],
+    "categories": ["business", "productivity"],
+    "lang": "vi",
+    "scope": "/admin/"
+}

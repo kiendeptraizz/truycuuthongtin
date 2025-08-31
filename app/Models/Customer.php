@@ -14,6 +14,11 @@ class Customer extends Model
         'email',
         'phone',
         'notes',
+        'is_collaborator',
+    ];
+
+    protected $casts = [
+        'is_collaborator' => 'boolean',
     ];
 
     public function customerServices(): HasMany
@@ -48,15 +53,17 @@ class Customer extends Model
 
         static::creating(function ($customer) {
             if (empty($customer->customer_code)) {
-                $customer->customer_code = self::generateCustomerCode();
+                $customer->customer_code = self::generateCustomerCode($customer->is_collaborator ?? false);
             }
         });
     }
 
-    private static function generateCustomerCode(): string
+    private static function generateCustomerCode(bool $isCollaborator = false): string
     {
+        $prefix = $isCollaborator ? 'CTV' : 'KUN';
+
         do {
-            $code = 'KUN' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
+            $code = $prefix . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
         } while (self::where('customer_code', $code)->exists());
 
         return $code;

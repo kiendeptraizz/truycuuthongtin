@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Logo icon -->
+  <circle cx="25" cy="30" r="20" fill="url(#logoGrad)"/>
+  <circle cx="20" cy="25" r="8" fill="none" stroke="white" stroke-width="2"/>
+  <path d="26 31l6 6" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Logo text -->
+  <text x="55" y="25" fill="#374151" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">TRUY CỨU</text>
+  <text x="55" y="42" fill="#6b7280" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="500">THÔNG TIN</text>
+</svg>

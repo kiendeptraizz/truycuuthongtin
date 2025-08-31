@@ -88,6 +88,34 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Collaborator Checkbox - Separate Row -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group mb-3">
+                                    <label class="form-label text-muted fw-bold">Loại khách hàng</label>
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="form-check">
+                                            <input type="checkbox" 
+                                                   class="form-check-input" 
+                                                   id="is_collaborator" 
+                                                   name="is_collaborator"
+                                                   value="1"
+                                                   style="transform: scale(1.2);"
+                                                   {{ old('is_collaborator') ? 'checked' : '' }}>
+                                            <label class="form-check-label fw-medium ms-2" for="is_collaborator" style="cursor: pointer;">
+                                                <span style="font-size: 18px;" class="text-success me-2">🤝</span>
+                                                <span class="text-dark">Đây là cộng tác viên</span>
+                                            </label>
+                                        </div>
+                                        <div class="form-text mt-2 text-muted">
+                                            <span style="font-size: 14px;" class="text-info me-1">💡</span>
+                                            <small>Nếu tích, mã khách hàng sẽ có định dạng <strong>CTV#####</strong></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-section">
@@ -184,28 +212,67 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const customerCodeInput = document.getElementById('customer_code');
+    const collaboratorCheckbox = document.getElementById('is_collaborator');
     const form = document.getElementById('customerCreateForm');
+
+    // Handle collaborator checkbox change
+    if (collaboratorCheckbox) {
+        console.log('Collaborator checkbox found and event listener added');
+        collaboratorCheckbox.addEventListener('change', function() {
+            console.log('Collaborator checkbox changed:', this.checked);
+            updateCustomerCodePattern();
+            // Clear current value to regenerate with new prefix
+            if (customerCodeInput) {
+                customerCodeInput.value = '';
+                customerCodeInput.classList.remove('is-valid', 'is-invalid');
+            }
+        });
+    } else {
+        console.log('Collaborator checkbox NOT found!');
+    }
+
+    // Update customer code pattern and placeholder based on collaborator status
+    function updateCustomerCodePattern() {
+        if (!customerCodeInput) return;
+
+        const isCollaborator = collaboratorCheckbox && collaboratorCheckbox.checked;
+        const prefix = isCollaborator ? 'CTV' : 'KUN';
+        
+        // Update placeholder and pattern
+        customerCodeInput.placeholder = isCollaborator ? 'CTV12345' : 'KUN12345';
+        customerCodeInput.pattern = isCollaborator ? '^CTV\\d{5}$' : '^KUN\\d{5}$';
+        
+        // Update help text
+        const formText = customerCodeInput.closest('.form-group').querySelector('.form-text');
+        if (formText) {
+            formText.innerHTML = `<i class="fas fa-info-circle text-info"></i> Để trống để tự động tạo mã theo định dạng ${prefix}#####`;
+        }
+    }
 
     // Auto-format customer code input
     if (customerCodeInput) {
         customerCodeInput.addEventListener('input', function(e) {
+            const isCollaborator = collaboratorCheckbox && collaboratorCheckbox.checked;
+            const prefix = isCollaborator ? 'CTV' : 'KUN';
+            
             let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-            // Auto-add KUN prefix if user starts typing numbers
-            if (value && !value.startsWith('KUN') && /^\d/.test(value)) {
-                value = 'KUN' + value;
+            // Auto-add prefix if user starts typing numbers
+            if (value && !value.startsWith(prefix) && /^\d/.test(value)) {
+                value = prefix + value;
             }
 
-            // Limit to KUN + 5 digits
-            if (value.startsWith('KUN')) {
+            // Limit to prefix + 5 digits
+            if (value.startsWith(prefix)) {
                 const numbers = value.substring(3).replace(/\D/g, '');
-                value = 'KUN' + numbers.substring(0, 5);
+                value = prefix + numbers.substring(0, 5);
             }
 
             e.target.value = value;
 
             // Validate format
-            const isValid = value === '' || /^KUN\d{5}$/.test(value);
+            const pattern = isCollaborator ? /^CTV\d{5}$/ : /^KUN\d{5}$/;
+            const isValid = value === '' || pattern.test(value);
             e.target.classList.toggle('is-invalid', !isValid && value !== '');
             e.target.classList.toggle('is-valid', isValid && value !== '');
         });
@@ -214,8 +281,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let checkTimeout;
         customerCodeInput.addEventListener('input', function(e) {
             const value = e.target.value;
+            const isCollaborator = collaboratorCheckbox && collaboratorCheckbox.checked;
+            const pattern = isCollaborator ? /^CTV\d{5}$/ : /^KUN\d{5}$/;
 
-            if (value && /^KUN\d{5}$/.test(value)) {
+            if (value && pattern.test(value)) {
                 clearTimeout(checkTimeout);
                 checkTimeout = setTimeout(() => {
                     checkCustomerCodeUniqueness(value);
@@ -224,12 +293,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Initialize pattern on page load
+    updateCustomerCodePattern();
+
     // Form validation
     if (form) {
         form.addEventListener('submit', function(e) {
             const customerCode = customerCodeInput.value.trim();
+            const isCollaborator = collaboratorCheckbox && collaboratorCheckbox.checked;
+            const pattern = isCollaborator ? /^CTV\d{5}$/ : /^KUN\d{5}$/;
+            const prefixName = isCollaborator ? 'CTV' : 'KUN';
 
-            if (customerCode && !/^KUN\d{5}$/.test(customerCode)) {
+            if (customerCode && !pattern.test(customerCode)) {
                 e.preventDefault();
                 customerCodeInput.classList.add('is-invalid');
 
@@ -240,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     errorDiv.className = 'invalid-feedback';
                     customerCodeInput.parentNode.parentNode.appendChild(errorDiv);
                 }
-                errorDiv.textContent = 'Mã khách hàng phải theo định dạng KUN##### (ví dụ: KUN12345)';
+                errorDiv.textContent = `Mã khách hàng phải theo định dạng ${prefixName}##### (ví dụ: ${prefixName}12345)`;
 
                 return false;
             }

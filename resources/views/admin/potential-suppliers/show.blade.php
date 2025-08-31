@@ -164,7 +164,7 @@
             </div>
             <div class="col-md-3">
                 <div class="stats-item">
-                    <div class="stats-number">{{ number_format($potentialSupplier->total_estimated_value, 0, '.', ',') }}</div>
+                    <div class="stats-number">{{ number_format($potentialSupplier->total_estimated_value, 0, ',', '.') }}</div>
                     <div class="stats-label">Giá trị ước tính (VND)</div>
                 </div>
             </div>

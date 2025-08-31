@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\ServicePackage;
 use App\Models\CustomerService;
+use App\Models\Profit;
 use Illuminate\Http\Request;
 
 class CustomerServiceController extends Controller
@@ -180,12 +181,36 @@ class CustomerServiceController extends Controller
             'expires_at' => 'required|date|after:activated_at',
             'status' => 'required|in:active,expired,cancelled',
             'internal_notes' => 'nullable|string',
+            'profit_amount' => 'nullable|numeric|min:0',
+            'profit_notes' => 'nullable|string|max:1000',
         ]);
 
-        $customerService = CustomerService::create($request->all());
+        // Tạo dịch vụ khách hàng
+        $customerService = CustomerService::create([
+            'customer_id' => $request->customer_id,
+            'service_package_id' => $request->service_package_id,
+            'assigned_by' => auth('admin')->id(),
+            'login_email' => $request->login_email,
+            'login_password' => $request->login_password,
+            'activated_at' => $request->activated_at,
+            'expires_at' => $request->expires_at,
+            'status' => $request->status,
+            'internal_notes' => $request->internal_notes,
+        ]);
+
+        // Nếu có nhập lợi nhuận, tạo record profit
+        if ($request->filled('profit_amount')) {
+            Profit::create([
+                'customer_service_id' => $customerService->id,
+                'profit_amount' => $request->profit_amount,
+                'notes' => $request->profit_notes,
+                'created_by' => auth('admin')->id(),
+            ]);
+        }
 
         return redirect(route('admin.customer-services.index') . '#service-' . $customerService->id)
-            ->with('success', 'Dịch vụ đã được gán thành công!');
+            ->with('success', 'Dịch vụ đã được gán thành công!' .
+                ($request->filled('profit_amount') ? ' Lợi nhuận đã được ghi nhận.' : ''));
     }
 
     /**
@@ -203,7 +228,7 @@ class CustomerServiceController extends Controller
      */
     public function edit(CustomerService $customerService)
     {
-        $customerService->load(['supplier', 'supplierService']);
+        $customerService->load(['supplier', 'supplierService', 'profit']);
         $customers = Customer::orderBy('name')->get();
 
         // Group service packages by account_type with priority order
@@ -244,9 +269,37 @@ class CustomerServiceController extends Controller
             'expires_at' => 'required|date|after:activated_at',
             'status' => 'required|in:active,expired,cancelled',
             'internal_notes' => 'nullable|string',
+            'profit_amount' => 'nullable|numeric|min:0',
+            'profit_notes' => 'nullable|string|max:1000',
         ]);
 
-        $customerService->update($request->all());
+        $customerService->update($request->except(['profit_amount', 'profit_notes']));
+
+        // Xử lý lợi nhuận
+        if ($request->filled('profit_amount')) {
+            // Kiểm tra xem đã có lợi nhuận chưa
+            if ($customerService->profit) {
+                // Cập nhật lợi nhuận hiện có
+                $customerService->profit->update([
+                    'profit_amount' => $request->profit_amount,
+                    'notes' => $request->profit_notes,
+                ]);
+                $profitMessage = ' Lợi nhuận đã được cập nhật.';
+            } else {
+                // Tạo mới lợi nhuận
+                Profit::create([
+                    'customer_service_id' => $customerService->id,
+                    'profit_amount' => $request->profit_amount,
+                    'notes' => $request->profit_notes,
+                    'created_by' => auth('admin')->id(),
+                ]);
+                $profitMessage = ' Lợi nhuận đã được ghi nhận.';
+            }
+        } else {
+            // Nếu không nhập profit_amount nhưng có lợi nhuận hiện tại, có thể xóa hoặc giữ nguyên
+            // Ở đây tôi sẽ giữ nguyên lợi nhuận hiện tại
+            $profitMessage = '';
+        }
 
         // Kiểm tra source parameter để xác định redirect về đâu
         $source = $request->query('source');
@@ -255,16 +308,16 @@ class CustomerServiceController extends Controller
         if ($source === 'customer' && $customerId) {
             // Nếu đến từ trang chi tiết khách hàng, redirect về trang đó
             return redirect()->route('admin.customers.show', $customerId)
-                ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
         } elseif ($source === 'shared-account') {
             // Nếu đến từ trang chi tiết tài khoản dùng chung, redirect về trang đó
             return redirect()->route('admin.shared-accounts.show', urlencode($customerService->login_email))
-                ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
         }
 
         // Mặc định redirect về trang danh sách dịch vụ với anchor
         return redirect(route('admin.customer-services.index') . '#service-' . $customerService->id)
-            ->with('success', 'Thông tin dịch vụ đã được cập nhật!');
+            ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
     }
 
     /**
@@ -318,7 +371,23 @@ class CustomerServiceController extends Controller
 
         $suppliers = \App\Models\Supplier::with('products')->orderBy('supplier_name')->get();
 
-        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers', 'accountTypePriority'));
+        // Check if customer has active family membership
+        $hasFamilyMembership = $customer->activeFamilyMembership()->exists();
+
+        // Get available family accounts for "add team" services
+        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['members'])
+            ->where('status', 'active')
+            ->get()
+            ->map(function ($family) {
+                $family->family_members_count = $family->members()->where('status', 'active')->count();
+                return $family;
+            })
+            ->filter(function ($family) {
+                // Only show families that have available slots
+                return $family->family_members_count < $family->max_members;
+            });
+
+        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts'));
     }
 
     /**
@@ -328,6 +397,7 @@ class CustomerServiceController extends Controller
     {
         $request->validate([
             'service_package_id' => 'required|exists:service_packages,id',
+            'family_account_id' => 'nullable|exists:family_accounts,id',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'supplier_service_id' => 'nullable|exists:supplier_products,id',
             'login_email' => 'required|email|max:255',
@@ -335,9 +405,33 @@ class CustomerServiceController extends Controller
             'activated_at' => 'required|date',
             'expires_at' => 'required|date|after:activated_at',
             'internal_notes' => 'nullable|string',
+            'profit_amount' => 'nullable|numeric|min:0',
+            'profit_notes' => 'nullable|string|max:1000',
         ]);
 
-        CustomerService::create([
+        // Check if service package is "add family" type
+        $servicePackage = ServicePackage::findOrFail($request->service_package_id);
+        if (strpos($servicePackage->account_type, 'add family') !== false) {
+            // Require family account selection for add family services
+            if (!$request->filled('family_account_id')) {
+                return back()->withErrors([
+                    'family_account_id' => 'Vui lòng chọn Family Account để thêm khách hàng vào.'
+                ])->withInput();
+            }
+
+            // Check if family account has available slots
+            $familyAccount = \App\Models\FamilyAccount::findOrFail($request->family_account_id);
+            $currentMembersCount = $familyAccount->members()->where('status', 'active')->count();
+
+            if ($currentMembersCount >= $familyAccount->max_members) {
+                return back()->withErrors([
+                    'family_account_id' => 'Family Account này đã đầy. Vui lòng chọn Family Account khác.'
+                ])->withInput();
+            }
+        }
+
+        // Tạo dịch vụ khách hàng
+        $customerService = CustomerService::create([
             'customer_id' => $customer->id,
             'service_package_id' => $request->service_package_id,
             'assigned_by' => auth('admin')->id(),
@@ -351,8 +445,39 @@ class CustomerServiceController extends Controller
             'internal_notes' => $request->internal_notes,
         ]);
 
+        // Nếu có nhập lợi nhuận, tạo record profit
+        if ($request->filled('profit_amount')) {
+            \App\Models\Profit::create([
+                'customer_service_id' => $customerService->id,
+                'profit_amount' => $request->profit_amount,
+                'notes' => $request->profit_notes,
+                'created_by' => auth('admin')->id(),
+            ]);
+        }
+
+        // Nếu là dịch vụ "add family", thêm khách hàng vào family account
+        if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
+            \App\Models\FamilyMember::updateOrCreate(
+                [
+                    'family_account_id' => $request->family_account_id,
+                    'customer_id' => $customer->id,
+                ],
+                [
+                    'member_name' => $customer->name,
+                    'member_email' => $request->login_email,
+                    'start_date' => $request->activated_at, // Thêm ngày bắt đầu
+                    'end_date' => $request->expires_at,     // Thêm ngày kết thúc
+                    'status' => 'active', // Kích hoạt lại nếu thành viên đã bị xóa
+                    'removed_at' => null, // Xóa dấu vết bị xóa
+                    'added_by' => auth('admin')->id(),
+                ]
+            );
+        }
+
         return redirect()->route('admin.customers.show', $customer)
-            ->with('success', 'Dịch vụ đã được gán cho khách hàng thành công!');
+            ->with('success', 'Dịch vụ đã được gán cho khách hàng thành công!' .
+                ($request->filled('profit_amount') ? ' Lợi nhuận đã được ghi nhận.' : '') .
+                (strpos($servicePackage->account_type, 'add family') !== false ? ' Khách hàng đã được thêm vào Family Account.' : ''));
     }
 
     /**

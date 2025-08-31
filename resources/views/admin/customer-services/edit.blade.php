@@ -167,7 +167,7 @@
                                 <option value="{{ $supplier->id }}"
                                     data-supplier-name="{{ $supplier->supplier_name }}"
                                     data-supplier-code="{{ $supplier->supplier_code }}"
-                                    data-products="{{ $supplier->products->map(function($p) { return $p->product_name . ' - ' . number_format($p->price) . ' VND'; })->implode('|') }}"
+                                    data-products="{{ $supplier->products->map(function($p) { return $p->product_name . ' - ' . number_format($p->price, 0, ',', '.') . ' VND'; })->implode('|') }}"
                                     data-services="{{ $supplier->products->map(function($p) { return $p->id . ':' . $p->product_name . ':' . $p->price; })->implode('|') }}"
                                     {{ old('supplier_id', $customerService->supplier_id) == $supplier->id ? 'selected' : '' }}>
                                     {{ $supplier->supplier_code }} - {{ $supplier->supplier_name }}
@@ -224,6 +224,76 @@
                             <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                             <div class="form-text">Chọn dịch vụ cụ thể mà nhà cung cấp sẽ cung cấp cho khách hàng này</div>
+                        </div>
+
+                        <!-- Thông tin lợi nhuận -->
+                        <div class="col-md-12 mb-4">
+                            <div class="card border-success">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0 text-success">
+                                        <i class="fas fa-money-bill-wave me-2"></i>
+                                        Thông tin lợi nhuận
+                                        @if($customerService->profit)
+                                            <span class="badge bg-success ms-2">Đã có lợi nhuận</span>
+                                        @else
+                                            <span class="badge bg-secondary ms-2">Chưa nhập lãi</span>
+                                        @endif
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_amount" class="form-label">
+                                                <i class="fas fa-dollar-sign me-1"></i>
+                                                Số tiền lãi
+                                            </label>
+                                            <div class="input-group">
+                                                <input type="number" 
+                                                       class="form-control @error('profit_amount') is-invalid @enderror" 
+                                                       id="profit_amount" 
+                                                       name="profit_amount" 
+                                                       min="0" 
+                                                       step="1000" 
+                                                       placeholder="Nhập số tiền lãi"
+                                                       value="{{ old('profit_amount', $customerService->profit->profit_amount ?? '') }}">
+                                                <span class="input-group-text">VNĐ</span>
+                                            </div>
+                                            @error('profit_amount')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                            <div class="form-text">
+                                                @if($customerService->profit)
+                                                    Lợi nhuận hiện tại: <strong>{{ format_currency($customerService->profit->profit_amount) }}</strong>
+                                                @else
+                                                    Nhập số tiền lãi thu được từ đơn hàng này
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label for="profit_notes" class="form-label">
+                                                <i class="fas fa-sticky-note me-1"></i>
+                                                Ghi chú lợi nhuận
+                                            </label>
+                                            <textarea class="form-control @error('profit_notes') is-invalid @enderror"
+                                                      id="profit_notes"
+                                                      name="profit_notes"
+                                                      rows="3"
+                                                      placeholder="Ghi chú về lợi nhuận...">{{ old('profit_notes', $customerService->profit->notes ?? '') }}</textarea>
+                                            @error('profit_notes')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                            @if($customerService->profit)
+                                                <div class="form-text">
+                                                    <small class="text-muted">
+                                                        Lần cập nhật cuối: {{ $customerService->profit->updated_at->format('d/m/Y H:i') }}
+                                                    </small>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -396,6 +466,33 @@
                 }, 100);
             }
         }
+
+        // Format profit amount input with thousand separators
+        const profitAmountInput = document.getElementById('profit_amount');
+        if (profitAmountInput) {
+            // Format existing value on page load
+            if (profitAmountInput.value) {
+                profitAmountInput.value = formatNumberInput(profitAmountInput.value);
+            }
+
+            // Format as user types
+            profitAmountInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\./g, ''); // Remove existing dots
+                if (value && !isNaN(value)) {
+                    e.target.value = formatNumberInput(value);
+                }
+            });
+
+            // Clean value before form submission (remove dots for proper validation)
+            profitAmountInput.closest('form').addEventListener('submit', function() {
+                profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+            });
+        }
     });
+
+    // Function to format number with thousand separators
+    function formatNumberInput(number) {
+        return parseInt(number).toLocaleString('vi-VN');
+    }
 </script>
 @endpush

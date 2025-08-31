@@ -13,6 +13,17 @@
 
     <title>@yield('title', 'Admin Panel') - Quản lý tài khoản số</title>
 
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.svg') }}">
+    <meta name="theme-color" content="#667eea">
+
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="Truy Cứu Thông Tin">
+    <meta name="description" content="Hệ thống quản lý và tra cứu thông tin tài khoản số">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,8 +31,15 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Font Awesome - Latest Version -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet"
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+    <!-- Fallback Font Awesome từ jsdelivr -->
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- ICON RESET CSS - Xóa sạch tất cả icons cũ -->
+    <link href="{{ asset('css/icon-reset.css') }}" rel="stylesheet">
+    <!-- FINAL ICON FIX CSS - Icons cuối cùng với emoji -->
+    <link href="{{ asset('css/final-icon-fix.css') }}" rel="stylesheet">
     <!-- Optimized Admin CSS -->
     <link href="{{ asset('css/admin-optimized.css') }}" rel="stylesheet">
 
@@ -53,7 +71,8 @@
         }
 
         /* Prevent white screen issues */
-        html, body {
+        html,
+        body {
             visibility: visible !important;
             opacity: 1 !important;
         }
@@ -85,21 +104,15 @@
                 transform: translateX(-100%);
                 transition: transform 0.3s ease;
             }
+
             .sidebar.show {
                 transform: translateX(0);
             }
+
             .main-content {
                 margin-left: 0;
             }
         }
-
-
-
-
-
-
-
-
     </style>
 
     @yield('styles')
@@ -111,10 +124,9 @@
             <!-- Sidebar -->
             <div class="sidebar" id="sidebar">
                 <div class="brand">
-                    <h4>
-                        <i class="fas fa-crown me-2"></i>
-                        KienUnlocked
-                    </h4>
+                    <div class="d-flex align-items-center">
+                        <img src="{{ asset('logo.svg') }}" alt="Logo" style="height: 40px; width: auto;" class="me-2">
+                    </div>
                 </div>
 
                 <nav class="nav flex-column px-2 py-3">
@@ -187,8 +199,14 @@
                     <!-- Reports & Analytics -->
                     <a class="nav-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}"
                         href="{{ route('admin.reports.profit') }}">
+                        <i class="fas fa-chart-pie me-3"></i>
+                        Báo cáo cũ
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}"
+                        href="{{ route('admin.revenue.index') }}">
                         <i class="fas fa-chart-line me-3"></i>
-                        Báo cáo
+                        Thống kê doanh thu
                     </a>
 
                     <a class="nav-link {{ request()->routeIs('admin.backup.*') ? 'active' : '' }}"
@@ -273,7 +291,7 @@
     </div>
 
     <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -358,6 +376,9 @@
     @yield('scripts')
 
     <!-- Push scripts stack -->
+    <!-- Final Icon Fix Script -->
+    <script src="{{ asset('js/final-icon-fix.js') }}"></script>
+
     @stack('scripts')
 </body>
 

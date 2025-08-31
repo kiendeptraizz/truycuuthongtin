@@ -212,7 +212,7 @@
                     <div class="col-12 mb-3">
                         <div class="d-flex align-items-center justify-content-between">
                             <span class="text-muted">Tổng giá trị:</span>
-                            <span class="fw-bold text-success">{{ number_format($supplier->products->sum('price'), 0, '.', ',') }} VND</span>
+                            <span class="fw-bold text-success">{{ number_format($supplier->products->sum('price'), 0, ',', '.') }} VND</span>
                         </div>
                     </div>
                     <div class="col-12">

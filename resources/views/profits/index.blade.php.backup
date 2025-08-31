@@ -1,0 +1,714 @@
+@extends('layouts.admin')
+
+@section('title', 'Quản lý lợi nhuận')
+
+@section('content')
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-chart-line me-2"></i>Quản lý lợi nhuận
+                    </h1>
+                    <p class="text-muted mb-0">Quản lý và thống kê lợi nhuận từ các đơn hàng trong ngày</p>
+                </div>
+                <div class="text-end">
+                    <small class="text-muted">Ngày hiện tại: <span id="current-date"></span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4" id="statistics-cards">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Tổng đơn hàng trong ngày
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-orders">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Đã nhập lãi
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="orders-with-profit">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Tổng lợi nhuận
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-profit">0đ</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Lợi nhuận trung bình
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="average-profit">0đ</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-bar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list me-2"></i>Danh sách đơn hàng trong ngày
+            </h6>
+            <button type="button" class="btn btn-primary btn-sm" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>Làm mới
+            </button>
+            <button type="button" class="btn btn-warning btn-sm" onclick="testAjax()">
+                <i class="fas fa-bug me-1"></i>Test
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="orders-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="8%">ID</th>
+                            <th width="20%">Khách hàng</th>
+                            <th width="25%">Dịch vụ</th>
+                            <th width="12%">Giá bán</th>
+                            <th width="15%">Ngày tạo</th>
+                            <th width="12%">Lợi nhuận</th>
+                            <th width="8%">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-tbody">
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Đang tải...</span>
+                                </div>
+                                <div class="mt-2">Đang tải dữ liệu...</div>
+                                <div class="mt-2">
+                                    <small class="text-muted">Nếu dữ liệu không load, vui lòng bấm nút "Test" để kiểm tra</small>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal nhập lợi nhuận -->
+<div class="modal fade" id="profitModal" tabindex="-1" aria-labelledby="profitModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="profitModalLabel">
+                    <i class="fas fa-money-bill-wave me-2"></i>Nhập lợi nhuận
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="profitForm">
+                <div class="modal-body">
+                    <input type="hidden" id="customer_service_id" name="customer_service_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Thông tin đơn hàng:</label>
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <div id="order-info"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="profit_amount" class="form-label">
+                            Số tiền lãi <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="profit_amount" name="profit_amount" 
+                                   min="0" step="1000" placeholder="Nhập số tiền lãi" required>
+                            <span class="input-group-text">VNĐ</span>
+                        </div>
+                        <div class="form-text">Nhập số tiền lãi thu được từ đơn hàng này</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Ghi chú</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Nhập ghi chú về lợi nhuận (tùy chọn)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Hủy
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Lưu lợi nhuận
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('styles')
+<style>
+/* Responsive styles for profit management */
+@media (max-width: 768px) {
+    /* Statistics cards - stack vertically on mobile */
+    .col-xl-3.col-md-6 {
+        margin-bottom: 1rem !important;
+    }
+
+    /* Make table responsive */
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+
+    /* Hide less important columns on mobile */
+    .table th:nth-child(1),
+    .table td:nth-child(1) {
+        display: none; /* Hide ID column */
+    }
+
+    .table th:nth-child(5),
+    .table td:nth-child(5) {
+        display: none; /* Hide created date column */
+    }
+
+    /* Adjust remaining columns */
+    .table th:nth-child(2),
+    .table td:nth-child(2) {
+        width: 30%;
+    }
+
+    .table th:nth-child(3),
+    .table td:nth-child(3) {
+        width: 35%;
+    }
+
+    .table th:nth-child(4),
+    .table td:nth-child(4) {
+        width: 15%;
+    }
+
+    .table th:nth-child(6),
+    .table td:nth-child(6) {
+        width: 15%;
+    }
+
+    .table th:nth-child(7),
+    .table td:nth-child(7) {
+        width: 5%;
+    }
+
+    /* Modal adjustments for mobile */
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    /* Card adjustments */
+    .card-body {
+        padding: 1rem;
+    }
+
+    /* Button adjustments */
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* Header adjustments */
+    .h3 {
+        font-size: 1.5rem;
+    }
+
+    /* Statistics card text */
+    .text-xs {
+        font-size: 0.7rem !important;
+    }
+
+    .h5 {
+        font-size: 1.1rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    /* Extra small devices */
+    .container-fluid {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    /* Further hide columns on very small screens */
+    .table th:nth-child(4),
+    .table td:nth-child(4) {
+        display: none; /* Hide price column */
+    }
+
+    /* Adjust remaining columns */
+    .table th:nth-child(2),
+    .table td:nth-child(2) {
+        width: 40%;
+    }
+
+    .table th:nth-child(3),
+    .table td:nth-child(3) {
+        width: 45%;
+    }
+
+    .table th:nth-child(6),
+    .table td:nth-child(6) {
+        width: 10%;
+    }
+
+    .table th:nth-child(7),
+    .table td:nth-child(7) {
+        width: 5%;
+    }
+
+    /* Stack header elements */
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+
+    .text-end {
+        text-align: left !important;
+        margin-top: 0.5rem;
+    }
+
+    /* Modal full width on small screens */
+    .modal-dialog {
+        margin: 0;
+        max-width: 100%;
+        height: 100%;
+    }
+
+    .modal-content {
+        height: 100%;
+        border-radius: 0;
+    }
+
+    /* Form adjustments */
+    .input-group-text {
+        font-size: 0.875rem;
+    }
+
+    /* Statistics cards - smaller text */
+    .card-body .row {
+        align-items: center;
+    }
+
+    .fa-2x {
+        font-size: 1.5em !important;
+    }
+}
+
+/* Touch-friendly buttons */
+@media (hover: none) and (pointer: coarse) {
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .btn-sm {
+        min-height: 36px;
+        min-width: 36px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .modal,
+    .btn,
+    .card-header .btn {
+        display: none !important;
+    }
+
+    .table th:nth-child(7),
+    .table td:nth-child(7) {
+        display: none !important;
+    }
+
+    .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Loading state styles */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Custom badge styles for profit status */
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+/* Hover effects for table rows */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.075);
+}
+
+/* Focus styles for accessibility */
+.btn:focus,
+.form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Animation for statistics cards */
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+/* Responsive text utilities */
+@media (max-width: 768px) {
+    .text-responsive {
+        font-size: 0.875rem;
+    }
+
+    .text-responsive-sm {
+        font-size: 0.75rem;
+    }
+}
+</style>
+@endsection
+
+@section('scripts')
+<script>
+// Global variables
+let ordersData = [];
+let statisticsData = {};
+
+// Document ready
+$(document).ready(function() {
+    console.log('Document ready, initializing profit management...');
+    
+    // Setup CSRF token for AJAX requests
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        }
+    });
+    
+    // Set current date
+    $('#current-date').text(new Date().toLocaleDateString('vi-VN'));
+    
+    // Load initial data
+    console.log('Loading initial data...');
+    loadTodayOrders();
+    loadTodayStatistics();
+    
+    // Setup form submission
+    setupProfitForm();
+    
+    // Auto refresh every 5 minutes
+    setInterval(function() {
+        refreshData();
+    }, 300000);
+});
+
+// Load today's orders
+function loadTodayOrders() {
+    console.log('Loading today orders...');
+    $.ajax({
+        url: '{{ route("admin.profits.today-orders") }}',
+        method: 'GET',
+        success: function(response) {
+            console.log('Today orders response:', response);
+            if (response.success) {
+                ordersData = response.data;
+                console.log('Orders data:', ordersData);
+                renderOrdersTable();
+            } else {
+                console.error('Failed to load orders:', response);
+                showError('Không thể tải danh sách đơn hàng');
+            }
+        },
+        error: function(xhr) {
+            console.error('AJAX error loading orders:', xhr);
+            showError('Lỗi khi tải danh sách đơn hàng: ' + getErrorMessage(xhr));
+        }
+    });
+}
+
+// Load today's statistics
+function loadTodayStatistics() {
+    console.log('Loading today statistics...');
+    $.ajax({
+        url: '{{ route("admin.profits.today-statistics") }}',
+        method: 'GET',
+        success: function(response) {
+            console.log('Today statistics response:', response);
+            if (response.success) {
+                statisticsData = response.data;
+                console.log('Statistics data:', statisticsData);
+                updateStatisticsCards();
+            } else {
+                console.error('Failed to load statistics:', response);
+                showError('Không thể tải thống kê');
+            }
+        },
+        error: function(xhr) {
+            console.error('AJAX error loading statistics:', xhr);
+            showError('Lỗi khi tải thống kê: ' + getErrorMessage(xhr));
+        }
+    });
+}
+
+// Render orders table
+function renderOrdersTable() {
+    const tbody = $('#orders-tbody');
+    
+    if (ordersData.length === 0) {
+        tbody.html(`
+            <tr>
+                <td colspan="7" class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <div>Không có đơn hàng nào trong ngày hôm nay</div>
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    let html = '';
+    ordersData.forEach(function(order) {
+        const profitDisplay = order.has_profit 
+            ? `<span class="badge bg-success">${formatCurrency(order.profit_amount)}</span>`
+            : `<span class="badge bg-secondary">Chưa nhập</span>`;
+            
+        const actionButton = order.has_profit
+            ? `<button class="btn btn-sm btn-warning" onclick="editProfit(${order.id})" title="Sửa lãi">
+                   <i class="fas fa-edit"></i>
+               </button>`
+            : `<button class="btn btn-sm btn-primary" onclick="addProfit(${order.id})" title="Nhập lãi">
+                   <i class="fas fa-plus"></i>
+               </button>`;
+        
+        html += `
+            <tr>
+                <td>${order.id}</td>
+                <td>${order.customer_name}</td>
+                <td>${order.service_name}</td>
+                <td>${formatCurrency(order.price)}</td>
+                <td>${order.created_at}</td>
+                <td>${profitDisplay}</td>
+                <td>${actionButton}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.html(html);
+}
+
+// Update statistics cards
+function updateStatisticsCards() {
+    $('#total-orders').text(statisticsData.total_orders || 0);
+    $('#orders-with-profit').text(statisticsData.orders_with_profit || 0);
+    $('#total-profit').text(statisticsData.total_profit || '0đ');
+    $('#average-profit').text(statisticsData.average_profit || '0đ');
+}
+
+// Add profit for an order
+function addProfit(orderId) {
+    const order = ordersData.find(o => o.id === orderId);
+    if (!order) return;
+    
+    $('#customer_service_id').val(orderId);
+    $('#profit_amount').val('');
+    $('#notes').val('');
+    
+    $('#order-info').html(`
+        <strong>Khách hàng:</strong> ${order.customer_name}<br>
+        <strong>Dịch vụ:</strong> ${order.service_name}<br>
+        <strong>Giá bán:</strong> ${formatCurrency(order.price)}
+    `);
+    
+    $('#profitModalLabel').html('<i class="fas fa-money-bill-wave me-2"></i>Nhập lợi nhuận');
+    $('#profitModal').modal('show');
+}
+
+// Edit profit for an order
+function editProfit(orderId) {
+    const order = ordersData.find(o => o.id === orderId);
+    if (!order) return;
+    
+    $('#customer_service_id').val(orderId);
+    $('#profit_amount').val(order.profit_amount || '');
+    $('#notes').val('');
+    
+    $('#order-info').html(`
+        <strong>Khách hàng:</strong> ${order.customer_name}<br>
+        <strong>Dịch vụ:</strong> ${order.service_name}<br>
+        <strong>Giá bán:</strong> ${formatCurrency(order.price)}<br>
+        <strong>Lãi hiện tại:</strong> ${formatCurrency(order.profit_amount)}
+    `);
+    
+    $('#profitModalLabel').html('<i class="fas fa-edit me-2"></i>Sửa lợi nhuận');
+    $('#profitModal').modal('show');
+}
+
+// Setup profit form submission
+function setupProfitForm() {
+    $('#profitForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            customer_service_id: $('#customer_service_id').val(),
+            profit_amount: $('#profit_amount').val(),
+            notes: $('#notes').val(),
+            _token: '{{ csrf_token() }}'
+        };
+        
+        // Disable submit button
+        const submitBtn = $(this).find('button[type="submit"]');
+        submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...');
+        
+        $.ajax({
+            url: '{{ route("admin.profits.store") }}',
+            method: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    $('#profitModal').modal('hide');
+                    showSuccess(response.message);
+                    refreshData();
+                } else {
+                    showError(response.message);
+                }
+            },
+            error: function(xhr) {
+                showError('Lỗi khi lưu lợi nhuận: ' + getErrorMessage(xhr));
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false).html('<i class="fas fa-save me-1"></i>Lưu lợi nhuận');
+            }
+        });
+    });
+}
+
+// Refresh all data
+function refreshData() {
+    loadTodayOrders();
+    loadTodayStatistics();
+}
+
+// Test function for debugging
+function testAjax() {
+    console.log('Testing AJAX...');
+    alert('Testing AJAX - check console for details');
+    
+    fetch('{{ route("admin.profits.today-orders") }}')
+        .then(response => {
+            console.log('Fetch response:', response);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Fetch data:', data);
+            alert('Fetch successful! Check console for data.');
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('Fetch error: ' + error.message);
+        });
+}
+
+// Utility functions
+function formatCurrency(amount) {
+    if (!amount) return '0đ';
+    return new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: 'VND'
+    }).format(amount);
+}
+
+function showSuccess(message) {
+    // You can replace this with your preferred notification system
+    alert('✅ ' + message);
+}
+
+function showError(message) {
+    // You can replace this with your preferred notification system
+    alert('❌ ' + message);
+}
+
+function getErrorMessage(xhr) {
+    if (xhr.responseJSON && xhr.responseJSON.message) {
+        return xhr.responseJSON.message;
+    }
+    return 'Có lỗi xảy ra';
+}
+</script>
+@endsection
