@@ -18,12 +18,6 @@ return [
         'from_email' => env('NOTIFICATION_EMAIL_FROM', 'noreply@example.com'),
     ],
 
-    'telegram' => [
-        'enabled' => env('NOTIFICATION_TELEGRAM_ENABLED', false),
-        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
-        'chat_id' => env('TELEGRAM_CHAT_ID'),
-    ],
-
     'zalo' => [
         'enabled' => env('NOTIFICATION_ZALO_ENABLED', false),
         'app_id' => env('ZALO_APP_ID'),

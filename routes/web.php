@@ -7,14 +7,10 @@ use App\Http\Controllers\Admin\ServiceCategoryController;
 use App\Http\Controllers\Admin\ServicePackageController;
 use App\Http\Controllers\Admin\CustomerServiceController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ContentSchedulerController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\AuthController;
-use App\Http\Controllers\Admin\LeadController;
 use App\Http\Controllers\LookupController;
-use App\Http\Controllers\Admin\SupplierController;
-use App\Http\Controllers\Admin\PotentialSupplierController;
 use App\Http\Controllers\Admin\CollaboratorController;
 use App\Http\Controllers\Admin\RevenueController;
 use App\Http\Controllers\ProfitController;
@@ -133,6 +129,10 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
         ->name('customer-services.reminder-report');
     Route::get('customer-services-daily-report', [CustomerServiceController::class, 'dailyReport'])
         ->name('customer-services.daily-report');
+    Route::get('customer-services-statistics', [CustomerServiceController::class, 'statistics'])
+        ->name('customer-services.statistics');
+    Route::delete('customer-services-expired/bulk-delete', [CustomerServiceController::class, 'deleteExpiredServices'])
+        ->name('customer-services.delete-expired');
 
     // Route để gán dịch vụ cho khách hàng
     Route::get('customers/{customer}/assign-service', [CustomerServiceController::class, 'assignForm'])
@@ -140,15 +140,7 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
     Route::post('customers/{customer}/assign-service', [CustomerServiceController::class, 'assignService'])
         ->name('customers.store-service');
 
-    // Quản lý Lead (khách hàng tiềm năng)
-    Route::resource('leads', LeadController::class);
-    Route::post('leads/{lead}/activity', [LeadController::class, 'addActivity'])->name('leads.add-activity');
-    Route::post('leads/{lead}/convert', [LeadController::class, 'convert'])->name('leads.convert');
-    Route::patch('leads/{lead}/mark-lost', [LeadController::class, 'markAsLost'])->name('leads.mark-lost');
-    Route::post('leads/bulk-action', [LeadController::class, 'bulkAction'])->name('leads.bulk-action');
 
-    // Báo cáo
-    Route::get('reports/profit', [ReportController::class, 'profit'])->name('reports.profit');
 
     // Content Scheduler
     Route::resource('content-scheduler', ContentSchedulerController::class);
@@ -161,19 +153,7 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
     Route::patch('invoices/{invoice}/mark-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.mark-paid');
     Route::patch('invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');
 
-    // Suppliers routes
-    Route::delete('suppliers/bulk-delete', [SupplierController::class, 'bulkDelete'])->name('suppliers.bulk-delete');
-    Route::get('suppliers/combined', [SupplierController::class, 'combinedIndex'])->name('suppliers.combined');
-    Route::get('suppliers/original', [SupplierController::class, 'originalIndex'])->name('suppliers.original');
-    Route::get('suppliers/statistics', [SupplierController::class, 'statistics'])->name('suppliers.statistics');
-    Route::get('suppliers/api/current', [SupplierController::class, 'apiCurrentSuppliers'])->name('suppliers.api.current');
-    Route::resource('suppliers', SupplierController::class);
 
-    // Potential Suppliers routes
-    Route::delete('potential-suppliers/bulk-delete', [PotentialSupplierController::class, 'bulkDelete'])->name('potential-suppliers.bulk-delete');
-    Route::post('potential-suppliers/{potentialSupplier}/convert', [PotentialSupplierController::class, 'convertToSupplier'])->name('potential-suppliers.convert');
-    Route::get('potential-suppliers/api/list', [PotentialSupplierController::class, 'apiPotentialSuppliers'])->name('potential-suppliers.api.list');
-    Route::resource('potential-suppliers', PotentialSupplierController::class);
 
     // Collaborators routes
     Route::resource('collaborators', CollaboratorController::class);
@@ -224,6 +204,12 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
         Route::get('/', [RevenueController::class, 'index'])->name('index');
         Route::get('/data', [RevenueController::class, 'getRevenueData'])->name('data');
         Route::get('/service-stats', [RevenueController::class, 'getServiceStats'])->name('service-stats');
+        Route::get('/customer-stats', [RevenueController::class, 'getCustomerStats'])->name('customer-stats');
+        Route::get('/category-stats', [RevenueController::class, 'getCategoryStats'])->name('category-stats');
+        Route::get('/performance-stats', [RevenueController::class, 'getPerformanceStats'])->name('performance-stats');
+        Route::get('/hourly-stats', [RevenueController::class, 'getHourlyStats'])->name('hourly-stats');
+        Route::get('/growth-stats', [RevenueController::class, 'getGrowthStats'])->name('growth-stats');
+        Route::get('/forecast-stats', [RevenueController::class, 'getForecastStats'])->name('forecast-stats');
         Route::get('/export', [RevenueController::class, 'exportReport'])->name('export');
         Route::post('/update-profit', [RevenueController::class, 'updateProfit'])->name('update-profit');
         Route::delete('/delete-profit', [RevenueController::class, 'deleteProfit'])->name('delete-profit');

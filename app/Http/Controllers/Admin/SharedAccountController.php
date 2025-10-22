@@ -153,7 +153,7 @@ class SharedAccountController extends Controller
             'expiring_soon' => $services->filter(function ($service) {
                 return $service->expires_at &&
                     $service->expires_at->isFuture() &&
-                    $service->expires_at->diffInDays(now()) <= 5; // Thay đổi từ 7 thành 5 ngày
+                    $service->getDaysRemaining() <= 5; // Thay đổi từ 7 thành 5 ngày
             })->count(),
         ];
 

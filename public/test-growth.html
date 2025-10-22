@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Test Growth Stats</title>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
+    <body>
+        <h1>Test Growth Stats API</h1>
+        <button id="testBtn">Test API Call</button>
+        <div id="result"></div>
+
+        <script>
+            $("#testBtn").click(function () {
+                console.log("Testing growth stats API...");
+
+                $.ajax({
+                    url: "/admin/revenue/growth-stats",
+                    method: "GET",
+                    data: { period: "day" },
+                    success: function (response) {
+                        console.log("Success:", response);
+                        $("#result").html(
+                            "<pre>" +
+                                JSON.stringify(response, null, 2) +
+                                "</pre>"
+                        );
+                    },
+                    error: function (xhr, status, error) {
+                        console.error("Error:", xhr.responseJSON || error);
+                        $("#result").html(
+                            '<p style="color:red">Error: ' +
+                                (xhr.responseJSON
+                                    ? JSON.stringify(xhr.responseJSON)
+                                    : error) +
+                                "</p>"
+                        );
+                    },
+                });
+            });
+        </script>
+    </body>
+</html>

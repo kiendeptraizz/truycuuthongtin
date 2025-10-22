@@ -9,7 +9,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-user-edit me-2"></i>
+                    <i class="fas fa-edit me-2"></i>
                     Chỉnh sửa thông tin khách hàng
                 </h5>
             </div>
@@ -40,7 +40,7 @@
                                        value="1"
                                        {{ old('is_collaborator', $customer->is_collaborator) ? 'checked' : '' }}>
                                 <label class="form-check-label" for="is_collaborator">
-                                    <i class="fas fa-handshake text-primary"></i>
+                                    <i class="fas fa-handshake text-success"></i>
                                     Đây là cộng tác viên
                                 </label>
                             </div>

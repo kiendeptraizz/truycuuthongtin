@@ -8,7 +8,7 @@
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="h3 mb-0 text-gray-800">🔗 Gán Dịch Vụ Mới</h1>
+            <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-plus me-2"></i>Gán Dịch Vụ Mới</h1>
             <p class="mb-0 text-muted">Kích hoạt dịch vụ cho khách hàng một cách nhanh chóng</p>
         </div>
         <div>

@@ -122,11 +122,26 @@
                         <div class="col-6">
                             <small class="text-muted">Ngày hết hạn:</small><br>
                             @if($familyAccount->expires_at)
-                                <strong class="{{ $familyAccount->expires_at->isPast() ? 'text-danger' : ($familyAccount->expires_at->diffInDays() <= 7 ? 'text-warning' : 'text-success') }}">
+                                @php
+                                    $daysRemaining = $familyAccount->getDaysRemaining();
+                                    $isExpired = $familyAccount->isExpired();
+                                    $isExpiringSoon = $familyAccount->isExpiringSoon(7);
+                                @endphp
+                                <strong class="{{ $isExpired ? 'text-danger' : ($isExpiringSoon ? 'text-warning' : 'text-success') }}">
                                     {{ $familyAccount->expires_at->format('d/m/Y') }}
                                 </strong>
                                 <br>
-                                <small class="text-muted">{{ $familyAccount->expires_at->diffForHumans() }}</small>
+                                <small class="text-muted">
+                                    @if($isExpired)
+                                        Đã hết hạn
+                                    @elseif($daysRemaining == 0)
+                                        Hết hạn hôm nay
+                                    @elseif($daysRemaining == 1)
+                                        Còn 1 ngày
+                                    @else
+                                        Còn {{ $daysRemaining }} ngày
+                                    @endif
+                                </small>
                             @else
                                 <span class="text-muted">Chưa thiết lập</span>
                             @endif
@@ -159,7 +174,7 @@
                         </h6>
                         @if($activeMembers->count() < $familyAccount->max_members)
                             <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                                <i class="fas fa-user-plus me-1"></i>
+                                <i class="fas fa-plus me-1"></i>
                                 Thêm thành viên
                             </a>
                         @else
@@ -323,7 +338,7 @@
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thành viên">
-                                                                <i class="fas fa-trash"></i> Xóa
+                                                                <i class="fas fa-trash-alt"></i> Xóa
                                                             </button>
                                                         </form>
                                                     </div>
@@ -346,7 +361,7 @@
                                     <h5 class="text-muted">Chưa có thành viên hoạt động</h5>
                                     <p class="text-muted mb-4">Family account này chưa có thành viên hoạt động nào</p>
                                     <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                                        <i class="fas fa-user-plus me-1"></i>
+                                        <i class="fas fa-plus me-1"></i>
                                         Thêm thành viên đầu tiên
                                     </a>
                                 </div>

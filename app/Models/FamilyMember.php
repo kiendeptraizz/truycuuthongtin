@@ -47,6 +47,43 @@ class FamilyMember extends Model
     ];
 
     /**
+     * Boot method
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Cập nhật current_members khi tạo member mới
+        static::created(function ($member) {
+            if ($member->familyAccount) {
+                $member->familyAccount->updateCurrentMembers();
+            }
+        });
+
+        // Cập nhật current_members khi cập nhật status của member
+        static::updated(function ($member) {
+            if ($member->familyAccount) {
+                // Cập nhật số thành viên nếu status thay đổi
+                if ($member->wasChanged('status')) {
+                    $member->familyAccount->updateCurrentMembers();
+                }
+
+                // Đồng bộ Customer Service nếu thông tin quan trọng thay đổi
+                if ($member->wasChanged(['member_email', 'status', 'expires_at', 'start_date', 'end_date'])) {
+                    $member->syncCustomerService();
+                }
+            }
+        });
+
+        // Cập nhật current_members khi xóa member
+        static::deleted(function ($member) {
+            if ($member->familyAccount) {
+                $member->familyAccount->updateCurrentMembers();
+            }
+        });
+    }
+
+    /**
      * Relationships
      */
     public function familyAccount(): BelongsTo
@@ -67,5 +104,47 @@ class FamilyMember extends Model
     public function removedBy(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'removed_by');
+    }
+
+    /**
+     * Đồng bộ thông tin member với Customer Service
+     */
+    public function syncCustomerService()
+    {
+        if (!$this->customer) {
+            return;
+        }
+
+        // Lấy customer service có family_account_id trùng
+        $customerService = \App\Models\CustomerService::where('customer_id', $this->customer_id)
+            ->where('family_account_id', $this->family_account_id)
+            ->first();
+
+        if ($customerService) {
+            $updated = false;
+
+            // Đồng bộ email nếu có thay đổi
+            if ($this->member_email && $customerService->login_email !== $this->member_email) {
+                $customerService->login_email = $this->member_email;
+                $updated = true;
+            }
+
+            // Đồng bộ ngày hết hạn
+            if ($this->end_date && $customerService->expires_at !== $this->end_date) {
+                $customerService->expires_at = $this->end_date;
+                $updated = true;
+            }
+
+            // Đồng bộ status
+            $serviceStatus = $this->status === 'active' ? 'active' : 'inactive';
+            if ($customerService->status !== $serviceStatus) {
+                $customerService->status = $serviceStatus;
+                $updated = true;
+            }
+
+            if ($updated) {
+                $customerService->save();
+            }
+        }
     }
 }

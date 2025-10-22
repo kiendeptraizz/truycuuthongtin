@@ -11,7 +11,7 @@
                     <div class="d-flex align-items-center">
                         <div class="me-auto">
                             <h5 class="mb-0">
-                                <i class="fas fa-users me-2"></i>
+                                <i class="fas fa-plus me-2"></i>
                                 Tạo Family Account Mới
                             </h5>
                             <small class="text-muted">Tạo tài khoản gia đình cho nhiều thành viên</small>
@@ -182,7 +182,7 @@
                             <div class="col-12">
                                 <div class="d-flex justify-content-between">
                                     <a href="{{ route('admin.family-accounts.index') }}" class="btn btn-secondary">
-                                        <i class="fas fa-times me-1"></i>
+                                        <i class="fas fa-times-circle me-1"></i>
                                         Hủy
                                     </a>
                                     <button type="submit" class="btn btn-primary">

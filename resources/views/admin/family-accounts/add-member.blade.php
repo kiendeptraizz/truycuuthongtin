@@ -44,7 +44,7 @@
                     <div class="d-flex align-items-center">
                         <div class="me-auto">
                             <h5 class="mb-0">
-                                <i class="fas fa-user-plus me-2"></i>
+                                <i class="fas fa-plus me-2"></i>
                                 Thêm thành viên mới
                             </h5>
                             <small class="text-muted">Thêm khách hàng vào family account</small>
@@ -73,7 +73,7 @@
                                 <!-- Member Type Selection -->
                                 <div class="col-12 mb-4">
                                     <label class="form-label">
-                                        <i class="fas fa-user-plus me-1"></i>
+                                        <i class="fas fa-plus me-1"></i>
                                         Loại thành viên <span class="text-danger">*</span>
                                     </label>
                                     <div class="row">
@@ -100,7 +100,7 @@
                                                        value="new" 
                                                        {{ old('member_type') === 'new' ? 'checked' : '' }}>
                                                 <label class="form-check-label" for="member_type_new">
-                                                    <i class="fas fa-user-plus me-1"></i>
+                                                    <i class="fas fa-plus me-1"></i>
                                                     Tạo khách hàng mới
                                                 </label>
                                             </div>
@@ -286,11 +286,11 @@
                                 <div class="col-12">
                                     <div class="d-flex justify-content-between">
                                         <a href="{{ route('admin.family-accounts.show', $familyAccount) }}" class="btn btn-secondary">
-                                            <i class="fas fa-times me-1"></i>
+                                            <i class="fas fa-times-circle me-1"></i>
                                             Hủy
                                         </a>
                                         <button type="submit" class="btn btn-success">
-                                            <i class="fas fa-user-plus me-1"></i>
+                                            <i class="fas fa-plus me-1"></i>
                                             Thêm thành viên
                                         </button>
                                     </div>

@@ -8,7 +8,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-users-cog me-2"></i>
+                            <i class="fas fa-edit me-2"></i>
                             Chỉnh sửa thông tin tài khoản dùng chung
                         </h5>
                         <small class="text-muted">Email: {{ $email }}</small>
@@ -139,7 +139,7 @@
                                 <!-- Thông tin 2FA -->
                                 <div class="card mt-3">
                                     <div class="card-header">
-                                        <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Xác thực 2 yếu tố (2FA)</h6>
+                                        <h6 class="mb-0"><i class="fas fa-shield-halved me-2"></i>Xác thực 2 yếu tố (2FA)</h6>
                                     </div>
                                     <div class="card-body">
                                         <div class="mb-3">
@@ -227,15 +227,15 @@
                                 <div class="d-flex justify-content-between">
                                     @if(request('source') === 'index')
                                         <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary">
-                                            <i class="fas fa-times"></i> Hủy
+                                            <i class="fas fa-times-circle"></i> Hủy
                                         </a>
                                     @elseif(request('source') === 'customer-service')
                                         <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
-                                            <i class="fas fa-times"></i> Hủy
+                                            <i class="fas fa-times-circle"></i> Hủy
                                         </a>
                                     @else
                                         <a href="{{ route('admin.shared-accounts.show', $email) }}" class="btn btn-secondary">
-                                            <i class="fas fa-times"></i> Hủy
+                                            <i class="fas fa-times-circle"></i> Hủy
                                         </a>
                                     @endif
                                     <button type="submit" class="btn btn-primary">

@@ -136,12 +136,7 @@
                             <small>Backup</small>
                         </a>
                     </div>
-                    <div class="col-md-2 col-sm-4 col-6 mb-3">
-                        <a href="{{ route('admin.reports.profit') }}" class="btn btn-secondary btn-block">
-                            <i class="fas fa-chart-line d-block mb-1"></i>
-                            <small>Báo Cáo</small>
-                        </a>
-                    </div>
+
                     <div class="col-md-2 col-sm-4 col-6 mb-3">
                         <a href="{{ route('lookup.index') }}" target="_blank" class="btn btn-outline-primary btn-block">
                             <i class="fas fa-search d-block mb-1"></i>

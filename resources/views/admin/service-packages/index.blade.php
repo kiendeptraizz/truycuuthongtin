@@ -126,12 +126,8 @@
                             </label>
                             <select name="status" class="form-select">
                                 <option value="">Tất cả trạng thái</option>
-                                <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>
-                                    <i class="fas fa-check-circle text-success"></i> Hoạt động
-                                </option>
-                                <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>
-                                    <i class="fas fa-pause-circle text-warning"></i> Tạm dừng
-                                </option>
+                                <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Hoạt động</option>
+                                <option value="inactive" {{ request('status') === 'inactive' ? 'selected' : '' }}>Tạm dừng</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -163,7 +159,7 @@
                                     <a href="{{ route('admin.service-packages.index') }}" 
                                        class="btn btn-outline-secondary d-flex align-items-center justify-content-center"
                                        title="Xóa tất cả bộ lọc">
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-times-circle"></i>
                                     </a>
                                 @endif
                             </div>
@@ -224,7 +220,7 @@
                                         </a>
                                         <a href="{{ route('admin.service-packages.index', ['account_type' => 'Tài khoản add family']) }}" 
                                            class="btn btn-sm {{ request('account_type') === 'Tài khoản add family' ? 'btn-secondary' : 'btn-outline-secondary' }}">
-                                            <i class="fas fa-user-plus me-1"></i>Add Fam
+                                            <i class="fas fa-plus me-1"></i>Add Fam
                                             @if(isset($accountTypeStats['Tài khoản add family']))
                                                 <span class="badge {{ request('account_type') === 'Tài khoản add family' ? 'bg-light text-dark' : 'bg-secondary text-white' }} ms-1">{{ $accountTypeStats['Tài khoản add family'] }}</span>
                                             @endif
@@ -335,7 +331,7 @@
                         </div>
                     </div>
                     <a href="{{ route('admin.service-packages.index') }}" class="btn btn-sm btn-outline-info">
-                        <i class="fas fa-times me-1"></i>
+                        <i class="fas fa-times-circle me-1"></i>
                         Xóa tất cả
                     </a>
                 </div>
@@ -458,7 +454,7 @@
                                                     class="btn btn-sm {{ $package->is_active ? 'btn-outline-warning' : 'btn-outline-success' }}"
                                                     title="{{ $package->is_active ? 'Tạm dừng' : 'Kích hoạt' }}"
                                                     onclick="return confirm('Bạn có chắc muốn {{ $package->is_active ? 'tạm dừng' : 'kích hoạt' }} gói dịch vụ này?')">
-                                                <i class="fas {{ $package->is_active ? 'fa-pause' : 'fa-play' }}" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">{{ $package->is_active ? '⏸️' : '▶️' }}</i>
+                                                <i class="fas {{ $package->is_active ? 'fa-pause' : 'fa-play' }}"></i>
                                             </button>
                                         </form>
                                     </div>
@@ -469,13 +465,13 @@
                                            class="btn btn-sm btn-info text-white"
                                            title="Xem chi tiết"
                                            style="min-width: 40px;">
-                                            <i class="fas fa-eye" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">👁️</i>
+                                            <i class="fas fa-eye"></i>
                                         </a>
                                         <a href="{{ route('admin.service-packages.edit', $package) }}"
                                            class="btn btn-sm btn-warning text-white"
                                            title="Chỉnh sửa"
                                            style="min-width: 40px;">
-                                            <i class="fas fa-edit" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">✏️</i>
+                                            <i class="fas fa-edit"></i>
                                         </a>
                                         <form method="POST"
                                               action="{{ route('admin.service-packages.destroy', $package) }}"
@@ -487,7 +483,7 @@
                                                     class="btn btn-sm btn-danger text-white"
                                                     title="Xóa"
                                                     style="min-width: 40px;">
-                                                <i class="fas fa-trash" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">🗑️</i>
+                                                <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </form>
                                     </div>

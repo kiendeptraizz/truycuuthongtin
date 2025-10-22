@@ -204,6 +204,7 @@
                                          data-package-id="{{ $package->id }}"
                                          data-category="{{ $categoryName }}"
                                          data-account-type="{{ $accountType }}"
+                                         data-duration="{{ $package->default_duration_days ?? 365 }}"
                                          data-search-text="{{ strtolower($package->name . ' ' . $categoryName . ' ' . $accountType) }}">
                                         
                                         <div class="package-card-inner">
@@ -722,6 +723,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // Trigger change event for form validation
+            console.log('Grid selector dispatching change event for:', packageId);
             hiddenInput.dispatchEvent(new Event('change'));
         }
     }
@@ -764,6 +766,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Trigger change event
+        console.log('Grid selector dispatching change event for clear selection');
         hiddenInput.dispatchEvent(new Event('change'));
     }
 

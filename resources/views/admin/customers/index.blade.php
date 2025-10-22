@@ -115,7 +115,7 @@
                         </button>
                         <a href="{{ route('admin.customers.create', ['page' => request('page', 1), 'search' => request('search')]) }}"
                             class="btn btn-outline-secondary btn-sm shadow-sm">
-                            <i class="fas fa-user-plus me-1"></i> Thêm đầy đủ
+                            <i class="fas fa-plus me-1"></i> Thêm đầy đủ
                         </a>
                     </div>
                 </div>
@@ -172,7 +172,7 @@
                                     @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'date_from', 'date_to']))
                                     <a href="{{ route('admin.customers.index') }}"
                                         class="btn btn-warning btn-sm">
-                                        <i class="fas fa-times"></i> Xóa bộ lọc
+                                        <i class="fas fa-times-circle"></i> Xóa bộ lọc
                                     </a>
                                     @endif
                                 </div>
@@ -258,7 +258,7 @@
         <div id="bulkActions" data-bulk-actions="customersTable" style="display: none;">
             <div class="btn-group">
                 <button class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">
-                    <i class="fas fa-trash me-1"></i>
+                    <i class="fas fa-trash-alt me-1"></i>
                     Xóa (<span data-selected-count>0</span>)
                 </button>
                 <button class="btn btn-outline-info btn-sm" onclick="bulkExport()">
@@ -292,7 +292,7 @@
     <div class="col-md-6 text-end">
         @if(request('search'))
             <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-times me-1"></i>
+                <i class="fas fa-times-circle me-1"></i>
                 Xóa bộ lọc
             </a>
         @endif
@@ -421,22 +421,22 @@
                             <div class="btn-group" role="group">
                                 <a href="{{ route('admin.customers.show', $customer) }}"
                                     class="btn btn-outline-info btn-sm" title="Xem chi tiết">
-                                    <i class="fas fa-eye" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">👁️</i>
+                                    <i class="fas fa-eye"></i>
                                 </a>
                                 <a href="{{ route('admin.customers.edit', $customer) }}"
                                     class="btn btn-outline-warning btn-sm" title="Chỉnh sửa">
-                                    <i class="fas fa-edit" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">✏️</i>
+                                    <i class="fas fa-edit"></i>
                                 </a>
                                 <a href="{{ route('admin.customers.assign-service', $customer) }}"
                                     class="btn btn-outline-success btn-sm" title="Gán dịch vụ">
-                                    <i class="fas fa-plus" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">➕</i>
+                                    <i class="fas fa-plus"></i>
                                 </a>
                                 <button type="button"
                                     class="btn btn-outline-danger btn-sm delete-btn"
                                     title="Xóa khách hàng"
                                     data-customer-name="{{ $customer->name }}"
                                     data-delete-url="{{ route('admin.customers.destroy', $customer) }}">
-                                    <i class="fas fa-trash" style="font-family: 'Font Awesome 6 Free'; font-weight: 900;">🗑️</i>
+                                    <i class="fas fa-trash-alt"></i>
                                 </button>
                             </div>
                         </td>
@@ -488,11 +488,11 @@
                 <div class="d-flex gap-3 justify-content-center">
                     @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'login_email', 'date_from', 'date_to']))
                     <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-primary btn-lg">
-                        <i class="fas fa-refresh me-2"></i>Xem tất cả
+                        <i class="fas fa-sync-alt me-2"></i>Xem tất cả
                     </a>
                     @endif
                     <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                        <i class="fas fa-user-plus me-2"></i>Thêm nhanh
+                        <i class="fas fa-plus me-2"></i>Thêm nhanh
                     </button>
                 </div>
             </div>
@@ -506,7 +506,7 @@
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header bg-primary text-white py-4">
                     <h4 class="modal-title fw-bold" id="quickAddModalLabel">
-                        <i class="fas fa-user-plus me-3"></i>
+                        <i class="fas fa-plus me-3"></i>
                         Thêm nhanh
                     </h4>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
@@ -549,7 +549,7 @@
                     </div>
                     <div class="modal-footer border-0 p-4">
                         <button type="button" class="btn btn-outline-secondary btn-lg px-4" data-bs-dismiss="modal">
-                            <i class="fas fa-times me-2"></i>
+                            <i class="fas fa-times-circle me-2"></i>
                             Hủy
                         </button>
                         <button type="submit" class="btn btn-primary btn-lg px-4" name="action" value="save">
@@ -591,14 +591,14 @@
                 </div>
                 <div class="modal-footer border-0 justify-content-center p-4">
                     <button type="button" class="btn btn-outline-secondary btn-lg px-4 me-3" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>
+                        <i class="fas fa-times-circle me-2"></i>
                         Hủy bỏ
                     </button>
                     <form id="deleteForm" method="POST" class="d-inline">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-danger btn-lg px-4">
-                            <i class="fas fa-trash me-2"></i>
+                            <i class="fas fa-trash-alt me-2"></i>
                             Xóa khách hàng
                         </button>
                     </form>
@@ -661,7 +661,7 @@
                             </ul>
                             <div class="mt-2">
                                 <a href="{{ route('admin.customers.index') }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-refresh"></i> Xem tất cả khách hàng
+                                    <i class="fas fa-sync-alt"></i> Xem tất cả khách hàng
                                 </a>
                             </div>
                         `;

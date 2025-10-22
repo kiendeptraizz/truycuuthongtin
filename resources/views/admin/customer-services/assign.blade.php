@@ -243,7 +243,7 @@
                                 class="form-control @error('expires_at') is-invalid @enderror"
                                 id="expires_at"
                                 name="expires_at"
-                                value="{{ old('expires_at', now()->addDays(30)->format('Y-m-d')) }}"
+                                value="{{ old('expires_at', now()->addDays(365)->format('Y-m-d')) }}"
                                 required>
                             @error('expires_at')
                             <div class="invalid-feedback">{{ $message }}</div>
@@ -278,14 +278,14 @@
                                                 Số tiền lãi
                                             </label>
                                             <div class="input-group">
-                                                <input type="number" 
+                                                <input type="text" 
                                                        class="form-control @error('profit_amount') is-invalid @enderror" 
                                                        id="profit_amount" 
                                                        name="profit_amount" 
-                                                       min="0" 
-                                                       step="any" 
-                                                       placeholder="Nhập số tiền lãi"
-                                                       value="{{ old('profit_amount') }}">
+                                                       placeholder="Nhập số tiền lãi (VD: 1000000)"
+                                                       value="{{ old('profit_amount') }}"
+                                                       inputmode="numeric"
+                                                       maxlength="15">
                                                 <span class="input-group-text">VNĐ</span>
                                             </div>
                                             @error('profit_amount')
@@ -345,32 +345,61 @@
         const serviceSelection = document.getElementById('service-selection');
         const supplierServiceSelect = document.getElementById('supplier_service_id');
 
+        // Wait a bit for grid component to initialize
+        setTimeout(function() {
+            console.log('Initializing service package handlers...');
+            initializeServicePackageHandlers();
+        }, 100);
+
+        function initializeServicePackageHandlers() {
+
         // Handle service package selection (for grid selector)
         serviceSelect.addEventListener('change', function() {
+            console.log('Service changed to:', this.value);
+            updateExpiryDateForSelectedService();
+            handleFamilyAccountLogic();
+        });
+
+        // Function to update expiry date based on selected service
+        function updateExpiryDateForSelectedService() {
+            if (serviceSelect.value) {
+                const selectedCard = document.querySelector(`[data-package-id="${serviceSelect.value}"]`);
+                if (selectedCard) {
+                    const duration = parseInt(selectedCard.getAttribute('data-duration')) || 365;
+                    console.log('Selected service duration:', duration, 'days');
+                    
+                    const activatedDate = new Date(activatedInput.value);
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + duration);
+
+                    expiresInput.value = expiresDate.toISOString().split('T')[0];
+                    console.log('Updated expiry date to:', expiresInput.value);
+                } else {
+                    console.log('No card found for package ID:', serviceSelect.value);
+                }
+            }
+        }
+
+        // Function to handle family account logic
+        function handleFamilyAccountLogic() {
             const familyWarning = document.getElementById('family-warning');
             const familySelection = document.getElementById('family-selection');
             const submitBtn = document.querySelector('button[type="submit"]');
             const hasFamilyMembership = {{ $hasFamilyMembership ? 'true' : 'false' }};
             
-            if (this.value) {
-                // Find the selected package card to get account type and duration
-                const selectedCard = document.querySelector(`[data-package-id="${this.value}"]`);
+            if (serviceSelect.value) {
+                const selectedCard = document.querySelector(`[data-package-id="${serviceSelect.value}"]`);
                 if (selectedCard) {
-                    // Check if this is an "add family" service
                     const accountType = selectedCard.getAttribute('data-account-type') || '';
                     
                     if (accountType.includes('add family')) {
-                        // Show family selection
                         familySelection.style.display = 'block';
-                        familyWarning.style.display = 'none'; // Hide warning in favor of selection
-                        
-                        // Enable submit button
+                        familyWarning.style.display = 'none';
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>Gán dịch vụ';
                         submitBtn.classList.remove('btn-danger');
                         submitBtn.classList.add('btn-primary');
                     } else {
-                        // Hide family selection for non-add-family services
                         familySelection.style.display = 'none';
                         familyWarning.style.display = 'none';
                         submitBtn.disabled = false;
@@ -378,20 +407,8 @@
                         submitBtn.classList.remove('btn-danger');
                         submitBtn.classList.add('btn-primary');
                     }
-
-                    // Try to get duration from the card's price text
-                    const priceText = selectedCard.querySelector('.package-price').textContent;
-                    const durationMatch = priceText.match(/(\d+)\s*ngày/);
-                    const duration = durationMatch ? parseInt(durationMatch[1]) : 30;
-
-                    const activatedDate = new Date(activatedInput.value);
-                    const expiresDate = new Date(activatedDate);
-                    expiresDate.setDate(expiresDate.getDate() + duration);
-
-                    expiresInput.value = expiresDate.toISOString().split('T')[0];
                 }
             } else {
-                // Hide selections when no service selected
                 familyWarning.style.display = 'none';
                 familySelection.style.display = 'none';
                 submitBtn.disabled = false;
@@ -399,25 +416,11 @@
                 submitBtn.classList.remove('btn-danger');
                 submitBtn.classList.add('btn-primary');
             }
-        });
+        }
 
         activatedInput.addEventListener('change', function() {
-            if (serviceSelect.value) {
-                // Find the selected package card to get duration
-                const selectedCard = document.querySelector(`[data-package-id="${serviceSelect.value}"]`);
-                if (selectedCard) {
-                    // Try to get duration from the card's price text
-                    const priceText = selectedCard.querySelector('.package-price').textContent;
-                    const durationMatch = priceText.match(/(\d+)\s*ngày/);
-                    const duration = durationMatch ? parseInt(durationMatch[1]) : 30;
-
-                    const activatedDate = new Date(this.value);
-                    const expiresDate = new Date(activatedDate);
-                    expiresDate.setDate(expiresDate.getDate() + duration);
-
-                    expiresInput.value = expiresDate.toISOString().split('T')[0];
-                }
-            }
+            console.log('Activation date changed to:', this.value);
+            updateExpiryDateForSelectedService();
         });
 
         // Handle supplier selection
@@ -540,15 +543,65 @@
 
             // Format as user types
             profitAmountInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\./g, ''); // Remove existing dots
-                if (value && !isNaN(value)) {
+                let value = e.target.value.replace(/[^\d]/g, ''); // Chỉ giữ lại số
+                if (value) {
                     e.target.value = formatNumberInput(value);
+                } else {
+                    e.target.value = '';
+                }
+            });
+
+            // Prevent non-numeric characters except backspace, delete, arrow keys
+            profitAmountInput.addEventListener('keydown', function(e) {
+                // Allow: backspace, delete, tab, escape, enter
+                if ([8, 9, 27, 13, 46].indexOf(e.keyCode) !== -1 ||
+                    // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                    (e.keyCode === 65 && e.ctrlKey === true) ||
+                    (e.keyCode === 67 && e.ctrlKey === true) ||
+                    (e.keyCode === 86 && e.ctrlKey === true) ||
+                    (e.keyCode === 88 && e.ctrlKey === true) ||
+                    // Allow: home, end, left, right, down, up
+                    (e.keyCode >= 35 && e.keyCode <= 40)) {
+                    return;
+                }
+                // Ensure that it is a number and stop the keypress
+                if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                    e.preventDefault();
                 }
             });
 
             // Clean value before form submission (remove dots for proper validation)
             profitAmountInput.closest('form').addEventListener('submit', function() {
-                profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+                const originalValue = profitAmountInput.value;
+                const cleanValue = profitAmountInput.value.replace(/\./g, '');
+                profitAmountInput.value = cleanValue;
+                console.log('Profit amount: Original =', originalValue, ', Clean =', cleanValue);
+            });
+        }
+        
+        } // End of initializeServicePackageHandlers()
+
+        // Also listen for any changes in the grid component area
+        const gridContainer = document.querySelector('.service-package-grid-container');
+        if (gridContainer) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                        // Check if a new card was selected
+                        const selectedCard = gridContainer.querySelector('.package-card.selected');
+                        if (selectedCard && serviceSelect.value) {
+                            console.log('Grid selection detected via observer');
+                            updateExpiryDateForSelectedService();
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(gridContainer, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['class']
             });
         }
     });

@@ -60,6 +60,53 @@
                             />
                         </div>
 
+                        <!-- Family Account Selection -->
+                        <div id="family-selection" class="col-md-12 mb-3" 
+                             style="display: {{ $customerService->servicePackage->account_type === 'Tài khoản add family' ? 'block' : 'none' }};">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Chọn Family Account để thêm khách hàng này vào</strong>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="family_account_id" class="form-label">
+                                        <i class="fas fa-users me-1"></i>
+                                        Family Account <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select @error('family_account_id') is-invalid @enderror"
+                                        id="family_account_id"
+                                        name="family_account_id">
+                                        <option value="">Chọn Family Account</option>
+                                        @foreach($availableFamilyAccounts as $family)
+                                        <option value="{{ $family->id }}"
+                                            data-current-members="{{ $family->family_members_count }}"
+                                            data-max-members="{{ $family->max_members }}"
+                                            {{ old('family_account_id', $currentFamilyMembership?->family_account_id) == $family->id ? 'selected' : '' }}>
+                                            {{ $family->family_name }} 
+                                            ({{ $family->family_members_count }}/{{ $family->max_members }} members)
+                                            - {{ $family->owner_name }}
+                                        </option>
+                                        @endforeach
+                                    </select>
+                                    @error('family_account_id')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <div class="form-text">Chọn Family Account để thêm khách hàng này vào</div>
+                                </div>
+                                @if($currentFamilyMembership)
+                                <div class="col-md-6">
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        <strong>Đã có Family Account:</strong><br>
+                                        {{ $currentFamilyMembership->familyAccount->family_name }}
+                                        <br><small>Owner: {{ $currentFamilyMembership->familyAccount->owner_name }}</small>
+                                    </div>
+                                </div>
+                                @endif
+                            </div>
+                        </div>
+
                         <div class="col-md-12 mb-3">
                             <label for="login_email" class="form-label">
                                 Email đăng nhập <span class="text-danger">*</span>
@@ -248,13 +295,11 @@
                                                 Số tiền lãi
                                             </label>
                                             <div class="input-group">
-                                                <input type="number" 
+                                                <input type="text" 
                                                        class="form-control @error('profit_amount') is-invalid @enderror" 
                                                        id="profit_amount" 
                                                        name="profit_amount" 
-                                                       min="0" 
-                                                       step="1000" 
-                                                       placeholder="Nhập số tiền lãi"
+                                                       placeholder="Nhập số tiền lãi (VD: 100000 hoặc 100,000)"
                                                        value="{{ old('profit_amount', $customerService->profit->profit_amount ?? '') }}">
                                                 <span class="input-group-text">VNĐ</span>
                                             </div>
@@ -325,27 +370,56 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('Edit form JavaScript loaded');
+        
+        // Service package duration tracking
+        let currentPackageDuration = {{ $customerService->servicePackage->default_duration_days ?? 30 }};
+        
         // Auto-calculation for date fields
-        const packageDurationDays = {{ $customerService->servicePackage->default_duration_days ?? 30 }};
         const startDateInput = document.querySelector('.start-date-input');
         const endDateInput = document.querySelector('.end-date-input');
 
         if (startDateInput && endDateInput) {
             startDateInput.addEventListener('change', function() {
                 if (this.value) {
-                    // Calculate end date = start date + package duration
+                    // Calculate end date = start date + current package duration
                     const startDate = new Date(this.value);
                     const endDate = new Date(startDate);
-                    endDate.setDate(startDate.getDate() + packageDurationDays);
+                    endDate.setDate(startDate.getDate() + currentPackageDuration);
 
                     // Format date for input
                     const formattedEndDate = endDate.toISOString().split('T')[0];
                     endDateInput.value = formattedEndDate;
 
                     // Show notification
-                    showAutoCalculationNotice(packageDurationDays);
+                    showAutoCalculationNotice(currentPackageDuration);
                 }
             });
+        }
+
+        // Function to update expiry date when service package changes
+        function updateExpiryDateForSelectedService() {
+            const selectedServiceCard = document.querySelector('.service-package-card.selected');
+            
+            if (selectedServiceCard && startDateInput && endDateInput) {
+                const newDuration = parseInt(selectedServiceCard.dataset.duration) || 365;
+                currentPackageDuration = newDuration;
+                
+                console.log('Service package changed, new duration:', newDuration);
+                
+                // If start date is filled, recalculate end date
+                if (startDateInput.value) {
+                    const startDate = new Date(startDateInput.value);
+                    const endDate = new Date(startDate);
+                    endDate.setDate(startDate.getDate() + newDuration);
+                    
+                    const formattedEndDate = endDate.toISOString().split('T')[0];
+                    endDateInput.value = formattedEndDate;
+                    
+                    console.log('Updated expiry date to:', formattedEndDate);
+                    showAutoCalculationNotice(newDuration);
+                }
+            }
         }
 
         // Show auto-calculation notice
@@ -378,6 +452,81 @@
                 }, 5000);
             }
         }
+
+        // Family account handling for service packages
+        const familySection = document.getElementById('family-selection');
+        console.log('Family section element:', familySection);
+        
+        function updateFamilyAccountVisibility() {
+            const selectedServiceCard = document.querySelector('.service-package-card.selected');
+            console.log('Selected service card:', selectedServiceCard);
+            
+            if (selectedServiceCard) {
+                const accountType = selectedServiceCard.dataset.accountType;
+                console.log('Current account type:', accountType);
+                
+                if (accountType === 'Tài khoản add family') {
+                    if (familySection) {
+                        familySection.style.display = 'block';
+                        console.log('Family section shown for add family account type');
+                    }
+                } else {
+                    if (familySection) {
+                        familySection.style.display = 'none';
+                        // Clear family selection when hidden
+                        const familySelect = document.getElementById('family_account_id');
+                        if (familySelect) {
+                            familySelect.value = '';
+                        }
+                        console.log('Family section hidden for non-family account type');
+                    }
+                }
+            } else {
+                console.log('No selected service card found');
+            }
+        }
+
+        // Update family visibility on page load
+        updateFamilyAccountVisibility();
+        
+        // Also check if current service package is add family type on page load
+        const currentServicePackage = @json($customerService->servicePackage);
+        if (currentServicePackage && currentServicePackage.account_type === 'Tài khoản add family') {
+            if (familySection) {
+                familySection.style.display = 'block';
+                console.log('Family section shown on page load for current add family service');
+            }
+        }
+
+        // Listen for service package card selection changes
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.service-package-card')) {
+                // Add a small delay to ensure the selected class is updated
+                setTimeout(function() {
+                    updateFamilyAccountVisibility();
+                    updateExpiryDateForSelectedService();
+                }, 50);
+            }
+        });
+
+        // Also listen for any programmatic changes to selected cards
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const target = mutation.target;
+                    if (target.classList.contains('service-package-card')) {
+                        updateFamilyAccountVisibility();
+                        updateExpiryDateForSelectedService();
+                    }
+                }
+            });
+        });
+
+        // Observe all service package cards for class changes
+        const serviceCards = document.querySelectorAll('.service-package-card');
+        serviceCards.forEach(card => {
+            observer.observe(card, { attributes: true, attributeFilter: ['class'] });
+        });
 
         // Supplier handling code
         const supplierSelect = document.getElementById('supplier_id');
@@ -477,15 +626,18 @@
 
             // Format as user types
             profitAmountInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\./g, ''); // Remove existing dots
-                if (value && !isNaN(value)) {
+                let value = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''); // Remove dots and non-numeric characters
+                if (value) {
                     e.target.value = formatNumberInput(value);
+                } else {
+                    e.target.value = '';
                 }
             });
 
             // Clean value before form submission (remove dots for proper validation)
             profitAmountInput.closest('form').addEventListener('submit', function() {
-                profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+                let cleanValue = profitAmountInput.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                profitAmountInput.value = cleanValue;
             });
         }
     });

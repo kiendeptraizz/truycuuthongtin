@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\ContentPost;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 
 class NotificationService
 {
@@ -29,10 +28,6 @@ class NotificationService
 
             if (config('notifications.email.enabled', false)) {
                 $results['email'] = $this->sendEmailNotification($message, $post);
-            }
-
-            if (config('notifications.telegram.enabled', false)) {
-                $results['telegram'] = $this->sendTelegramNotification($message, $post);
             }
 
             if (config('notifications.zalo.enabled', false)) {
@@ -88,42 +83,6 @@ class NotificationService
             return true;
         } catch (\Exception $e) {
             Log::error('Email notification failed', ['error' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    /**
-     * Send Telegram notification
-     */
-    private function sendTelegramNotification(string $message, ContentPost $post): bool
-    {
-        try {
-            $botToken = config('notifications.telegram.bot_token');
-            $chatId = config('notifications.telegram.chat_id');
-
-            if (!$botToken || !$chatId) {
-                Log::warning('Telegram configuration missing');
-                return false;
-            }
-
-            $response = Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                'chat_id' => $chatId,
-                'text' => $message,
-                'parse_mode' => 'HTML'
-            ]);
-
-            if ($response->successful()) {
-                Log::info('Telegram notification sent successfully');
-                return true;
-            } else {
-                Log::error('Telegram notification failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
-                ]);
-                return false;
-            }
-        } catch (\Exception $e) {
-            Log::error('Telegram notification error', ['error' => $e->getMessage()]);
             return false;
         }
     }

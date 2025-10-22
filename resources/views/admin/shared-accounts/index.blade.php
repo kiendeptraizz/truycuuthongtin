@@ -254,7 +254,7 @@
                             </div>
                             <div class="col-md-2">
                                 <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-outline-secondary w-100">
-                                    Xóa bộ lọc
+                                    <i class="fas fa-times-circle me-1"></i> Xóa bộ lọc
                                 </a>
                             </div>
                         </form>
@@ -426,7 +426,7 @@
                     <h5 class="text-muted">Không có tài khoản dùng chung</h5>
                     <p class="text-muted">Không tìm thấy tài khoản nào có nhiều hơn 1 dịch vụ hoặc thỏa mãn điều kiện lọc.</p>
                     <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-primary">
-                        <i class="fas fa-refresh me-1"></i>
+                        <i class="fas fa-sync-alt me-1"></i>
                         Xem tất cả
                     </a>
                 </div>

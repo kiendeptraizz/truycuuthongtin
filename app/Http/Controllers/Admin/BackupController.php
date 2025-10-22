@@ -46,22 +46,32 @@ class BackupController extends Controller
     /**
      * Tạo backup manual
      */
-    public function create()
+    public function create(Request $request)
     {
         try {
-            // Chạy lệnh backup mới
-            Artisan::call('backup:run', ['--type' => 'manual']);
+            $backupType = $request->input('backup_type', 'database'); // 'database' hoặc 'complete'
+
+            if ($backupType === 'complete') {
+                // Chạy lệnh backup toàn bộ
+                Artisan::call('backup:complete', ['--type' => 'manual']);
+                $message = 'Backup toàn bộ hệ thống đã được tạo thành công!';
+            } else {
+                // Chạy lệnh backup database
+                Artisan::call('backup:run', ['--type' => 'manual']);
+                $message = 'Backup cơ sở dữ liệu đã được tạo thành công!';
+            }
 
             $output = Artisan::output();
 
             // Parse output để lấy tên file backup
-            preg_match('/✅ Backup thành công: (.+)/', $output, $matches);
+            preg_match('/✅ Backup.*: (.+)/', $output, $matches);
             $backupName = $matches[1] ?? 'Không xác định';
 
             return response()->json([
                 'success' => true,
-                'message' => 'Backup toàn bộ CSDL đã được tạo thành công!',
+                'message' => $message,
                 'backup_name' => $backupName,
+                'backup_type' => $backupType,
                 'output' => $output
             ]);
         } catch (\Exception $e) {
@@ -236,7 +246,10 @@ class BackupController extends Controller
 
     private function getBackupStatistics()
     {
-        $files = glob($this->backupPath . '/*.sql');
+        // Lấy cả file .sql và .zip
+        $sqlFiles = glob($this->backupPath . '/*.sql');
+        $zipFiles = glob($this->backupPath . '/*.zip');
+        $files = array_merge($sqlFiles, $zipFiles);
 
         if (empty($files)) {
             return [
@@ -248,6 +261,8 @@ class BackupController extends Controller
                 'hours_ago' => 0,
                 'daily_count' => 0,
                 'manual_count' => 0,
+                'complete_count' => 0,
+                'database_count' => 0,
             ];
         }
 
@@ -262,6 +277,8 @@ class BackupController extends Controller
         // Đếm theo loại
         $dailyCount = count(array_filter($files, fn($f) => strpos(basename($f), '_daily_') !== false));
         $manualCount = count($files) - $dailyCount;
+        $completeCount = count(array_filter($files, fn($f) => strpos(basename($f), 'COMPLETE_BACKUP') !== false));
+        $databaseCount = count($files) - $completeCount;
 
         return [
             'total_backups' => count($files),
@@ -273,12 +290,17 @@ class BackupController extends Controller
             'hours_ago' => round((time() - filemtime($latestFile)) / 3600, 1),
             'daily_count' => $dailyCount,
             'manual_count' => $manualCount,
+            'complete_count' => $completeCount,
+            'database_count' => $databaseCount,
         ];
     }
 
     private function calculateHealthScore()
     {
-        $files = glob($this->backupPath . '/*.sql');
+        // Lấy cả file .sql và .zip
+        $sqlFiles = glob($this->backupPath . '/*.sql');
+        $zipFiles = glob($this->backupPath . '/*.zip');
+        $files = array_merge($sqlFiles, $zipFiles);
 
         if (empty($files)) {
             return [
@@ -310,6 +332,13 @@ class BackupController extends Controller
             $issues[] = "Số lượng backup ít (" . count($files) . " < 5)";
         }
 
+        // Ưu tiên cho complete backup
+        $completeBackups = array_filter($files, fn($f) => strpos(basename($f), 'COMPLETE_BACKUP') !== false);
+        if (empty($completeBackups)) {
+            $score -= 20;
+            $issues[] = "Không có backup toàn bộ hệ thống";
+        }
+
         $status = $score >= 90 ? 'excellent' : ($score >= 70 ? 'good' : ($score >= 50 ? 'warning' : 'critical'));
 
         return [
@@ -321,7 +350,10 @@ class BackupController extends Controller
 
     private function getRecentBackups($limit = 5)
     {
-        $files = glob($this->backupPath . '/*.sql');
+        // Lấy cả file .sql và .zip
+        $sqlFiles = glob($this->backupPath . '/*.sql');
+        $zipFiles = glob($this->backupPath . '/*.zip');
+        $files = array_merge($sqlFiles, $zipFiles);
 
         if (empty($files)) {
             return [];
@@ -332,41 +364,18 @@ class BackupController extends Controller
             return filemtime($b) - filemtime($a);
         });
 
+        $files = array_slice($files, 0, $limit);
         $backups = [];
-        for ($i = 0; $i < min($limit, count($files)); $i++) {
-            $file = $files[$i];
-            $filename = basename($file);
 
-            $backups[] = [
-                'filename' => $filename,
-                'size' => filesize($file),
-                'size_formatted' => $this->formatBytes(filesize($file)),
-                'created_at' => filemtime($file),
-                'created_at_formatted' => date('Y-m-d H:i:s', filemtime($file)),
-                'type' => $this->getBackupType($filename),
-                'extension' => pathinfo($filename, PATHINFO_EXTENSION)
-            ];
-        }
-
-        return $backups;
-    }
-
-    private function getAllBackups()
-    {
-        $files = glob($this->backupPath . '/*.sql');
-
-        if (empty($files)) {
-            return [];
-        }
-
-        // Sắp xếp theo thời gian
-        usort($files, function ($a, $b) {
-            return filemtime($b) - filemtime($a);
-        });
-
-        $backups = [];
         foreach ($files as $file) {
             $filename = basename($file);
+            $extension = pathinfo($file, PATHINFO_EXTENSION);
+
+            // Xác định loại backup
+            $type = 'Database';
+            if (strpos($filename, 'COMPLETE_BACKUP') !== false) {
+                $type = 'Complete System';
+            }
 
             $backups[] = [
                 'filename' => $filename,
@@ -375,11 +384,65 @@ class BackupController extends Controller
                 'created_at' => filemtime($file),
                 'created_at_formatted' => date('Y-m-d H:i:s', filemtime($file)),
                 'created_at_human' => Carbon::createFromTimestamp(filemtime($file))->diffForHumans(),
-                'type' => $this->getBackupType($filename),
-                'extension' => pathinfo($filename, PATHINFO_EXTENSION),
+                'type' => $type,
+                'extension' => $extension,
                 'status' => $this->verifyBackupIntegrity($file) ? 'success' : 'error'
             ];
         }
+
+        return $backups;
+    }
+
+    private function getAllBackups()
+    {
+        // Lấy cả file .sql và .zip
+        $sqlFiles = glob($this->backupPath . '/*.sql');
+        $zipFiles = glob($this->backupPath . '/*.zip');
+        $files = array_merge($sqlFiles, $zipFiles);
+
+        if (empty($files)) {
+            return [];
+        }
+
+        $backups = [];
+        foreach ($files as $file) {
+            $filename = basename($file);
+            $extension = pathinfo($file, PATHINFO_EXTENSION);
+
+            // Xác định loại backup
+            $type = 'database';
+            if (strpos($filename, 'COMPLETE_BACKUP') !== false) {
+                $type = 'complete';
+            }
+
+            // Xác định frequency
+            $frequency = 'manual';
+            if (strpos($filename, '_daily_') !== false) {
+                $frequency = 'daily';
+            } elseif (strpos($filename, '_weekly_') !== false) {
+                $frequency = 'weekly';
+            }
+
+            $backups[] = [
+                'filename' => $filename,
+                'path' => $file,
+                'size' => filesize($file),
+                'size_formatted' => $this->formatBytes(filesize($file)),
+                'created_at' => filemtime($file),
+                'created_at_formatted' => date('Y-m-d H:i:s', filemtime($file)),
+                'created_at_human' => Carbon::createFromTimestamp(filemtime($file))->diffForHumans(),
+                'type' => $type,
+                'frequency' => $frequency,
+                'extension' => $extension,
+                'can_restore' => $extension === 'sql', // Chỉ restore được file SQL
+                'status' => $this->verifyBackupIntegrity($file) ? 'success' : 'error'
+            ];
+        }
+
+        // Sắp xếp theo thời gian tạo (mới nhất trước)
+        usort($backups, function ($a, $b) {
+            return $b['created_at'] - $a['created_at'];
+        });
 
         return $backups;
     }
@@ -397,6 +460,17 @@ class BackupController extends Controller
 
         if ($extension === 'sql') {
             return file_exists($filePath) && filesize($filePath) > 0;
+        } elseif ($extension === 'zip') {
+            if (!file_exists($filePath) || filesize($filePath) === 0) {
+                return false;
+            }
+
+            // Kiểm tra tính toàn vẹn của ZIP file
+            $zip = new \ZipArchive();
+            $result = $zip->open($filePath, \ZipArchive::CHECKCONS);
+            $zip->close();
+
+            return $result === true;
         }
 
         return false;

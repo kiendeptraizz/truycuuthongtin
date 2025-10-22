@@ -184,7 +184,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-1"></i>Hủy
+                        <i class="fas fa-times-circle me-1"></i>Hủy
                     </button>
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save me-1"></i>Lưu lợi nhuận

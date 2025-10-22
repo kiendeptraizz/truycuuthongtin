@@ -42,7 +42,7 @@
                     <div class="d-flex align-items-center">
                         <div class="me-auto">
                             <h5 class="mb-0">
-                                <i class="fas fa-user-edit me-2"></i>
+                                <i class="fas fa-edit me-2"></i>
                                 Chỉnh sửa thành viên
                             </h5>
                             <small class="text-muted">{{ $member->member_name ?? $member->member_email }}</small>
@@ -82,15 +82,9 @@
                                     Trạng thái <span class="text-danger">*</span>
                                 </label>
                                 <select class="form-select" id="status" name="status" required>
-                                    <option value="active" {{ $member->status === 'active' ? 'selected' : '' }}>
-                                        <i class="fas fa-check-circle"></i> Hoạt động
-                                    </option>
-                                    <option value="suspended" {{ $member->status === 'suspended' ? 'selected' : '' }}>
-                                        <i class="fas fa-pause-circle"></i> Tạm dừng
-                                    </option>
-                                    <option value="removed" {{ $member->status === 'removed' ? 'selected' : '' }}>
-                                        <i class="fas fa-times-circle"></i> Đã xóa
-                                    </option>
+                                    <option value="active" {{ $member->status === 'active' ? 'selected' : '' }}>Hoạt động</option>
+                                    <option value="suspended" {{ $member->status === 'suspended' ? 'selected' : '' }}>Tạm dừng</option>
+                                    <option value="removed" {{ $member->status === 'removed' ? 'selected' : '' }}>Đã xóa</option>
                                 </select>
                                 <div class="invalid-feedback"></div>
                             </div>
@@ -128,12 +122,12 @@
                                             class="btn btn-outline-secondary" 
                                             id="reset-auto-calc"
                                             title="Tính lại tự động từ ngày bắt đầu">
-                                        <i class="fas fa-refresh"></i>
+                                        <i class="fas fa-sync-alt"></i>
                                     </button>
                                 </div>
                                 <div class="invalid-feedback"></div>
                                 <small class="form-text text-muted">
-                                    <i class="fas fa-magic"></i> 
+                                    <i class="fas fa-info-circle"></i>
                                     <span id="auto-calculated-info">Tự động tính từ ngày bắt đầu + {{ $familyAccount->servicePackage->duration_days ?? 30 }} ngày</span>
                                 </small>
                             </div>
@@ -179,7 +173,7 @@
                             <div class="col-12">
                                 <div class="d-flex justify-content-between">
                                     <a href="{{ route('admin.family-accounts.show', $familyAccount) }}" class="btn btn-secondary">
-                                        <i class="fas fa-times me-1"></i>
+                                        <i class="fas fa-times-circle me-1"></i>
                                         Hủy
                                     </a>
                                     <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -326,7 +320,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Show alert message
     function showAlert(type, message) {
         const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
-        const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-times-circle';
         
         const alertHtml = `
             <div class="alert ${alertClass} alert-dismissible fade show" role="alert">

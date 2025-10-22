@@ -33,7 +33,7 @@
                             <div class="col-md-6">
                                 @if(request('search'))
                                     <a href="{{ route('admin.service-categories.index') }}" class="btn btn-secondary">
-                                        <i class="fas fa-times"></i> Xóa bộ lọc
+                                        <i class="fas fa-times-circle"></i> Xóa bộ lọc
                                     </a>
                                 @endif
                             </div>
@@ -87,12 +87,12 @@
                                                         @csrf
                                                         @method('DELETE')
                                                         <button type="submit" class="btn btn-sm btn-danger" title="Xóa">
-                                                            <i class="fas fa-trash"></i>
+                                                            <i class="fas fa-trash-alt"></i>
                                                         </button>
                                                     </form>
                                                 @else
                                                     <button class="btn btn-sm btn-secondary" disabled title="Không thể xóa danh mục có gói dịch vụ">
-                                                        <i class="fas fa-trash"></i>
+                                                        <i class="fas fa-trash-alt"></i>
                                                     </button>
                                                 @endif
                                             </div>

@@ -194,7 +194,7 @@
 
 @if(session('error'))
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
-    <i class="fas fa-exclamation-circle me-2"></i>
+    <i class="fas fa-times-circle me-2"></i>
     {{ session('error') }}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
@@ -324,7 +324,7 @@
                     <div class="col-md-6">
                         <div class="card">
                             <div class="card-header">
-                                <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Xác thực 2 yếu tố</h6>
+                                <h6 class="mb-0"><i class="fas fa-shield-halved me-2"></i>Xác thực 2 yếu tố</h6>
                             </div>
                             <div class="card-body">
                                 <div class="mb-2">
@@ -407,7 +407,7 @@
                         <div class="card logout-section">
                             <div class="card-header text-white">
                                 <h6 class="mb-0">
-                                    <i class="fas fa-sign-out-alt me-2"></i>
+                                    <i class="fas fa-right-from-bracket me-2"></i>
                                     Quản lý Logout Devices
                                 </h6>
                             </div>
@@ -425,7 +425,7 @@
                                     <div class="col-md-4 text-end">
                                         <a href="{{ route('admin.shared-accounts.logout-form', $email) }}"
                                            class="btn btn-danger btn-logout-primary text-white">
-                                            <i class="fas fa-sign-out-alt me-2"></i>
+                                            <i class="fas fa-right-from-bracket me-2"></i>
                                             Logout All Devices
                                         </a>
                                         <button type="button" class="btn btn-outline-secondary ms-2"
@@ -468,7 +468,8 @@
                             @foreach($services as $service)
                             @php
                                 $isExpired = $service->expires_at && $service->expires_at->isPast();
-                                $isExpiring = $service->expires_at && $service->expires_at->isFuture() && $service->expires_at->diffInDays(now()) <= 5;
+                                $daysRemaining = $service->getDaysRemaining();
+                                $isExpiring = $service->expires_at && $service->expires_at->isFuture() && $daysRemaining <= 5;
                                 $statusClass = $isExpired ? 'table-danger' : ($isExpiring ? 'table-warning' : '');
 
                                 // Tạo ghi chú ngắn gọn
@@ -527,9 +528,9 @@
                                             @if($isExpired)
                                                 <span class="text-danger">Hết hạn</span>
                                             @elseif($isExpiring)
-                                                <span class="text-warning">{{ $service->expires_at->diffInDays(now()) }}d</span>
+                                                <span class="text-warning">{{ $daysRemaining }}d</span>
                                             @else
-                                                <span class="text-success">{{ $service->expires_at->diffInDays(now()) }}d</span>
+                                                <span class="text-success">{{ $daysRemaining }}d</span>
                                             @endif
                                         </div>
                                     @else
@@ -611,7 +612,7 @@
                                                 <button type="button"
                                                         class="dropdown-item text-danger"
                                                         onclick="confirmDeleteService('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')">
-                                                    <i class="fas fa-trash me-2"></i>
+                                                    <i class="fas fa-trash-alt me-2"></i>
                                                     Xóa
                                                 </button>
                                             </li>

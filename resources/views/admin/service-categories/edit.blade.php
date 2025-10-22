@@ -55,7 +55,7 @@
                             <i class="fas fa-save"></i> Cập nhật danh mục
                         </button>
                         <a href="{{ route('admin.service-categories.index') }}" class="btn btn-secondary">
-                            <i class="fas fa-times"></i> Hủy
+                            <i class="fas fa-times-circle"></i> Hủy
                         </a>
                     </div>
                 </form>

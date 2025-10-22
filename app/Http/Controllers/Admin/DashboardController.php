@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Models\ServicePackage;
 use App\Models\CustomerService;
 use App\Models\ContentPost;
-use App\Models\Lead;
 
 class DashboardController extends Controller
 {
@@ -19,28 +18,7 @@ class DashboardController extends Controller
         $totalActiveServices = CustomerService::where('status', 'active')->count();
         $expiringSoonServices = CustomerService::expiringSoon()->count();
 
-        // Lead statistics
-        $totalLeads = Lead::count();
-        $newLeads = Lead::where('status', 'new')->count();
-        $followUpTodayLeads = Lead::needFollowUpToday()->count();
-        $overdueLeads = Lead::overdueFollowUp()->count();
-        $convertedThisMonth = Lead::where('status', 'won')
-            ->whereMonth('converted_at', now()->month)
-            ->count();
 
-        // Leads cần chú ý
-        $urgentLeads = Lead::with(['servicePackage', 'assignedUser'])
-            ->where('priority', 'urgent')
-            ->whereNotIn('status', ['won', 'lost'])
-            ->orderBy('created_at', 'desc')
-            ->limit(5)
-            ->get();
-
-        $overdueLeadsList = Lead::with(['servicePackage', 'assignedUser'])
-            ->overdueFollowUp()
-            ->orderBy('next_follow_up_at')
-            ->limit(5)
-            ->get();
 
         // Dịch vụ sắp hết hạn (5 ngày tới)
         $expiringSoon = CustomerService::with(['customer', 'servicePackage'])
@@ -99,13 +77,6 @@ class DashboardController extends Controller
             'popularServices',
             'upcomingPosts',
             'overduePosts',
-            'totalLeads',
-            'newLeads',
-            'followUpTodayLeads',
-            'overdueLeads',
-            'convertedThisMonth',
-            'urgentLeads',
-            'overdueLeadsList',
             'recentAssignments',
             'assignmentsToday',
             'assignmentsThisWeek'

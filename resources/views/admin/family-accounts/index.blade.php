@@ -137,7 +137,7 @@
                                     Lọc
                                 </button>
                                 <a href="{{ route('admin.family-accounts.index') }}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-times me-1"></i>
+                                    <i class="fas fa-times-circle me-1"></i>
                                     Reset
                                 </a>
                             </div>
@@ -234,16 +234,29 @@
                                     </td>
                                     <td>
                                         @if($account->expires_at)
+                                        @php
+                                            $daysRemaining = $account->getDaysRemaining();
+                                            $isExpired = $account->isExpired();
+                                            $isExpiringSoon = $account->isExpiringSoon(7);
+                                        @endphp
                                         <div>
                                             {{ $account->expires_at->format('d/m/Y') }}
-                                            @if($account->expires_at->isPast())
-                                            <i class="fas fa-exclamation-circle text-danger ms-1" title="Đã hết hạn"></i>
-                                            @elseif($account->expires_at->diffInDays() <= 7)
-                                                <i class="fas fa-clock text-warning ms-1" title="Sắp hết hạn"></i>
+                                            @if($isExpired)
+                                            <i class="fas fa-exclamation-triangle text-danger ms-1" title="Đã hết hạn"></i>
+                                            @elseif($isExpiringSoon)
+                                                <i class="fas fa-exclamation-triangle text-warning ms-1" title="Sắp hết hạn"></i>
                                                 @endif
                                         </div>
                                         <small class="text-muted">
-                                            {{ $account->expires_at->diffForHumans() }}
+                                            @if($isExpired)
+                                                Đã hết hạn
+                                            @elseif($daysRemaining == 0)
+                                                Hết hạn hôm nay
+                                            @elseif($daysRemaining == 1)
+                                                Còn 1 ngày
+                                            @else
+                                                Còn {{ $daysRemaining }} ngày
+                                            @endif
                                         </small>
                                         @else
                                         <span class="text-muted">Chưa set</span>
@@ -254,18 +267,18 @@
                                             <a href="{{ route('admin.family-accounts.show', $account) }}"
                                                 class="btn btn-sm btn-outline-primary"
                                                 title="Xem chi tiết">
-                                                <i class="fas fa-eye">👁️</i>
+                                                <i class="fas fa-eye"></i>
                                             </a>
                                             <a href="{{ route('admin.family-accounts.edit', $account) }}"
                                                 class="btn btn-sm btn-outline-secondary"
                                                 title="Chỉnh sửa">
-                                                <i class="fas fa-edit">✏️</i>
+                                                <i class="fas fa-edit"></i>
                                             </a>
                                             @if($account->current_members < $account->max_members)
                                                 <a href="{{ route('admin.family-accounts.add-member-form', $account) }}"
                                                     class="btn btn-sm btn-outline-success"
                                                     title="Thêm thành viên">
-                                                    <i class="fas fa-user-plus">➕</i>
+                                                    <i class="fas fa-plus"></i>
                                                 </a>
                                                 @endif
                                                 <form method="POST"
@@ -275,7 +288,7 @@
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa Family Account">
-                                                        <i class="fas fa-trash">🗑️</i>
+                                                        <i class="fas fa-trash-alt"></i>
                                                     </button>
                                                 </form>
                                         </div>

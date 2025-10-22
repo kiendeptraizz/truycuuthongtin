@@ -243,7 +243,7 @@
                             <div class="col-12">
                                 <div class="d-flex justify-content-between">
                                     <a href="{{ route('admin.family-accounts.show', $familyAccount) }}" class="btn btn-secondary">
-                                        <i class="fas fa-times me-1"></i>
+                                        <i class="fas fa-times-circle me-1"></i>
                                         Hủy
                                     </a>
                                     <button type="submit" class="btn btn-primary">

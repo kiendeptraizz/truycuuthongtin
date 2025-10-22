@@ -158,6 +158,20 @@
                     </div>
                 </div>
             </form>
+            
+            <!-- Quick Date Filters -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary" onclick="setDateRange('today')">Hôm nay</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="setDateRange('yesterday')">Hôm qua</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="setDateRange('this_week')">Tuần này</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="setDateRange('this_month')">Tháng này</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="setDateRange('last_month')">Tháng trước</button>
+                    </div>
+                </div>
+            </div>
+            </form>
         </div>
     </div>
 
@@ -332,6 +346,11 @@ $(document).ready(function() {
         e.preventDefault();
         loadRevenueData();
     });
+    
+    // Auto-load data when dates change
+    $('#start_date, #end_date, #group_by').on('change', function() {
+        loadRevenueData();
+    });
 
     // Handle export button
     $('#exportBtn').on('click', function() {
@@ -341,11 +360,22 @@ $(document).ready(function() {
 });
 
 function loadRevenueData() {
+    const startDate = $('#start_date').val();
+    const endDate = $('#end_date').val();
+    
+    // Validate date range
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+        alert('Ngày bắt đầu không thể sau ngày kết thúc!');
+        return;
+    }
+    
     const formData = {
-        start_date: $('#start_date').val(),
-        end_date: $('#end_date').val(),
+        start_date: startDate,
+        end_date: endDate,
         group_by: $('#group_by').val()
     };
+    
+    console.log('Loading data with filters:', formData); // Debug log
 
     // Show loading states
     showLoadingState();
@@ -361,7 +391,10 @@ function loadRevenueData() {
             updateOrdersTable(response.orders);
         },
         error: function(xhr, status, error) {
-            console.error('Error loading revenue data:', error);
+            console.error('Error loading revenue data:', error, xhr.responseJSON);
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                alert('Lỗi: ' + xhr.responseJSON.error);
+            }
             showErrorState();
         }
     });
@@ -375,7 +408,11 @@ function loadRevenueData() {
             updateServiceStats(response);
         },
         error: function(xhr, status, error) {
-            console.error('Error loading service stats:', error);
+            console.error('Error loading service stats:', error, xhr.responseJSON);
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                alert('Lỗi thống kê dịch vụ: ' + xhr.responseJSON.error);
+            }
+            $('#serviceStats').html('<p class="text-danger text-center">Có lỗi xảy ra khi tải dữ liệu</p>');
         }
     });
 }
@@ -526,10 +563,13 @@ function updateServiceStats(services) {
         return;
     }
 
+    // Tính tổng doanh thu của tất cả dịch vụ để tính phần trăm chính xác
+    const totalRevenue = services.reduce((sum, service) => sum + parseFloat(service.total_revenue || 0), 0);
+
     let html = '';
     services.slice(0, 5).forEach((service, index) => {
-        const percentage = services[0].total_revenue > 0 ? 
-            Math.round((service.total_revenue / services[0].total_revenue) * 100) : 0;
+        const percentage = totalRevenue > 0 ? 
+            Math.round((parseFloat(service.total_revenue || 0) / totalRevenue) * 100) : 0;
         
         html += `
             <div class="mb-3">
@@ -545,6 +585,9 @@ function updateServiceStats(services) {
                 <div class="d-flex justify-content-between">
                     <small class="text-muted">${formatCurrency(service.total_revenue)}</small>
                     <small class="text-success">+${formatCurrency(service.total_profit)}</small>
+                </div>
+                <div class="text-right">
+                    <small class="text-info">${percentage}% tổng doanh thu</small>
                 </div>
             </div>
         `;
@@ -724,6 +767,42 @@ function formatCurrency(amount) {
         style: 'currency',
         currency: 'VND'
     }).format(amount || 0);
+}
+
+function setDateRange(period) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    switch(period) {
+        case 'today':
+            startDate = endDate = today.toISOString().split('T')[0];
+            break;
+        case 'yesterday':
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = endDate = yesterday.toISOString().split('T')[0];
+            break;
+        case 'this_week':
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay());
+            startDate = startOfWeek.toISOString().split('T')[0];
+            endDate = today.toISOString().split('T')[0];
+            break;
+        case 'this_month':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+            endDate = today.toISOString().split('T')[0];
+            break;
+        case 'last_month':
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+            startDate = lastMonth.toISOString().split('T')[0];
+            endDate = lastDayOfLastMonth.toISOString().split('T')[0];
+            break;
+    }
+    
+    $('#start_date').val(startDate);
+    $('#end_date').val(endDate);
+    loadRevenueData();
 }
 </script>
 @endpush

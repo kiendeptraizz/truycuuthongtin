@@ -118,6 +118,7 @@ class FamilyAccountController extends Controller
                 'owner_name' => $request->owner_name,
                 'max_members' => $request->max_members,
                 'current_members' => 0,
+                'activated_at' => now(),
                 'expires_at' => Carbon::parse($request->expires_at),
                 'status' => 'active',
                 'family_notes' => $request->family_notes,

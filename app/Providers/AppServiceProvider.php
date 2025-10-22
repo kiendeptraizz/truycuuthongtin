@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 use App\Console\Commands\DeleteAllCustomers;
+use App\Console\Commands\CompleteBackupCommand;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,13 +25,12 @@ class AppServiceProvider extends ServiceProvider
         // Sử dụng Bootstrap cho pagination
         Paginator::useBootstrapFive();
 
-        // Set timezone cho Carbon
-        \Carbon\Carbon::setLocale('vi');
-
-        // Register custom commands
+        // Set timezone và locale cho Carbon
+        \Carbon\Carbon::setLocale('vi');        // Register custom commands
         if ($this->app->runningInConsole()) {
             $this->commands([
                 DeleteAllCustomers::class,
+                CompleteBackupCommand::class,
             ]);
         }
 

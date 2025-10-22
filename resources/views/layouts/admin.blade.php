@@ -146,16 +146,16 @@
                         Khách hàng
                     </a>
 
-                    <a class="nav-link {{ request()->routeIs('admin.customer-services.*') ? 'active' : '' }}"
+                    <a class="nav-link {{ request()->routeIs('admin.customer-services.*') && !request()->routeIs('admin.customer-services.statistics') ? 'active' : '' }}"
                         href="{{ route('admin.customer-services.index') }}">
                         <i class="fas fa-link me-3"></i>
                         Dịch vụ khách hàng
                     </a>
 
-                    <a class="nav-link {{ request()->routeIs('admin.leads.*') ? 'active' : '' }}"
-                        href="{{ route('admin.leads.index') }}">
-                        <i class="fas fa-user-plus me-3"></i>
-                        Leads
+                    <a class="nav-link {{ request()->routeIs('admin.customer-services.statistics') ? 'active' : '' }}"
+                        href="{{ route('admin.customer-services.statistics') }}">
+                        <i class="fas fa-chart-bar me-3"></i>
+                        Thống kê dịch vụ
                     </a>
 
                     <hr class="text-white-50 mx-3">
@@ -163,13 +163,13 @@
                     <!-- Family & Shared Accounts -->
                     <a class="nav-link {{ request()->routeIs('admin.family-accounts.*') ? 'active' : '' }}"
                         href="{{ route('admin.family-accounts.index') }}">
-                        <i class="fas fa-home me-3"></i>
+                        <i class="fas fa-house-user me-3"></i>
                         Family Accounts
                     </a>
 
                     <a class="nav-link {{ request()->routeIs('admin.shared-accounts.*') ? 'active' : '' }}"
                         href="{{ route('admin.shared-accounts.index') }}">
-                        <i class="fas fa-share-alt me-3"></i>
+                        <i class="fas fa-share-nodes me-3"></i>
                         Shared Accounts
                     </a>
 
@@ -188,20 +188,9 @@
                         Gói dịch vụ
                     </a>
 
-                    <a class="nav-link {{ request()->routeIs('admin.suppliers.*') || request()->routeIs('admin.potential-suppliers.*') ? 'active' : '' }}"
-                        href="{{ route('admin.suppliers.index') }}">
-                        <i class="fas fa-truck me-3"></i>
-                        Nhà cung cấp
-                    </a>
-
                     <hr class="text-white-50 mx-3">
 
                     <!-- Reports & Analytics -->
-                    <a class="nav-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}"
-                        href="{{ route('admin.reports.profit') }}">
-                        <i class="fas fa-chart-pie me-3"></i>
-                        Báo cáo cũ
-                    </a>
 
                     <a class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}"
                         href="{{ route('admin.revenue.index') }}">
@@ -211,7 +200,7 @@
 
                     <a class="nav-link {{ request()->routeIs('admin.backup.*') ? 'active' : '' }}"
                         href="{{ route('admin.backup.index') }}">
-                        <i class="fas fa-shield-alt me-3"></i>
+                        <i class="fas fa-database me-3"></i>
                         Backup
                     </a>
 
@@ -277,7 +266,7 @@
 
                     @if(session('error'))
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <i class="fas fa-times-circle me-2"></i>
                         {{ session('error') }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>

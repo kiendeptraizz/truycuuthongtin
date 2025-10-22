@@ -12,9 +12,21 @@ Artisan::command('inspire', function () {
 // 🔄 HỆ THỐNG BACKUP TỰ ĐỘNG
 // ============================================================================
 
-// Chạy backup toàn bộ CSDL và dọn dẹp file cũ hàng ngày vào lúc 2:00 AM
+// Chạy backup database hàng ngày vào lúc 2:00 AM
 Schedule::command('backup:run --type=daily')
     ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Chạy backup toàn bộ hệ thống hàng tuần vào Chủ nhật lúc 1:00 AM
+Schedule::command('backup:complete --type=weekly')
+    ->weeklyOn(0, '01:00') // 0 = Sunday
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Chạy backup toàn bộ hệ thống hàng ngày vào lúc 3:00 AM (sau backup database)
+Schedule::command('backup:complete --type=daily')
+    ->dailyAt('03:00')
     ->withoutOverlapping()
     ->runInBackground();
 

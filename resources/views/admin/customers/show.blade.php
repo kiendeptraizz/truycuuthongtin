@@ -166,7 +166,7 @@
                                             @elseif($service->isExpiringSoon())
                                             <span class="text-warning">Sắp hết hạn</span>
                                             @else
-                                            Còn {{ $service->expires_at->diffInDays(now()) }} ngày
+                                            Còn {{ $service->getDaysRemaining() }} ngày
                                             @endif
                                         </small>
                                     </div>
@@ -215,7 +215,7 @@
                                             <button type="submit"
                                                 class="btn btn-sm btn-outline-danger"
                                                 title="Xóa">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </form>
                                     </div>

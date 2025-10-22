@@ -10,7 +10,7 @@
             <div class="form-header">
                 <div class="d-flex align-items-center">
                     <div class="icon-wrapper me-3" style="width: 50px; height: 50px; background: var(--primary-gradient); border-radius: 15px; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-user-plus fa-lg text-white"></i>
+                        <i class="fas fa-plus fa-lg text-white"></i>
                     </div>
                     <div>
                         <h1 class="form-title">Thêm đầy đủ thông tin khách hàng</h1>
@@ -104,12 +104,12 @@
                                                    style="transform: scale(1.2);"
                                                    {{ old('is_collaborator') ? 'checked' : '' }}>
                                             <label class="form-check-label fw-medium ms-2" for="is_collaborator" style="cursor: pointer;">
-                                                <span style="font-size: 18px;" class="text-success me-2">🤝</span>
+                                                <i class="fas fa-handshake text-success me-2"></i>
                                                 <span class="text-dark">Đây là cộng tác viên</span>
                                             </label>
                                         </div>
                                         <div class="form-text mt-2 text-muted">
-                                            <span style="font-size: 14px;" class="text-info me-1">💡</span>
+                                            <i class="fas fa-lightbulb text-info me-1"></i>
                                             <small>Nếu tích, mã khách hàng sẽ có định dạng <strong>CTV#####</strong></small>
                                         </div>
                                     </div>

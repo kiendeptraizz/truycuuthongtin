@@ -73,6 +73,20 @@
 .table tbody tr:hover .sticky-column {
     background-color: #f8f9fa !important;
 }
+
+/* Search highlight */
+.search-highlight {
+    background-color: #fff3cd;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+/* Search info styling */
+.search-info {
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
 </style>
 @endsection
 
@@ -122,7 +136,7 @@
                     <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
                         <h6 class="alert-heading mb-2">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            🚨 CẢNH BÁO: {{ $urgentServices->count() }} dịch vụ sẽ hết hạn trong 24h!
+                            CẢNH BÁO: {{ $urgentServices->count() }} dịch vụ sẽ hết hạn trong 24h!
                         </h6>
                         <p class="mb-0">
                             Cần liên hệ khách hàng ngay:
@@ -138,8 +152,8 @@
                 @elseif($criticalServices->count() > 0)
                     <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
                         <h6 class="alert-heading mb-2">
-                            <i class="fas fa-clock me-2"></i>
-                            ⚠️ CHÚ Ý: {{ $criticalServices->count() }} dịch vụ sẽ hết hạn trong 2 ngày!
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            CHÚ Ý: {{ $criticalServices->count() }} dịch vụ sẽ hết hạn trong 2 ngày!
                         </h6>
                         <p class="mb-0">
                             Nên liên hệ khách hàng sớm để gia hạn.
@@ -156,7 +170,7 @@
                                 <div class="card-header">
                                     <h6 class="mb-0">
                                         <i class="fas fa-chart-line me-2"></i>
-                                        📊 Thống kê dịch vụ kích hoạt hôm nay ({{ now()->format('d/m/Y') }})
+                                        Thống kê dịch vụ kích hoạt hôm nay ({{ now()->format('d/m/Y') }})
                                     </h6>
                                 </div>
                                 <div class="card-body">
@@ -202,8 +216,12 @@
                                 <input type="text" 
                                        name="search" 
                                        class="form-control" 
-                                       placeholder="Tìm khách hàng hoặc dịch vụ..."
+                                       placeholder="Tìm theo tên, mã KH, email KH, SĐT, email đăng nhập, tên gói DV..."
                                        value="{{ request('search') }}">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Có thể tìm theo email đăng nhập dịch vụ
+                                </small>
                             </div>
                             <div class="col-md-3">
                                 <select name="filter" class="form-select">
@@ -229,7 +247,7 @@
                                     </optgroup>
                                     <optgroup label="Ngày kích hoạt">
                                         <option value="activated-today" {{ request('filter') === 'activated-today' ? 'selected' : '' }}>
-                                            🎯 Kích hoạt hôm nay
+                                            Kích hoạt hôm nay
                                         </option>
                                         <option value="activated-yesterday" {{ request('filter') === 'activated-yesterday' ? 'selected' : '' }}>
                                             Kích hoạt hôm qua
@@ -261,7 +279,7 @@
                                 @if(request()->hasAny(['search', 'filter', 'service_package_id']))
                                     <a href="{{ route('admin.customer-services.index') }}" 
                                        class="btn btn-secondary w-100 mt-1">
-                                        <i class="fas fa-times me-1"></i>Xóa
+                                        <i class="fas fa-times-circle me-1"></i>Xóa
                                     </a>
                                 @endif
                             </div>
@@ -359,7 +377,7 @@
                                                             <button class="btn btn-sm btn-outline-secondary"
                                                                     onclick="resetReminder({{ $service->id }})"
                                                                     title="Reset trạng thái nhắc nhở">
-                                                                <i class="fas fa-undo"></i>
+                                                                <i class="fas fa-sync-alt"></i>
                                                             </button>
                                                         @endif
                                                     @elseif($isExpired)
@@ -375,7 +393,7 @@
                                                             <button class="btn btn-sm btn-outline-secondary"
                                                                     onclick="resetReminder({{ $service->id }})"
                                                                     title="Reset trạng thái nhắc nhở">
-                                                                <i class="fas fa-undo"></i>
+                                                                <i class="fas fa-sync-alt"></i>
                                                             </button>
                                                         @endif
                                                     @endif
@@ -383,7 +401,7 @@
                                                     <button class="btn btn-sm btn-outline-danger"
                                                             onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')"
                                                             title="Xóa">
-                                                        <i class="fas fa-trash"></i>
+                                                        <i class="fas fa-trash-alt"></i>
                                                     </button>
                                                 </div>
                                             </div>
@@ -394,7 +412,7 @@
                                                 <strong>{{ $service->customer->name }}</strong>
                                                 <br><small class="text-muted">{{ $service->customer->customer_code }}</small>
                                                 @if($status === 'expiring' && $daysRemaining <= 1)
-                                                    <br><small class="text-danger fw-bold">🚨 CẤP BÁC!</small>
+                                                    <br><small class="text-danger fw-bold"><i class="fas fa-exclamation-triangle"></i> CẤP BÁC!</small>
                                                 @endif
                                             </div>
                                         </td>
@@ -423,7 +441,7 @@
                                                 <span class="badge bg-success">Đang hoạt động</span>
                                             @elseif($status === 'expiring')
                                                 @if($daysRemaining <= 1)
-                                                    <span class="badge bg-danger">🚨 SẮP HẾT HẠN</span>
+                                                    <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> SẮP HẾT HẠN</span>
                                                 @else
                                                     <span class="badge bg-warning">Sắp hết hạn</span>
                                                 @endif
@@ -437,7 +455,7 @@
                                             @if($service->reminder_sent)
                                                 <div class="d-flex align-items-center">
                                                     <span class="badge bg-success me-2">
-                                                        <i class="fas fa-check"></i> Đã nhắc
+                                                        <i class="fas fa-check-circle"></i> Đã nhắc
                                                     </span>
                                                     <small class="text-muted">
                                                         {{ $service->reminder_count }}x<br>
@@ -447,7 +465,7 @@
                                                 @if($service->needsReminderAgain())
                                                     <div class="mt-1">
                                                         <span class="badge bg-warning text-dark">
-                                                            <i class="fas fa-clock"></i> Cần nhắc lại
+                                                            <i class="fas fa-exclamation-triangle"></i> Cần nhắc lại
                                                         </span>
                                                     </div>
                                                 @endif

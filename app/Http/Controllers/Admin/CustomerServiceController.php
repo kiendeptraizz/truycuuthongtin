@@ -87,12 +87,21 @@ class CustomerServiceController extends Controller
 
         // Search
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('customer', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%");
-            })->orWhereHas('servicePackage', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                // Tìm kiếm trong thông tin khách hàng
+                $q->whereHas('customer', function ($subQ) use ($search) {
+                    $subQ->where('name', 'like', "%{$search}%")
+                        ->orWhere('customer_code', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                })
+                    // Tìm kiếm trong email đăng nhập dịch vụ (không phân biệt hoa thường)
+                    ->orWhereRaw('LOWER(login_email) LIKE ?', ['%' . strtolower($search) . '%'])
+                    // Tìm kiếm trong tên gói dịch vụ
+                    ->orWhereHas('servicePackage', function ($subQ) use ($search) {
+                        $subQ->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -218,7 +227,7 @@ class CustomerServiceController extends Controller
      */
     public function show(CustomerService $customerService)
     {
-        $customerService->load(['customer', 'servicePackage.category', 'supplier', 'supplierService']);
+        $customerService->load(['customer', 'servicePackage.category']);
 
         return view('admin.customer-services.show', compact('customerService'));
     }
@@ -228,7 +237,7 @@ class CustomerServiceController extends Controller
      */
     public function edit(CustomerService $customerService)
     {
-        $customerService->load(['supplier', 'supplierService', 'profit']);
+        $customerService->load(['profit']);
         $customers = Customer::orderBy('name')->get();
 
         // Group service packages by account_type with priority order
@@ -248,9 +257,28 @@ class CustomerServiceController extends Controller
             return [$priority, $package->name];
         });
 
-        $suppliers = \App\Models\Supplier::with('products')->orderBy('supplier_name')->get();
+        $suppliers = collect(); // Empty collection since we removed suppliers
 
-        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers', 'accountTypePriority'));
+        // Check if customer has active family membership
+        $hasFamilyMembership = $customerService->customer->activeFamilyMembership()->exists();
+
+        // Get available family accounts for "add team" services
+        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['members'])
+            ->where('status', 'active')
+            ->get()
+            ->map(function ($family) {
+                $family->family_members_count = $family->members()->where('status', 'active')->count();
+                return $family;
+            })
+            ->filter(function ($family) {
+                // Only show families that have available slots
+                return $family->family_members_count < $family->max_members;
+            });
+
+        // Get current family account if exists
+        $currentFamilyMembership = $customerService->customer->activeFamilyMembership()->first();
+
+        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts', 'currentFamilyMembership'));
     }
 
     /**
@@ -261,8 +289,7 @@ class CustomerServiceController extends Controller
         $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'service_package_id' => 'required|exists:service_packages,id',
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'supplier_service_id' => 'nullable|exists:supplier_products,id',
+            'family_account_id' => 'nullable|exists:family_accounts,id',
             'login_email' => 'required|email|max:255',
             'login_password' => 'nullable|string|max:255',
             'activated_at' => 'required|date',
@@ -301,6 +328,28 @@ class CustomerServiceController extends Controller
             $profitMessage = '';
         }
 
+        // Xử lý family account cho dịch vụ "add family"
+        $familyMessage = '';
+        $servicePackage = $customerService->servicePackage;
+        if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
+            \App\Models\FamilyMember::updateOrCreate(
+                [
+                    'family_account_id' => $request->family_account_id,
+                    'customer_id' => $customerService->customer_id,
+                ],
+                [
+                    'member_name' => $customerService->customer->name,
+                    'member_email' => $request->login_email,
+                    'start_date' => $request->activated_at,
+                    'end_date' => $request->expires_at,
+                    'status' => 'active',
+                    'removed_at' => null,
+                    'added_by' => auth('admin')->id(),
+                ]
+            );
+            $familyMessage = ' Khách hàng đã được cập nhật trong Family Account.';
+        }
+
         // Kiểm tra source parameter để xác định redirect về đâu
         $source = $request->query('source');
         $customerId = $request->query('customer_id');
@@ -308,16 +357,16 @@ class CustomerServiceController extends Controller
         if ($source === 'customer' && $customerId) {
             // Nếu đến từ trang chi tiết khách hàng, redirect về trang đó
             return redirect()->route('admin.customers.show', $customerId)
-                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage . $familyMessage);
         } elseif ($source === 'shared-account') {
             // Nếu đến từ trang chi tiết tài khoản dùng chung, redirect về trang đó
             return redirect()->route('admin.shared-accounts.show', urlencode($customerService->login_email))
-                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
+                ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage . $familyMessage);
         }
 
         // Mặc định redirect về trang danh sách dịch vụ với anchor
         return redirect(route('admin.customer-services.index') . '#service-' . $customerService->id)
-            ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage);
+            ->with('success', 'Thông tin dịch vụ đã được cập nhật!' . $profitMessage . $familyMessage);
     }
 
     /**
@@ -369,7 +418,7 @@ class CustomerServiceController extends Controller
             return [$priority, $package->name];
         });
 
-        $suppliers = \App\Models\Supplier::with('products')->orderBy('supplier_name')->get();
+        $suppliers = collect(); // Empty collection since we removed suppliers
 
         // Check if customer has active family membership
         $hasFamilyMembership = $customer->activeFamilyMembership()->exists();
@@ -398,8 +447,6 @@ class CustomerServiceController extends Controller
         $request->validate([
             'service_package_id' => 'required|exists:service_packages,id',
             'family_account_id' => 'nullable|exists:family_accounts,id',
-            'supplier_id' => 'nullable|exists:suppliers,id',
-            'supplier_service_id' => 'nullable|exists:supplier_products,id',
             'login_email' => 'required|email|max:255',
             'login_password' => 'nullable|string|max:255',
             'activated_at' => 'required|date',
@@ -435,8 +482,6 @@ class CustomerServiceController extends Controller
             'customer_id' => $customer->id,
             'service_package_id' => $request->service_package_id,
             'assigned_by' => auth('admin')->id(),
-            'supplier_id' => $request->supplier_id,
-            'supplier_service_id' => $request->supplier_service_id,
             'login_email' => $request->login_email,
             'login_password' => $request->login_password,
             'activated_at' => $request->activated_at,
@@ -608,5 +653,107 @@ class CustomerServiceController extends Controller
             'expiringSoon',
             'stats'
         ));
+    }
+
+    /**
+     * Hiển thị trang thống kê chi tiết dịch vụ khách hàng
+     */
+    public function statistics()
+    {
+        // Thống kê tổng quan
+        $totalServices = CustomerService::count();
+        $activeServices = CustomerService::where('status', 'active')->count();
+        $inactiveServices = CustomerService::where('status', 'inactive')->count();
+        $cancelledServices = CustomerService::where('status', 'cancelled')->count();
+        $expiredByStatus = CustomerService::where('status', 'expired')->count();
+
+        // Thống kê theo ngày hết hạn
+        $now = now();
+        $servicesWithExpiry = CustomerService::whereNotNull('expires_at');
+
+        $expiredByDate = $servicesWithExpiry->clone()->where('expires_at', '<', $now)->count();
+        $validByDate = $servicesWithExpiry->clone()->where('expires_at', '>=', $now)->count();
+
+        // Phân loại dịch vụ hết hạn theo thời gian
+        $expiredCategories = [
+            'today' => CustomerService::whereDate('expires_at', $now->toDateString())->count(),
+            'yesterday' => CustomerService::whereDate('expires_at', $now->copy()->subDay()->toDateString())->count(),
+            'last_week' => CustomerService::whereBetween('expires_at', [
+                $now->copy()->subWeek()->startOfDay(),
+                $now->copy()->subDay()->endOfDay()
+            ])->count(),
+            'last_month' => CustomerService::whereBetween('expires_at', [
+                $now->copy()->subMonth()->startOfDay(),
+                $now->copy()->subWeek()->endOfDay()
+            ])->count(),
+            'over_month' => CustomerService::where('expires_at', '<', $now->copy()->subMonth())->count()
+        ];
+
+        // Dịch vụ hết hạn cần xóa (hết hạn > 30 ngày, bất kể status)
+        $expiredServicesToDelete = CustomerService::with(['customer', 'servicePackage'])
+            ->where('expires_at', '<', $now->copy()->subDays(30))
+            ->whereIn('status', ['expired', 'cancelled']) // Chỉ xóa expired và cancelled
+            ->orderBy('expires_at')
+            ->limit(100)
+            ->get();
+
+        // Thống kê theo gói dịch vụ
+        $servicesByPackage = CustomerService::with('servicePackage')
+            ->selectRaw('service_package_id, COUNT(*) as count')
+            ->groupBy('service_package_id')
+            ->orderBy('count', 'desc')
+            ->limit(10)
+            ->get();
+
+        // Dịch vụ sắp hết hạn (7 ngày tới)
+        $expiringSoon = CustomerService::with(['customer', 'servicePackage'])
+            ->where('expires_at', '>=', $now)
+            ->where('expires_at', '<=', $now->copy()->addDays(7))
+            ->orderBy('expires_at')
+            ->get();
+
+        // Danh sách dịch vụ đã hết hạn (50 dịch vụ gần nhất)
+        $expiredServices = CustomerService::with(['customer', 'servicePackage'])
+            ->where('expires_at', '<', $now)
+            ->orderBy('expires_at', 'desc')
+            ->limit(50)
+            ->get();
+
+        return view('admin.customer-services.statistics', compact(
+            'totalServices',
+            'activeServices',
+            'inactiveServices',
+            'cancelledServices',
+            'expiredByStatus',
+            'expiredByDate',
+            'validByDate',
+            'expiredCategories',
+            'expiredServicesToDelete',
+            'servicesByPackage',
+            'expiringSoon',
+            'expiredServices'
+        ));
+    }
+
+    /**
+     * Xóa các dịch vụ đã hết hạn lâu
+     */
+    public function deleteExpiredServices(Request $request)
+    {
+        $request->validate([
+            'days' => 'required|integer|min:30|max:365',
+            'confirm' => 'required|accepted'
+        ]);
+
+        $days = $request->input('days', 30);
+        $cutoffDate = now()->subDays($days);
+
+        // Chỉ xóa các dịch vụ hết hạn > X ngày và có status = 'expired' hoặc 'cancelled'
+        $deletedCount = CustomerService::where('expires_at', '<', $cutoffDate)
+            ->whereIn('status', ['expired', 'cancelled'])
+            ->delete();
+
+        return redirect()->route('admin.customer-services.statistics')
+            ->with('success', "Đã xóa thành công {$deletedCount} dịch vụ hết hạn trên {$days} ngày.");
     }
 }
