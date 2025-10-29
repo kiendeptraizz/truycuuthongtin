@@ -14,6 +14,10 @@ use App\Http\Controllers\LookupController;
 use App\Http\Controllers\Admin\CollaboratorController;
 use App\Http\Controllers\Admin\RevenueController;
 use App\Http\Controllers\ProfitController;
+use App\Http\Controllers\ZaloAccountController;
+use App\Http\Controllers\TargetGroupController;
+use App\Http\Controllers\MessageCampaignController;
+use App\Http\Controllers\ZaloDashboardController;
 
 
 
@@ -433,6 +437,32 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
             'Tài khoản cấp (dùng riêng)' => 4
         ];
         return view('selector-comparison', compact('servicePackages', 'accountTypePriority'));
+    });
+
+    // ========================================================================
+    // 📱 ZALO MARKETING MANAGEMENT
+    // ========================================================================
+    Route::prefix('zalo')->name('zalo.')->group(function () {
+        // Dashboard
+        Route::get('/', [ZaloDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/conversion-funnel', [ZaloDashboardController::class, 'conversionFunnel'])->name('conversion-funnel');
+
+        // Zalo Accounts Management
+        Route::resource('accounts', ZaloAccountController::class);
+        Route::post('accounts/{account}/reset-counter', [ZaloAccountController::class, 'resetCounter'])
+            ->name('accounts.reset-counter');
+
+        // Target Groups Management
+        Route::resource('groups', TargetGroupController::class);
+        Route::get('groups/{group}/members', [TargetGroupController::class, 'members'])
+            ->name('groups.members');
+
+        // Message Campaigns Management
+        Route::resource('campaigns', MessageCampaignController::class);
+        Route::post('campaigns/{campaign}/update-stats', [MessageCampaignController::class, 'updateStats'])
+            ->name('campaigns.update-stats');
+        Route::get('campaigns/{campaign}/report', [MessageCampaignController::class, 'report'])
+            ->name('campaigns.report');
     });
 });
 Route::get("/test-filter", function () {

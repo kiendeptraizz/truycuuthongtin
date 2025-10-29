@@ -78,21 +78,14 @@ class AutoBackupCommand extends Command
         }
 
         $command = sprintf(
-            '"%s" --host=%s --port=%s --user=%s --password="%s" --single-transaction --routines --triggers %s > "%s"',
+            '"%s" --host=%s --port=%s --user=%s --password="%s" --default-character-set=utf8mb4 --single-transaction --routines --triggers --column-statistics=0 --result-file="%s" %s',
             $mysqldumpPath,
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
             $password,
-            escapeshellarg($database),
-            $sqlFile
-        );
-
-        // Thêm --column-statistics=0 để tránh lỗi với MySQL 8.0+
-        $command = str_replace(
-            '--single-transaction',
-            '--single-transaction --column-statistics=0',
-            $command
+            $sqlFile,
+            escapeshellarg($database)
         );
 
         exec($command, $output, $returnCode);

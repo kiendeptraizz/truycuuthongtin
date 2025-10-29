@@ -189,7 +189,52 @@
                             <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
+                    </div>
 
+                    <!-- Custom Duration Row -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="custom_duration" class="form-label">
+                                <i class="fas fa-clock me-1"></i>
+                                Thời hạn tùy chỉnh
+                            </label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="custom_duration" 
+                                       name="custom_duration" 
+                                       min="1" 
+                                       placeholder="Nhập số"
+                                       value="">
+                                <select class="form-select" id="duration_unit" name="duration_unit" style="max-width: 120px;">
+                                    <option value="days">Ngày</option>
+                                    <option value="months" selected>Tháng</option>
+                                    <option value="years">Năm</option>
+                                </select>
+                            </div>
+                            <div class="form-text text-info">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Để trống để sử dụng thời hạn mặc định của gói dịch vụ (<strong>{{ $customerService->servicePackage->default_duration_days ?? 30 }}</strong> ngày)
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-calculator me-1"></i>
+                                Tính toán tự động
+                            </label>
+                            <div class="alert alert-light border p-2 mb-0">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-magic text-primary me-2"></i>
+                                    <small class="text-muted mb-0">
+                                        Ngày hết hạn sẽ được tự động cập nhật khi bạn thay đổi ngày kích hoạt hoặc thời hạn
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
                         <div class="col-md-12 mb-3">
                             <label for="internal_notes" class="form-label">Ghi chú nội bộ</label>
                             <textarea class="form-control @error('internal_notes') is-invalid @enderror"
@@ -378,47 +423,81 @@
         // Auto-calculation for date fields
         const startDateInput = document.querySelector('.start-date-input');
         const endDateInput = document.querySelector('.end-date-input');
+        const customDurationInput = document.getElementById('custom_duration');
+        const durationUnitSelect = document.getElementById('duration_unit');
 
-        if (startDateInput && endDateInput) {
-            startDateInput.addEventListener('change', function() {
-                if (this.value) {
-                    // Calculate end date = start date + current package duration
-                    const startDate = new Date(this.value);
-                    const endDate = new Date(startDate);
-                    endDate.setDate(startDate.getDate() + currentPackageDuration);
+        // Function to calculate duration in days
+        function calculateDuration() {
+            const duration = parseInt(customDurationInput?.value) || 0;
+            const unit = durationUnitSelect?.value || 'days';
+            
+            if (duration <= 0) {
+                return currentPackageDuration; // Use package default
+            }
+            
+            switch (unit) {
+                case 'days':
+                    return duration;
+                case 'months':
+                    return duration * 30; // Approximate
+                case 'years':
+                    return duration * 365; // Approximate
+                default:
+                    return currentPackageDuration;
+            }
+        }
 
-                    // Format date for input
-                    const formattedEndDate = endDate.toISOString().split('T')[0];
-                    endDateInput.value = formattedEndDate;
+        // Function to update expires date based on start date and duration
+        function updateExpiresDate() {
+            if (!startDateInput?.value || !endDateInput) return;
+            
+            const startDate = new Date(startDateInput.value);
+            if (isNaN(startDate.getTime())) return;
+            
+            const durationInDays = calculateDuration();
+            const endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + durationInDays);
+            
+            const formattedEndDate = endDate.toISOString().split('T')[0];
+            endDateInput.value = formattedEndDate;
+            
+            console.log(`Updated end date: ${formattedEndDate} (${durationInDays} days from ${startDateInput.value})`);
+            showAutoCalculationNotice(durationInDays);
+        }
 
-                    // Show notification
-                    showAutoCalculationNotice(currentPackageDuration);
-                }
-            });
+        // Add event listeners for auto-calculation
+        if (startDateInput) {
+            startDateInput.addEventListener('change', updateExpiresDate);
+            startDateInput.addEventListener('input', updateExpiresDate);
+        }
+        
+        if (customDurationInput) {
+            customDurationInput.addEventListener('change', updateExpiresDate);
+            customDurationInput.addEventListener('input', updateExpiresDate);
+            customDurationInput.addEventListener('keyup', updateExpiresDate);
+        }
+        
+        if (durationUnitSelect) {
+            durationUnitSelect.addEventListener('change', updateExpiresDate);
         }
 
         // Function to update expiry date when service package changes
         function updateExpiryDateForSelectedService() {
             const selectedServiceCard = document.querySelector('.service-package-card.selected');
             
-            if (selectedServiceCard && startDateInput && endDateInput) {
+            if (selectedServiceCard) {
                 const newDuration = parseInt(selectedServiceCard.dataset.duration) || 365;
                 currentPackageDuration = newDuration;
                 
                 console.log('Service package changed, new duration:', newDuration);
                 
-                // If start date is filled, recalculate end date
-                if (startDateInput.value) {
-                    const startDate = new Date(startDateInput.value);
-                    const endDate = new Date(startDate);
-                    endDate.setDate(startDate.getDate() + newDuration);
-                    
-                    const formattedEndDate = endDate.toISOString().split('T')[0];
-                    endDateInput.value = formattedEndDate;
-                    
-                    console.log('Updated expiry date to:', formattedEndDate);
-                    showAutoCalculationNotice(newDuration);
+                // Clear custom duration when package changes (optional)
+                if (customDurationInput) {
+                    customDurationInput.value = '';
                 }
+                
+                // Recalculate dates using the new package duration
+                updateExpiresDate();
             }
         }
 
@@ -430,26 +509,32 @@
                 oldNotice.remove();
             }
 
+            // Determine source of duration
+            const isCustomDuration = customDurationInput && customDurationInput.value && parseInt(customDurationInput.value) > 0;
+            const durationSource = isCustomDuration ? 'thời hạn tùy chỉnh' : 'gói dịch vụ';
+
             // Create new notice
             const notice = document.createElement('div');
-            notice.className = 'alert alert-info alert-dismissible fade show auto-calculation-notice mt-3';
+            notice.className = 'alert alert-success alert-dismissible fade show auto-calculation-notice mt-3';
             notice.innerHTML = `
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>Tự động tính toán:</strong> Ngày hết hạn đã được cập nhật (+${days} ngày từ ngày kích hoạt)
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Tự động tính toán:</strong> Ngày hết hạn đã được cập nhật (+${days} ngày từ ${durationSource})
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
 
-            // Add notice after the date fields row
-            const dateFieldsRow = startDateInput.closest('.row');
-            if (dateFieldsRow) {
-                dateFieldsRow.insertAdjacentElement('afterend', notice);
+            // Add notice after the custom duration row
+            const customDurationRow = customDurationInput ? customDurationInput.closest('.row') : null;
+            const targetRow = customDurationRow || (startDateInput ? startDateInput.closest('.row') : null);
+            
+            if (targetRow) {
+                targetRow.insertAdjacentElement('afterend', notice);
 
-                // Auto-hide after 5 seconds
+                // Auto-hide after 4 seconds
                 setTimeout(() => {
                     if (notice && notice.parentNode) {
                         notice.remove();
                     }
-                }, 5000);
+                }, 4000);
             }
         }
 

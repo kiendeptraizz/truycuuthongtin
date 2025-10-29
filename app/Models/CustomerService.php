@@ -19,6 +19,9 @@ class CustomerService extends Model
         'activated_at',
         'expires_at',
         'status',
+        'duration_days',
+        'cost_price',
+        'price',
         'internal_notes',
         'reminder_sent',
         'reminder_sent_at',
@@ -150,8 +153,15 @@ class CustomerService extends Model
     }
 
     // Scope để lấy các dịch vụ đã hết hạn
-    // Chỉ tính là hết hạn khi đã qua hết ngày hết hạn (sau 23:59:59 của ngày hôm qua)
+    // Lọc theo status = 'expired' (đã được tự động cập nhật bởi scheduled command)
     public function scopeExpired($query)
+    {
+        return $query->where('status', 'expired');
+    }
+
+    // Scope để lấy các dịch vụ đã hết hạn theo thời gian (bất kể status)
+    // Chỉ tính là hết hạn khi đã qua hết ngày hết hạn (sau 23:59:59 của ngày hôm qua)
+    public function scopeExpiredByDate($query)
     {
         $yesterday = now()->subDay()->endOfDay();
         return $query->where('expires_at', '<=', $yesterday);

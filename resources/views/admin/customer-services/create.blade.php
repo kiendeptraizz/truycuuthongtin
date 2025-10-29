@@ -32,7 +32,7 @@
                 <div class="card-body">
                     <form method="POST" action="{{ route('admin.customer-services.store') }}" id="assignServiceForm">
                         @csrf
-                    
+
                         <!-- Customer Selection -->
                         <div class="row mb-4">
                             <div class="col-md-6">
@@ -43,247 +43,389 @@
                                     label="Khách hàng"
                                     placeholder="Tìm kiếm khách hàng theo tên, mã KH hoặc email..."
                                     :required="true"
-                                    help-text="Tìm kiếm theo tên hoặc mã khách hàng ({{ $customers->count() }} khách hàng)"
-                                />
+                                    help-text="Tìm kiếm theo tên hoặc mã khách hàng ({{ $customers->count() }} khách hàng)" />
                             </div>
-                        
-                        <div class="col-md-12 mb-4">
-                            <label class="form-label">
-                                <i class="fas fa-box me-1"></i>
-                                Gói dịch vụ <span class="text-danger">*</span>
-                                <small class="text-muted ms-2">(Phân loại theo danh mục và loại tài khoản)</small>
-                            </label>
 
-                            <x-service-package-grid-selector
-                                :service-packages="$servicePackages"
-                                :account-type-priority="$accountTypePriority"
-                                name="service_package_id"
-                                id="service_package_id"
-                                :required="true"
-                                placeholder="Chọn gói dịch vụ phù hợp..."
-                            />
-                        </div>
-                        
-                        <div class="col-md-12 mb-3">
-                            <label for="login_email" class="form-label">
-                                Email đăng nhập <span class="text-danger">*</span>
-                            </label>
-                            <input type="email" 
-                                   class="form-control @error('login_email') is-invalid @enderror" 
-                                   id="login_email" 
-                                   name="login_email" 
-                                   value="{{ old('login_email') }}" 
-                                   required>
-                            @error('login_email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="col-md-12 mb-3">
-                            <label for="login_password" class="form-label">Mật khẩu</label>
-                            <input type="text" 
-                                   class="form-control @error('login_password') is-invalid @enderror" 
-                                   id="login_password" 
-                                   name="login_password" 
-                                   value="{{ old('login_password') }}">
-                            @error('login_password')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <div class="form-text">Để trống nếu không muốn lưu mật khẩu</div>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="activated_at" class="form-label">
-                                Ngày kích hoạt <span class="text-danger">*</span>
-                            </label>
-                            <input type="date" 
-                                   class="form-control @error('activated_at') is-invalid @enderror" 
-                                   id="activated_at" 
-                                   name="activated_at" 
-                                   value="{{ old('activated_at', now()->format('Y-m-d')) }}" 
-                                   required>
-                            @error('activated_at')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="expires_at" class="form-label">
-                                Ngày hết hạn <span class="text-danger">*</span>
-                            </label>
-                            <input type="date" 
-                                   class="form-control @error('expires_at') is-invalid @enderror" 
-                                   id="expires_at" 
-                                   name="expires_at" 
-                                   value="{{ old('expires_at', now()->addDays(30)->format('Y-m-d')) }}" 
-                                   required>
-                            @error('expires_at')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label for="status" class="form-label">
-                                Trạng thái <span class="text-danger">*</span>
-                            </label>
-                            <select class="form-select @error('status') is-invalid @enderror" 
-                                    id="status" 
-                                    name="status" 
+                            <div class="col-md-12 mb-4">
+                                <label class="form-label">
+                                    <i class="fas fa-box me-1"></i>
+                                    Gói dịch vụ <span class="text-danger">*</span>
+                                    <small class="text-muted ms-2">(Phân loại theo danh mục và loại tài khoản)</small>
+                                </label>
+
+                                <x-service-package-grid-selector
+                                    :service-packages="$servicePackages"
+                                    :account-type-priority="$accountTypePriority"
+                                    name="service_package_id"
+                                    id="service_package_id"
+                                    :required="true"
+                                    placeholder="Chọn gói dịch vụ phù hợp..." />
+                            </div>
+
+                            <div class="col-md-12 mb-3">
+                                <label for="login_email" class="form-label">
+                                    Email đăng nhập <span class="text-danger">*</span>
+                                </label>
+                                <input type="email"
+                                    class="form-control @error('login_email') is-invalid @enderror"
+                                    id="login_email"
+                                    name="login_email"
+                                    value="{{ old('login_email') }}"
                                     required>
-                                <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>
-                                    Hoạt động
-                                </option>
-                                <option value="expired" {{ old('status') === 'expired' ? 'selected' : '' }}>
-                                    Hết hạn
-                                </option>
-                                <option value="cancelled" {{ old('status') === 'cancelled' ? 'selected' : '' }}>
-                                    Đã hủy
-                                </option>
-                            </select>
-                            @error('status')
+                                @error('login_email')
                                 <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="col-md-12 mb-3">
-                            <label for="internal_notes" class="form-label">Ghi chú nội bộ</label>
-                            <textarea class="form-control @error('internal_notes') is-invalid @enderror" 
-                                      id="internal_notes" 
-                                      name="internal_notes" 
-                                      rows="3">{{ old('internal_notes') }}</textarea>
-                            @error('internal_notes')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                                @enderror
+                            </div>
 
-                        <!-- Thông tin lợi nhuận -->
-                        <div class="col-md-12 mb-4">
-                            <div class="card border-success">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0 text-success">
-                                        <i class="fas fa-money-bill-wave me-2"></i>
-                                        Thông tin lợi nhuận (Tùy chọn)
-                                    </h6>
+                            <div class="col-md-12 mb-3">
+                                <label for="login_password" class="form-label">Mật khẩu</label>
+                                <input type="text"
+                                    class="form-control @error('login_password') is-invalid @enderror"
+                                    id="login_password"
+                                    name="login_password"
+                                    value="{{ old('login_password') }}">
+                                @error('login_password')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">Để trống nếu không muốn lưu mật khẩu</div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="activated_at" class="form-label">
+                                    Ngày kích hoạt <span class="text-danger">*</span>
+                                </label>
+                                <input type="date"
+                                    class="form-control @error('activated_at') is-invalid @enderror"
+                                    id="activated_at"
+                                    name="activated_at"
+                                    value="{{ old('activated_at', now()->format('Y-m-d')) }}"
+                                    required>
+                                @error('activated_at')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="expires_at" class="form-label">
+                                    Ngày hết hạn <span class="text-danger">*</span>
+                                </label>
+                                <input type="date"
+                                    class="form-control @error('expires_at') is-invalid @enderror"
+                                    id="expires_at"
+                                    name="expires_at"
+                                    value="{{ old('expires_at', now()->addDays(30)->format('Y-m-d')) }}"
+                                    required>
+                                @error('expires_at')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="status" class="form-label">
+                                    Trạng thái <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select @error('status') is-invalid @enderror"
+                                    id="status"
+                                    name="status"
+                                    required>
+                                    <option value="active" {{ old('status', 'active') === 'active' ? 'selected' : '' }}>
+                                        Hoạt động
+                                    </option>
+                                    <option value="expired" {{ old('status') === 'expired' ? 'selected' : '' }}>
+                                        Hết hạn
+                                    </option>
+                                    <option value="cancelled" {{ old('status') === 'cancelled' ? 'selected' : '' }}>
+                                        Đã hủy
+                                    </option>
+                                </select>
+                                @error('status')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <!-- Thời hạn và Giá tiền -->
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Thời hạn <span class="text-danger">*</span>
+                                </label>
+
+                                <!-- Radio chọn đơn vị -->
+                                <div class="mb-2">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="duration_unit" id="duration_unit_days" value="days" checked>
+                                        <label class="form-check-label" for="duration_unit_days">
+                                            Ngày
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="duration_unit" id="duration_unit_months" value="months">
+                                        <label class="form-check-label" for="duration_unit_months">
+                                            Tháng
+                                        </label>
+                                    </div>
                                 </div>
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label for="profit_amount" class="form-label">
-                                                <i class="fas fa-dollar-sign me-1"></i>
-                                                Số tiền lãi
-                                            </label>
-                                            <div class="input-group">
-                                                <input type="number" 
-                                                       class="form-control @error('profit_amount') is-invalid @enderror" 
-                                                       id="profit_amount" 
-                                                       name="profit_amount" 
-                                                       min="0" 
-                                                       step="1000" 
-                                                       placeholder="Nhập số tiền lãi"
-                                                       value="{{ old('profit_amount') }}">
-                                                <span class="input-group-text">VNĐ</span>
-                                            </div>
-                                            @error('profit_amount')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                            @enderror
-                                            <div class="form-text">Nhập số tiền lãi thu được từ đơn hàng này (để trống nếu chưa xác định)</div>
-                                        </div>
 
-                                        <div class="col-md-6 mb-3">
-                                            <label for="profit_notes" class="form-label">
-                                                <i class="fas fa-sticky-note me-1"></i>
-                                                Ghi chú lợi nhuận
-                                            </label>
-                                            <textarea class="form-control @error('profit_notes') is-invalid @enderror"
-                                                      id="profit_notes"
-                                                      name="profit_notes"
-                                                      rows="3"
-                                                      placeholder="Ghi chú về lợi nhuận...">{{ old('profit_notes') }}</textarea>
-                                            @error('profit_notes')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                            @enderror
+                                <!-- Input nhập số -->
+                                <div class="input-group">
+                                    <input type="number"
+                                        class="form-control @error('duration_days') is-invalid @enderror"
+                                        id="duration_value"
+                                        value="{{ old('duration_value', 30) }}"
+                                        min="1"
+                                        required>
+                                    <span class="input-group-text" id="duration_unit_label">ngày</span>
+                                </div>
+
+                                <!-- Hidden input để lưu giá trị ngày thực tế -->
+                                <input type="hidden" name="duration_days" id="duration_days" value="{{ old('duration_days', 30) }}">
+
+                                @error('duration_days')
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text" id="duration_calculated_text">Thời hạn: 30 ngày</div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="cost_price" class="form-label">
+                                    <i class="fas fa-dollar-sign me-1"></i>
+                                    Giá nhập (VNĐ) <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                    class="form-control @error('cost_price') is-invalid @enderror"
+                                    id="cost_price"
+                                    name="cost_price"
+                                    value="{{ old('cost_price') }}"
+                                    data-currency="VND"
+                                    data-show-currency="false"
+                                    placeholder="0"
+                                    required>
+                                @error('cost_price')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">Giá vốn mua từ nhà cung cấp</div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label for="price" class="form-label">
+                                    <i class="fas fa-tag me-1"></i>
+                                    Giá bán (VNĐ) <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                    class="form-control @error('price') is-invalid @enderror"
+                                    id="price"
+                                    name="price"
+                                    value="{{ old('price') }}"
+                                    data-currency="VND"
+                                    data-show-currency="false"
+                                    placeholder="0"
+                                    required>
+                                @error('price')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <div class="form-text">Giá bán cho khách hàng</div>
+                            </div>
+
+                            <div class="col-md-12 mb-3">
+                                <label for="internal_notes" class="form-label">Ghi chú nội bộ</label>
+                                <textarea class="form-control @error('internal_notes') is-invalid @enderror"
+                                    id="internal_notes"
+                                    name="internal_notes"
+                                    rows="3">{{ old('internal_notes') }}</textarea>
+                                @error('internal_notes')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <!-- Thông tin lợi nhuận -->
+                            <div class="col-md-12 mb-4">
+                                <div class="card border-success">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0 text-success">
+                                            <i class="fas fa-money-bill-wave me-2"></i>
+                                            Thông tin lợi nhuận (Tùy chọn)
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="profit_amount" class="form-label">
+                                                    <i class="fas fa-dollar-sign me-1"></i>
+                                                    Số tiền lãi
+                                                </label>
+                                                <div class="input-group">
+                                                    <input type="number"
+                                                        class="form-control @error('profit_amount') is-invalid @enderror"
+                                                        id="profit_amount"
+                                                        name="profit_amount"
+                                                        min="0"
+                                                        step="1000"
+                                                        placeholder="Nhập số tiền lãi"
+                                                        value="{{ old('profit_amount') }}">
+                                                    <span class="input-group-text">VNĐ</span>
+                                                </div>
+                                                @error('profit_amount')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
+                                                <div class="form-text">Nhập số tiền lãi thu được từ đơn hàng này (để trống nếu chưa xác định)</div>
+                                            </div>
+
+                                            <div class="col-md-6 mb-3">
+                                                <label for="profit_notes" class="form-label">
+                                                    <i class="fas fa-sticky-note me-1"></i>
+                                                    Ghi chú lợi nhuận
+                                                </label>
+                                                <textarea class="form-control @error('profit_notes') is-invalid @enderror"
+                                                    id="profit_notes"
+                                                    name="profit_notes"
+                                                    rows="3"
+                                                    placeholder="Ghi chú về lợi nhuận...">{{ old('profit_notes') }}</textarea>
+                                                @error('profit_notes')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left me-1"></i>
-                            Quay lại
-                        </a>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>
-                            Gán dịch vụ
-                        </button>
-                    </div>
-                </form>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ route('admin.customer-services.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Quay lại
+                            </a>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>
+                                Gán dịch vụ
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const serviceSelect = document.getElementById('service_package_id');
-    const activatedInput = document.getElementById('activated_at');
-    const expiresInput = document.getElementById('expires_at');
-    
-    serviceSelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        if (selectedOption.value) {
-            const duration = parseInt(selectedOption.dataset.duration) || 30;
-            const activatedDate = new Date(activatedInput.value);
-            const expiresDate = new Date(activatedDate);
-            expiresDate.setDate(expiresDate.getDate() + duration);
-            
-            expiresInput.value = expiresDate.toISOString().split('T')[0];
-        }
-    });
-    
-    activatedInput.addEventListener('change', function() {
-        const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
-        if (selectedOption.value) {
-            const duration = parseInt(selectedOption.dataset.duration) || 30;
-            const activatedDate = new Date(this.value);
-            const expiresDate = new Date(activatedDate);
-            expiresDate.setDate(expiresDate.getDate() + duration);
-            
-            expiresInput.value = expiresDate.toISOString().split('T')[0];
-        }
-    });
+    @push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const serviceSelect = document.getElementById('service_package_id');
+            const activatedInput = document.getElementById('activated_at');
+            const expiresInput = document.getElementById('expires_at');
 
-    // Format profit amount input with thousand separators
-    const profitAmountInput = document.getElementById('profit_amount');
-    if (profitAmountInput) {
-        // Format existing value on page load
-        if (profitAmountInput.value) {
-            profitAmountInput.value = formatNumberInput(profitAmountInput.value);
-        }
+            serviceSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption.value) {
+                    const duration = parseInt(selectedOption.dataset.duration) || 30;
+                    const activatedDate = new Date(activatedInput.value);
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + duration);
 
-        // Format as user types
-        profitAmountInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\./g, ''); // Remove existing dots
-            if (value && !isNaN(value)) {
-                e.target.value = formatNumberInput(value);
+                    expiresInput.value = expiresDate.toISOString().split('T')[0];
+                }
+            });
+
+            activatedInput.addEventListener('change', function() {
+                const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
+                if (selectedOption.value) {
+                    const duration = parseInt(selectedOption.dataset.duration) || 30;
+                    const activatedDate = new Date(this.value);
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + duration);
+
+                    expiresInput.value = expiresDate.toISOString().split('T')[0];
+                }
+            });
+
+            // Format profit amount input with thousand separators
+            const profitAmountInput = document.getElementById('profit_amount');
+            if (profitAmountInput) {
+                // Format existing value on page load
+                if (profitAmountInput.value) {
+                    profitAmountInput.value = formatNumberInput(profitAmountInput.value);
+                }
+
+                // Format as user types
+                profitAmountInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\./g, ''); // Remove existing dots
+                    if (value && !isNaN(value)) {
+                        e.target.value = formatNumberInput(value);
+                    }
+                });
+
+                // Clean value before form submission (remove dots for proper validation)
+                profitAmountInput.closest('form').addEventListener('submit', function() {
+                    profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
+                });
+            }
+            // ===== Duration Calculator Logic =====
+            const durationUnitRadios = document.querySelectorAll('input[name="duration_unit"]');
+            const durationValueInput = document.getElementById('duration_value');
+            const durationDaysHidden = document.getElementById('duration_days');
+            const durationUnitLabel = document.getElementById('duration_unit_label');
+            const durationCalculatedText = document.getElementById('duration_calculated_text');
+            const activatedAtInput = document.getElementById('activated_at');
+            const expiresAtInput = document.getElementById('expires_at');
+
+            if (durationUnitRadios.length > 0 && durationValueInput && durationDaysHidden) {
+                function calculateDuration() {
+                    const unit = document.querySelector('input[name="duration_unit"]:checked').value;
+                    const value = parseInt(durationValueInput.value) || 0;
+                    let days = 0;
+
+                    if (unit === 'days') {
+                        days = value;
+                        durationUnitLabel.textContent = 'ngày';
+                        durationCalculatedText.textContent = `Thời hạn: ${value} ngày`;
+                    } else if (unit === 'months') {
+                        days = value * 30; // 1 tháng = 30 ngày
+                        durationUnitLabel.textContent = 'tháng';
+                        durationCalculatedText.textContent = `Thời hạn: ${value} tháng (${days} ngày)`;
+                    }
+
+                    durationDaysHidden.value = days;
+
+                    // Tự động tính ngày hết hạn
+                    updateExpiresDate();
+                }
+
+                function updateExpiresDate() {
+                    if (activatedAtInput.value && durationDaysHidden.value) {
+                        const activatedDate = new Date(activatedAtInput.value);
+                        const days = parseInt(durationDaysHidden.value);
+                        const expiresDate = new Date(activatedDate);
+                        expiresDate.setDate(expiresDate.getDate() + days);
+
+                        // Format date to YYYY-MM-DD
+                        const year = expiresDate.getFullYear();
+                        const month = String(expiresDate.getMonth() + 1).padStart(2, '0');
+                        const day = String(expiresDate.getDate()).padStart(2, '0');
+                        expiresAtInput.value = `${year}-${month}-${day}`;
+                    }
+                }
+
+                // Event listeners
+                durationUnitRadios.forEach(radio => {
+                    radio.addEventListener('change', calculateDuration);
+                });
+
+                durationValueInput.addEventListener('input', calculateDuration);
+
+                // Khi thay đổi ngày kích hoạt, tính lại ngày hết hạn
+                if (activatedAtInput) {
+                    activatedAtInput.addEventListener('change', updateExpiresDate);
+                }
+
+                // Initial calculation
+                calculateDuration();
             }
         });
 
-        // Clean value before form submission (remove dots for proper validation)
-        profitAmountInput.closest('form').addEventListener('submit', function() {
-            profitAmountInput.value = profitAmountInput.value.replace(/\./g, '');
-        });
-    }
-});
-
-// Function to format number with thousand separators
-function formatNumberInput(number) {
-    return parseInt(number).toLocaleString('vi-VN');
-}
-</script>
-@endpush
-@endsection
+        // Function to format number with thousand separators
+        function formatNumberInput(number) {
+            return parseInt(number).toLocaleString('vi-VN');
+        }
+    </script>
+    @endpush
+    @endsection

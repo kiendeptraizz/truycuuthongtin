@@ -143,10 +143,12 @@ class BackupController extends Controller
             $connection = config('database.default');
             $dbConfig = config("database.connections.{$connection}");
 
+            // Đảm bảo set charset UTF8MB4 trước khi restore
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::statement('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;');
 
             $command = sprintf(
-                'mysql --host=%s --port=%s --user=%s --password="%s" %s < %s',
+                'mysql --host=%s --port=%s --user=%s --password="%s" --default-character-set=utf8mb4 %s < %s',
                 escapeshellarg($dbConfig['host']),
                 escapeshellarg($dbConfig['port']),
                 escapeshellarg($dbConfig['username']),
@@ -158,6 +160,9 @@ class BackupController extends Controller
             exec($command, $output, $returnCode);
 
             if ($returnCode === 0) {
+                // Sau khi restore, đảm bảo lại charset cho các bảng quan trọng
+                $this->fixEncodingAfterRestore();
+
                 DB::statement('SET FOREIGN_KEY_CHECKS=1;');
                 Log::info("Database restored successfully from {$filename}.");
                 return response()->json(['success' => true, 'message' => 'Cơ sở dữ liệu đã được khôi phục thành công!']);
@@ -517,5 +522,37 @@ class BackupController extends Controller
         }
 
         return round($size, $precision) . ' ' . $units[$i];
+    }
+
+    /**
+     * Sửa encoding sau khi restore để đảm bảo UTF8MB4
+     */
+    private function fixEncodingAfterRestore()
+    {
+        try {
+            // Đảm bảo database có charset utf8mb4
+            DB::statement('ALTER DATABASE ' . config('database.connections.mysql.database') . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+
+            // Sửa charset cho các bảng quan trọng có chứa tiếng Việt
+            $tables = [
+                'customers',
+                'family_members',
+                'content_posts',
+                'leads',
+                'suppliers',
+                'collaborators',
+                'admins',
+                'users'
+            ];
+
+            foreach ($tables as $table) {
+                DB::statement("ALTER TABLE {$table} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                Log::info("Fixed encoding for table: {$table}");
+            }
+
+            Log::info('Encoding fixed after restore completed.');
+        } catch (\Exception $e) {
+            Log::warning('Error fixing encoding after restore: ' . $e->getMessage());
+        }
     }
 }

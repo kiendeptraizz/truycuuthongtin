@@ -190,6 +190,33 @@
 
                     <hr class="text-white-50 mx-3">
 
+                    <!-- Zalo Marketing -->
+                    <a class="nav-link {{ request()->routeIs('admin.zalo.dashboard') || request()->routeIs('admin.zalo.conversion-funnel') ? 'active' : '' }}"
+                        href="{{ route('admin.zalo.dashboard') }}">
+                        <i class="fas fa-comments me-3"></i>
+                        Zalo Marketing
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.zalo.accounts.*') ? 'active' : '' }}"
+                        href="{{ route('admin.zalo.accounts.index') }}">
+                        <i class="fas fa-user-circle me-3"></i>
+                        Tài khoản Zalo
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.zalo.groups.*') ? 'active' : '' }}"
+                        href="{{ route('admin.zalo.groups.index') }}">
+                        <i class="fas fa-users-rectangle me-3"></i>
+                        Nhóm mục tiêu
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.zalo.campaigns.*') ? 'active' : '' }}"
+                        href="{{ route('admin.zalo.campaigns.index') }}">
+                        <i class="fas fa-paper-plane me-3"></i>
+                        Chiến dịch tin nhắn
+                    </a>
+
+                    <hr class="text-white-50 mx-3">
+
                     <!-- Reports & Analytics -->
 
                     <a class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}"

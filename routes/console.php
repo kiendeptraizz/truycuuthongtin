@@ -31,6 +31,17 @@ Schedule::command('backup:complete --type=daily')
     ->runInBackground();
 
 // ============================================================================
+// 🔄 CẬP NHẬT STATUS DỊCH VỤ HẾT HẠN
+// ============================================================================
+
+// Tự động cập nhật status của các dịch vụ đã hết hạn từ 'active' sang 'expired'
+// Chạy hàng ngày vào lúc 00:05 AM (sau nửa đêm 5 phút)
+Schedule::command('services:update-expired')
+    ->dailyAt('00:05')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// ============================================================================
 // 📧 CONTENT REMINDERS
 // ============================================================================
 

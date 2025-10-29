@@ -189,10 +189,17 @@ class CustomerServiceController extends Controller
             'activated_at' => 'required|date',
             'expires_at' => 'required|date|after:activated_at',
             'status' => 'required|in:active,expired,cancelled',
+            'duration_days' => 'required|integer|min:1',
+            'cost_price' => 'required|string',
+            'price' => 'required|string',
             'internal_notes' => 'nullable|string',
             'profit_amount' => 'nullable|numeric|min:0',
             'profit_notes' => 'nullable|string|max:1000',
         ]);
+
+        // Parse currency inputs
+        $costPrice = parseCurrency($request->cost_price);
+        $price = parseCurrency($request->price);
 
         // Tạo dịch vụ khách hàng
         $customerService = CustomerService::create([
@@ -204,6 +211,9 @@ class CustomerServiceController extends Controller
             'activated_at' => $request->activated_at,
             'expires_at' => $request->expires_at,
             'status' => $request->status,
+            'duration_days' => $request->duration_days,
+            'cost_price' => $costPrice,
+            'price' => $price,
             'internal_notes' => $request->internal_notes,
         ]);
 
@@ -451,10 +461,17 @@ class CustomerServiceController extends Controller
             'login_password' => 'nullable|string|max:255',
             'activated_at' => 'required|date',
             'expires_at' => 'required|date|after:activated_at',
+            'duration_days' => 'required|integer|min:1',
+            'cost_price' => 'required|string',
+            'price' => 'required|string',
             'internal_notes' => 'nullable|string',
             'profit_amount' => 'nullable|numeric|min:0',
             'profit_notes' => 'nullable|string|max:1000',
         ]);
+
+        // Parse currency inputs
+        $costPrice = parseCurrency($request->cost_price);
+        $price = parseCurrency($request->price);
 
         // Check if service package is "add family" type
         $servicePackage = ServicePackage::findOrFail($request->service_package_id);
@@ -487,6 +504,9 @@ class CustomerServiceController extends Controller
             'activated_at' => $request->activated_at,
             'expires_at' => $request->expires_at,
             'status' => 'active',
+            'duration_days' => $request->duration_days,
+            'cost_price' => $costPrice,
+            'price' => $price,
             'internal_notes' => $request->internal_notes,
         ]);
 
@@ -671,7 +691,7 @@ class CustomerServiceController extends Controller
         $now = now();
         $servicesWithExpiry = CustomerService::whereNotNull('expires_at');
 
-        $expiredByDate = $servicesWithExpiry->clone()->where('expires_at', '<', $now)->count();
+        $expiredByDate = CustomerService::expiredByDate()->count();
         $validByDate = $servicesWithExpiry->clone()->where('expires_at', '>=', $now)->count();
 
         // Phân loại dịch vụ hết hạn theo thời gian

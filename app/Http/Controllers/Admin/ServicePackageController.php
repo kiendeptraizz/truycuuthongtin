@@ -82,19 +82,11 @@ class ServicePackageController extends Controller
             'category_id' => 'required|exists:service_categories,id',
             'name' => 'required|string|max:255',
             'account_type' => 'required|string|max:255',
-            'default_duration_days' => 'required|integer|min:1',
-            'price' => 'required|string',
-            'cost_price' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
 
-        // Parse currency inputs
-        $data = $request->all();
-        $data['price'] = parseCurrency($request->price);
-        $data['cost_price'] = $request->cost_price ? parseCurrency($request->cost_price) : null;
-
-        ServicePackage::create($data);
+        ServicePackage::create($request->all());
 
         return redirect()->route('admin.service-packages.index')
             ->with('success', 'Gói dịch vụ đã được tạo thành công!');
@@ -129,19 +121,11 @@ class ServicePackageController extends Controller
             'category_id' => 'required|exists:service_categories,id',
             'name' => 'required|string|max:255',
             'account_type' => 'required|string|max:255',
-            'default_duration_days' => 'required|integer|min:1',
-            'price' => 'required|string',
-            'cost_price' => 'nullable|string',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
 
-        // Parse currency inputs
-        $data = $request->all();
-        $data['price'] = parseCurrency($request->price);
-        $data['cost_price'] = $request->cost_price ? parseCurrency($request->cost_price) : null;
-
-        $servicePackage->update($data);
+        $servicePackage->update($request->all());
 
         return redirect(route('admin.service-packages.index') . '#package-' . $servicePackage->id)
             ->with('success', 'Gói dịch vụ đã được cập nhật!');

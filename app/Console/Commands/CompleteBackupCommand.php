@@ -123,19 +123,22 @@ class CompleteBackupCommand extends Command
         $mysqldumpPath = $this->findMysqlDumpPath();
 
         $command = sprintf(
-            '"%s" --host=%s --port=%s --user=%s --password="%s" --single-transaction --routines --triggers --column-statistics=0 %s > "%s"',
+            '"%s" --host=%s --port=%s --user=%s --password="%s" --default-character-set=utf8mb4 --single-transaction --routines --triggers --column-statistics=0 --result-file="%s" %s',
             $mysqldumpPath,
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
             $password,
-            escapeshellarg($database),
-            $sqlFile
+            $sqlFile,
+            escapeshellarg($database)
         );
 
         exec($command, $output, $returnCode);
 
         if ($returnCode === 0 && file_exists($sqlFile) && filesize($sqlFile) > 0) {
+            // Thêm charset declaration vào đầu file backup
+            $this->addCharsetToBackupFile($sqlFile);
+
             $this->info("✅ Database backup: " . $this->formatBytes(filesize($sqlFile)));
         } else {
             throw new \Exception("Failed to create database backup. mysqldump exited with code: {$returnCode}");
@@ -433,5 +436,38 @@ class CompleteBackupCommand extends Command
         ]);
 
         $this->info("📧 " . $message);
+    }
+
+    /**
+     * Thêm charset declaration vào đầu file backup SQL
+     */
+    private function addCharsetToBackupFile($sqlFile)
+    {
+        try {
+            $content = file_get_contents($sqlFile);
+
+            // Kiểm tra xem đã có charset declaration chưa
+            if (strpos($content, 'SET NAMES utf8mb4') === false) {
+                // Thêm charset declarations vào đầu file sau dòng comment đầu tiên
+                $charsetDeclarations = "\n-- Charset declarations for Vietnamese support\n";
+                $charsetDeclarations .= "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;\n";
+                $charsetDeclarations .= "SET character_set_client = utf8mb4;\n";
+                $charsetDeclarations .= "SET character_set_connection = utf8mb4;\n";
+                $charsetDeclarations .= "SET character_set_results = utf8mb4;\n";
+                $charsetDeclarations .= "SET collation_connection = utf8mb4_unicode_ci;\n\n";
+
+                // Tìm vị trí sau dòng đầu tiên có mysqldump comment
+                $pos = strpos($content, "-- MySQL dump");
+                if ($pos !== false) {
+                    $endLine = strpos($content, "\n", $pos);
+                    if ($endLine !== false) {
+                        $content = substr($content, 0, $endLine + 1) . $charsetDeclarations . substr($content, $endLine + 1);
+                        file_put_contents($sqlFile, $content);
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            $this->error("Warning: Could not add charset to backup file: " . $e->getMessage());
+        }
     }
 }
