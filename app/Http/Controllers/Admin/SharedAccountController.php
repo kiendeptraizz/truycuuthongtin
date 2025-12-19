@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomerService;
 use App\Models\ServicePackage;
 use App\Models\SharedAccountLogoutLog;
+use App\Models\SharedAccountCredential;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Exception;
@@ -124,7 +125,7 @@ class SharedAccountController extends Controller
      */
     public function show($email, Request $request)
     {
-        $services = CustomerService::with(['customer', 'servicePackage', 'assignedBy'])
+        $services = CustomerService::with(['customer', 'servicePackage'])
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->where('service_packages.account_type', 'Tài khoản dùng chung')
             ->where('login_email', $email)
@@ -469,6 +470,255 @@ class SharedAccountController extends Controller
                 'per_page' => $logs->perPage(),
                 'total' => $logs->total(),
             ]
+        ]);
+    }
+
+    // =========================================================================
+    // SHARED ACCOUNT CREDENTIALS MANAGEMENT
+    // =========================================================================
+
+    /**
+     * Hiển thị danh sách credentials theo gói dịch vụ
+     */
+    public function credentials(Request $request)
+    {
+        // Lấy gói dịch vụ loại dùng chung
+        $servicePackages = ServicePackage::where('account_type', 'Tài khoản dùng chung')
+            ->active()
+            ->withCount('sharedCredentials')
+            ->orderBy('name')
+            ->get();
+
+        $credentials = collect();
+        $selectedPackage = null;
+
+        if ($request->filled('service_package_id')) {
+            $selectedPackage = ServicePackage::find($request->service_package_id);
+
+            $query = SharedAccountCredential::with(['servicePackage', 'customerServices'])
+                ->where('service_package_id', $request->service_package_id);
+
+            if ($request->filled('search')) {
+                $query->where('email', 'like', '%' . $request->search . '%');
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $credentials = $query->latest()->paginate(20)->withQueryString();
+        }
+
+        // Thống kê
+        $stats = [
+            'total_credentials' => SharedAccountCredential::count(),
+            'active_credentials' => SharedAccountCredential::where('status', 'active')->count(),
+            'total_users' => CustomerService::whereNotNull('shared_credential_id')->where('status', 'active')->count(),
+        ];
+
+        return view('admin.shared-accounts.credentials.index', compact('servicePackages', 'credentials', 'selectedPackage', 'stats'));
+    }
+
+    /**
+     * Form thêm credential mới
+     */
+    public function createCredential(Request $request)
+    {
+        $servicePackages = ServicePackage::where('account_type', 'Tài khoản dùng chung')
+            ->active()
+            ->orderBy('name')
+            ->get();
+
+        $selectedPackageId = $request->service_package_id;
+
+        return view('admin.shared-accounts.credentials.create', compact('servicePackages', 'selectedPackageId'));
+    }
+
+    /**
+     * Lưu credential mới
+     */
+    public function storeCredential(Request $request)
+    {
+        $request->validate([
+            'service_package_id' => 'required|exists:service_packages,id',
+            'email' => 'required|email|max:255',
+            'password' => 'nullable|string',
+            'two_factor_secret' => 'nullable|string',
+            'recovery_codes' => 'nullable|string',
+            'notes' => 'nullable|string|max:2000',
+            'max_users' => 'required|integer|min:1|max:100',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        SharedAccountCredential::create([
+            'service_package_id' => $request->service_package_id,
+            'email' => $request->email,
+            'password' => $request->password,
+            'two_factor_secret' => $request->two_factor_secret,
+            'recovery_codes' => $request->recovery_codes,
+            'notes' => $request->notes,
+            'max_users' => $request->max_users,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'is_active' => true,
+            'status' => 'active',
+        ]);
+
+        return redirect()->route('admin.shared-accounts.credentials', ['service_package_id' => $request->service_package_id])
+            ->with('success', 'Đã thêm tài khoản dùng chung thành công!');
+    }
+
+    /**
+     * Form sửa credential
+     */
+    public function editCredential(SharedAccountCredential $credential)
+    {
+        $credential->load(['servicePackage', 'customerServices.customer']);
+
+        return view('admin.shared-accounts.credentials.edit', compact('credential'));
+    }
+
+    /**
+     * Cập nhật credential
+     */
+    public function updateCredential(Request $request, SharedAccountCredential $credential)
+    {
+        $request->validate([
+            'email' => 'required|email|max:255',
+            'password' => 'nullable|string',
+            'two_factor_secret' => 'nullable|string',
+            'recovery_codes' => 'nullable|string',
+            'notes' => 'nullable|string|max:2000',
+            'max_users' => 'required|integer|min:1|max:100',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'status' => 'required|in:active,expired,suspended,full',
+        ]);
+
+        $credential->update([
+            'email' => $request->email,
+            'password' => $request->password,
+            'two_factor_secret' => $request->two_factor_secret,
+            'recovery_codes' => $request->recovery_codes,
+            'notes' => $request->notes,
+            'max_users' => $request->max_users,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'status' => $request->status,
+            'is_active' => $request->status === 'active',
+        ]);
+
+        return redirect()->route('admin.shared-accounts.credentials', ['service_package_id' => $credential->service_package_id])
+            ->with('success', 'Đã cập nhật tài khoản dùng chung!');
+    }
+
+    /**
+     * Xóa credential
+     */
+    public function destroyCredential(SharedAccountCredential $credential)
+    {
+        $packageId = $credential->service_package_id;
+
+        // Kiểm tra có dịch vụ đang dùng không
+        if ($credential->customerServices()->where('status', 'active')->count() > 0) {
+            return redirect()->back()
+                ->with('error', 'Không thể xóa tài khoản đang có dịch vụ sử dụng!');
+        }
+
+        $credential->delete();
+
+        return redirect()->route('admin.shared-accounts.credentials', ['service_package_id' => $packageId])
+            ->with('success', 'Đã xóa tài khoản dùng chung!');
+    }
+
+    /**
+     * Nhập hàng loạt credentials
+     */
+    public function bulkImportCredentials(Request $request)
+    {
+        $request->validate([
+            'service_package_id' => 'required|exists:service_packages,id',
+            'accounts_data' => 'required|string',
+            'max_users' => 'required|integer|min:1|max:100',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        $data = trim($request->accounts_data);
+        $lines = array_filter(explode("\n", $data), fn($line) => trim($line) !== '');
+
+        $imported = 0;
+        $errors = [];
+
+        foreach ($lines as $index => $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+
+            // Parse line: email|password|2fa
+            $parts = array_map('trim', preg_split('/[|:;\t]/', $line));
+
+            if (count($parts) < 1 || empty($parts[0])) {
+                $errors[] = "Dòng " . ($index + 1) . ": Thiếu email";
+                continue;
+            }
+
+            try {
+                SharedAccountCredential::create([
+                    'service_package_id' => $request->service_package_id,
+                    'email' => $parts[0],
+                    'password' => $parts[1] ?? null,
+                    'two_factor_secret' => $parts[2] ?? null,
+                    'recovery_codes' => $parts[3] ?? null,
+                    'max_users' => $request->max_users,
+                    'start_date' => $request->start_date,
+                    'end_date' => $request->end_date,
+                    'is_active' => true,
+                    'status' => 'active',
+                ]);
+                $imported++;
+            } catch (\Exception $e) {
+                $errors[] = "Dòng " . ($index + 1) . ": " . $e->getMessage();
+            }
+        }
+
+        $message = "Đã nhập {$imported} tài khoản thành công!";
+        if (count($errors) > 0) {
+            session()->flash('import_errors', array_slice($errors, 0, 10));
+        }
+
+        return redirect()->route('admin.shared-accounts.credentials', ['service_package_id' => $request->service_package_id])
+            ->with('success', $message);
+    }
+
+    /**
+     * API: Lấy danh sách credentials theo package (cho form gán dịch vụ)
+     */
+    public function getCredentialsByPackage($packageId)
+    {
+        $credentials = SharedAccountCredential::where('service_package_id', $packageId)
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->withCount(['customerServices as current_users' => function ($q) {
+                $q->where('status', 'active');
+            }])
+            ->get()
+            ->filter(function ($cred) {
+                return $cred->current_users < $cred->max_users;
+            })
+            ->map(function ($cred) {
+                return [
+                    'id' => $cred->id,
+                    'email' => $cred->email,
+                    'current_users' => $cred->current_users,
+                    'max_users' => $cred->max_users,
+                    'available_slots' => $cred->max_users - $cred->current_users,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'credentials' => $credentials->values()
         ]);
     }
 }

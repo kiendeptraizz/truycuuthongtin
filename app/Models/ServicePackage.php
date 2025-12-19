@@ -61,6 +61,26 @@ class ServicePackage extends Model
         return $this->hasMany(CustomerService::class)->where('status', 'active');
     }
 
+    public function familyAccounts(): HasMany
+    {
+        return $this->hasMany(FamilyAccount::class);
+    }
+
+    public function activeFamilyAccounts(): HasMany
+    {
+        return $this->hasMany(FamilyAccount::class)->where('status', 'active');
+    }
+
+    public function sharedCredentials(): HasMany
+    {
+        return $this->hasMany(SharedAccountCredential::class);
+    }
+
+    public function activeSharedCredentials(): HasMany
+    {
+        return $this->hasMany(SharedAccountCredential::class)->where('is_active', true)->where('status', 'active');
+    }
+
     // Scope để lấy các gói đang hoạt động
     public function scopeActive($query)
     {

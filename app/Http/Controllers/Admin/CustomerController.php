@@ -26,10 +26,16 @@ class CustomerController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        // Filter by service package
+        // Filter by service package (by ID or by name search)
         if ($request->filled('service_package_id')) {
             $query->whereHas('customerServices', function ($q) use ($request) {
                 $q->where('service_package_id', $request->service_package_id);
+            });
+        } elseif ($request->filled('service_package_search')) {
+            // Text-based search for service package name
+            $packageSearch = trim($request->service_package_search);
+            $query->whereHas('customerServices.servicePackage', function ($q) use ($packageSearch) {
+                $q->where('name', 'like', "%{$packageSearch}%");
             });
         }
 
@@ -75,7 +81,7 @@ class CustomerController extends Controller
         // Debug logging
         Log::info('Customer Store Request', [
             'request_data' => $request->all(),
-            'user_id' => auth('admin')->id()
+            'user_id' => 1
         ]);
 
         // Validation rules
@@ -156,7 +162,7 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer)
     {
-        $customer->load(['customerServices.servicePackage.category', 'customerServices.assignedBy']);
+        $customer->load(['customerServices.servicePackage.category', 'customerServices.familyAccount']);
 
         return view('admin.customers.show', compact('customer'));
     }

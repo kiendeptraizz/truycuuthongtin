@@ -14,7 +14,11 @@ class LookupController extends Controller
         $code = $request->get('code');
 
         if ($code) {
-            $customer = Customer::where('customer_code', $code)
+            // Tìm theo mã khách hàng hoặc email
+            $customer = Customer::where(function ($query) use ($code) {
+                $query->where('customer_code', $code)
+                    ->orWhere('email', $code);
+            })
                 ->with(['customerServices.servicePackage.category'])
                 ->first();
 
@@ -32,19 +36,24 @@ class LookupController extends Controller
     public function search(Request $request)
     {
         $request->validate([
-            'code' => 'required|string|max:50'
+            'code' => 'required|string|max:255'
         ]);
 
-        $code = $request->get('code');
+        $code = trim($request->get('code'));
 
-        $customer = Customer::where('customer_code', $code)
+        // Tìm theo mã khách hàng, email khách hàng, hoặc số điện thoại
+        $customer = Customer::where(function ($query) use ($code) {
+            $query->where('customer_code', $code)
+                ->orWhere('email', $code)
+                ->orWhere('phone', $code);
+        })
             ->with(['customerServices.servicePackage.category'])
             ->first();
 
         if (!$customer) {
             return response()->json([
                 'success' => false,
-                'message' => 'Không tìm thấy thông tin với mã này'
+                'message' => 'Không tìm thấy thông tin. Vui lòng kiểm tra lại mã khách hàng, email hoặc số điện thoại.'
             ], 404);
         }
 

@@ -1,52 +1,115 @@
 @extends('layouts.admin')
 
-@section('titl    @media (max-width: 768px) {
-        .customers-table th:nth-child(5),
-        .customers-table td:nth-child(5) {
-            display: none;
-        }
-    }
+@section('titl @media (max-width: 768px) {
+.customers-table th:nth-child(5),
+.customers-table td:nth-child(5) {
+display: none;
+}
+}
 
-    /* Icon fallback styles */
-    .btn .fas, .btn .fa {
-        display: inline-block;
-        width: 1em;
-        text-align: center;
-        font-size: 14px;
-    }
-    
-    /* Khi Font Awesome load được, ẩn emoji */
-    .fas:before, .fa:before {
-        font-family: "Font Awesome 6 Free";
-        font-weight: 900;
-    }
-    
-    /* Fallback: hiện emoji khi Font Awesome không load */
-    .fas, .fa {
-        font-family: "Font Awesome 6 Free", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-    }
-    
-    /* Đảm bảo icons hiển thị chính xác */
-    .fas.fa-eye:before { content: "\f06e"; }
-    .fas.fa-edit:before { content: "\f044"; }
-    .fas.fa-plus:before { content: "\f067"; }
-    .fas.fa-trash:before { content: "\f2ed"; }
-    
-    /* Ensure icons are visible */
-    .btn-group .btn {
-        min-width: 32px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }uản lý khách hàng')
+/* Icon fallback styles */
+.btn .fas, .btn .fa {
+display: inline-block;
+width: 1em;
+text-align: center;
+font-size: 14px;
+}
+
+/* Khi Font Awesome load được, ẩn emoji */
+.fas:before, .fa:before {
+font-family: "Font Awesome 6 Free";
+font-weight: 900;
+}
+
+/* Fallback: hiện emoji khi Font Awesome không load */
+.fas, .fa {
+font-family: "Font Awesome 6 Free", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+
+/* Đảm bảo icons hiển thị chính xác */
+.fas.fa-eye:before { content: "\f06e"; }
+.fas.fa-edit:before { content: "\f044"; }
+.fas.fa-plus:before { content: "\f067"; }
+.fas.fa-trash:before { content: "\f2ed"; }
+
+/* Ensure icons are visible */
+.btn-group .btn {
+min-width: 32px;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+}uản lý khách hàng')
 @section('page-title', 'Quản lý khách hàng')
 
-@push('styles')
+@section('styles')
 <style>
+    /* Searchable Dropdown Portal - Fixed position outside all containers */
+    .service-dropdown-portal {
+        display: none;
+        position: fixed;
+        z-index: 999999;
+        background: #fff;
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 10px 0;
+    }
+
+    .service-dropdown-portal .dropdown-item {
+        padding: 12px 20px;
+        cursor: pointer;
+        display: block;
+        color: #333;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+
+    .service-dropdown-portal .dropdown-item:hover {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        color: #667eea;
+        border-left-color: #667eea;
+    }
+
+    .service-dropdown-portal .dropdown-item.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-left-color: white;
+    }
+
+    .service-dropdown-portal .dropdown-item.active i {
+        color: white !important;
+    }
+
+    .service-dropdown-portal .dropdown-item.highlighted {
+        background: rgba(102, 126, 234, 0.1);
+    }
+
+    .service-dropdown-portal .dropdown-divider {
+        margin: 8px 15px;
+        border-color: #eee;
+    }
+
+    #servicePackageSearch {
+        border-radius: 10px;
+        border: 2px solid #e0e0e0;
+        padding-left: 15px;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    #servicePackageSearch:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+        background: white;
+    }
+
     /* Optimized customer table styles */
     .customers-table {
         font-size: 0.875rem;
-        min-width: 1000px;
+        min-width: 800px;
     }
 
     .customers-table th,
@@ -59,6 +122,7 @@
         display: flex;
         gap: 0.25rem;
         justify-content: center;
+        flex-wrap: nowrap;
     }
 
     .customers-table .btn-group .btn {
@@ -77,7 +141,28 @@
         font-size: 0.875rem;
     }
 
+    /* Sticky action column - luôn hiển thị cột thao tác */
+    .customers-table th:last-child,
+    .customers-table td:last-child {
+        position: sticky;
+        right: 0;
+        background: #fff;
+        box-shadow: -3px 0 5px rgba(0,0,0,0.05);
+        z-index: 1;
+        min-width: 140px;
+    }
+
+    .customers-table thead th:last-child {
+        background: #f8f9fa;
+        z-index: 2;
+    }
+
+    .customers-table tbody tr:hover td:last-child {
+        background: #f8f9fa;
+    }
+
     @media (max-width: 1200px) {
+
         .customers-table th:nth-child(3),
         .customers-table td:nth-child(3) {
             display: none;
@@ -85,6 +170,7 @@
     }
 
     @media (max-width: 768px) {
+
         .customers-table th:nth-child(5),
         .customers-table td:nth-child(5) {
             display: none;
@@ -94,9 +180,67 @@
             padding: 0.25rem 0.375rem;
             font-size: 0.7rem;
         }
+
+        .customers-table th:last-child,
+        .customers-table td:last-child {
+            min-width: 120px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .customers-table {
+            min-width: 600px;
+        }
+
+        .customers-table .btn-group {
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .customers-table .btn-group .btn {
+            padding: 0.2rem 0.3rem;
+            font-size: 0.65rem;
+        }
+
+        .customers-table th:last-child,
+        .customers-table td:last-child {
+            min-width: 45px;
+        }
+    }
+
+    /* Scroll indicator cho mobile */
+    .table-scroll-hint {
+        display: none;
+        text-align: center;
+        padding: 8px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 0.8rem;
+        border-radius: 8px 8px 0 0;
+        animation: pulse-hint 2s infinite;
+    }
+
+    @keyframes pulse-hint {
+        0%, 100% { opacity: 0.9; }
+        50% { opacity: 1; }
+    }
+
+    @media (max-width: 992px) {
+        .table-scroll-hint {
+            display: block;
+        }
+    }
+
+    /* Action cell styling để nổi bật hơn */
+    .action-cell {
+        background: #fff !important;
+    }
+
+    .action-buttons {
+        white-space: nowrap;
     }
 </style>
-@endpush
+@endsection
 
 @section('content')
 <div class="row g-4">
@@ -138,15 +282,16 @@
                                 <label class="form-label">
                                     <i class="fas fa-box text-success"></i> Gói dịch vụ
                                 </label>
-                                <select name="service_package_id" class="form-select">
-                                    <option value="">Tất cả gói dịch vụ</option>
-                                    @foreach($servicePackages as $package)
-                                    <option value="{{ $package->id }}"
-                                        {{ request('service_package_id') == $package->id ? 'selected' : '' }}>
-                                        {{ $package->name }}
-                                    </option>
-                                    @endforeach
-                                </select>
+                                <div class="service-package-wrapper position-relative">
+                                    <input type="text"
+                                        id="servicePackageSearch"
+                                        name="service_package_search"
+                                        class="form-control"
+                                        placeholder="Tìm gói dịch vụ..."
+                                        value="{{ request('service_package_search') ?? (request('service_package_id') ? $servicePackages->find(request('service_package_id'))?->name : '') }}"
+                                        autocomplete="off">
+                                    <input type="hidden" name="service_package_id" id="servicePackageId" value="{{ request('service_package_id') }}">
+                                </div>
                             </div>
                             <div class="col-lg-2 col-md-6">
                                 <label class="form-label">
@@ -169,7 +314,7 @@
                                     <button type="submit" class="btn btn-primary btn-sm">
                                         <i class="fas fa-search"></i> Lọc
                                     </button>
-                                    @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'date_from', 'date_to']))
+                                    @if(request()->hasAny(['search', 'service_package_id', 'service_package_search', 'service_status', 'date_from', 'date_to']))
                                     <a href="{{ route('admin.customers.index') }}"
                                         class="btn btn-warning btn-sm">
                                         <i class="fas fa-times-circle"></i> Xóa bộ lọc
@@ -211,27 +356,29 @@
                         @if($customers->total() > 0)
                         ({{ $customers->firstItem() }}-{{ $customers->lastItem() }})
                         @endif
-                        
-                        @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'date_from', 'date_to']))
+
+                        @if(request()->hasAny(['search', 'service_package_id', 'service_package_search', 'service_status', 'date_from', 'date_to']))
                         <div class="mt-1">
                             <small class="text-info">
-                                <i class="fas fa-filter"></i> Đang lọc: 
+                                <i class="fas fa-filter"></i> Đang lọc:
                                 @if(request('search'))
-                                    <span class="badge bg-secondary">Tìm: {{ request('search') }}</span>
+                                <span class="badge bg-secondary">Tìm: {{ request('search') }}</span>
                                 @endif
                                 @if(request('service_package_id'))
-                                    @php
-                                        $selectedPackage = $servicePackages->find(request('service_package_id'));
-                                    @endphp
-                                    <span class="badge bg-success">Gói: {{ $selectedPackage ? $selectedPackage->name : 'Không xác định' }}</span>
+                                @php
+                                $selectedPackage = $servicePackages->find(request('service_package_id'));
+                                @endphp
+                                <span class="badge bg-success">Gói: {{ $selectedPackage ? $selectedPackage->name : 'Không xác định' }}</span>
+                                @elseif(request('service_package_search'))
+                                <span class="badge bg-success">Gói: {{ request('service_package_search') }}</span>
                                 @endif
                                 @if(request('service_status'))
-                                    <span class="badge bg-info">Trạng thái: {{ request('service_status') === 'active' ? 'Hoạt động' : 'Hết hạn' }}</span>
+                                <span class="badge bg-info">Trạng thái: {{ request('service_status') === 'active' ? 'Hoạt động' : 'Hết hạn' }}</span>
                                 @endif
                                 @if(request('date_from') || request('date_to'))
-                                    <span class="badge bg-warning">
-                                        Ngày: {{ request('date_from') ?? '...' }} → {{ request('date_to') ?? '...' }}
-                                    </span>
+                                <span class="badge bg-warning">
+                                    Ngày: {{ request('date_from') ?? '...' }} → {{ request('date_to') ?? '...' }}
+                                </span>
                                 @endif
                             </small>
                         </div>
@@ -291,10 +438,10 @@
     </div>
     <div class="col-md-6 text-end">
         @if(request('search'))
-            <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-times-circle me-1"></i>
-                Xóa bộ lọc
-            </a>
+        <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-times-circle me-1"></i>
+            Xóa bộ lọc
+        </a>
         @endif
     </div>
 </div>
@@ -303,6 +450,10 @@
 @if($customers->count() > 0)
 <div class="card shadow-sm">
     <div class="card-body p-0">
+        <div class="table-scroll-hint">
+            <i class="fas fa-arrows-alt-h me-2"></i>
+            Vuốt sang phải để xem thêm • Cột thao tác cố định bên phải
+        </div>
         <div class="table-responsive">
             <table id="customersTable" class="table table-hover mb-0 customers-table enhanced-table">
                 <thead>
@@ -417,8 +568,8 @@
                                 <div class="text-muted">{{ $customer->created_at->format('H:i') }}</div>
                             </div>
                         </td>
-                        <td class="text-center">
-                            <div class="btn-group" role="group">
+                        <td class="text-center action-cell">
+                            <div class="btn-group action-buttons" role="group">
                                 <a href="{{ route('admin.customers.show', $customer) }}"
                                     class="btn btn-outline-info btn-sm" title="Xem chi tiết">
                                     <i class="fas fa-eye"></i>
@@ -444,9 +595,9 @@
                     @endforeach
                 </tbody>
             </table>
-            </div>
         </div>
     </div>
+</div>
 </div>
 
 <!-- Pagination -->
@@ -479,14 +630,14 @@
                 </div>
                 <h4 class="text-muted mb-3">Không tìm thấy khách hàng nào</h4>
                 <p class="text-muted fs-5 mb-4">
-                    @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'login_email', 'date_from', 'date_to']))
+                    @if(request()->hasAny(['search', 'service_package_id', 'service_package_search', 'service_status', 'login_email', 'date_from', 'date_to']))
                     Không có khách hàng nào khớp với tiêu chí tìm kiếm của bạn.
                     @else
                     Hệ thống chưa có khách hàng nào. Hãy thêm nhanh khách hàng đầu tiên!
                     @endif
                 </p>
                 <div class="d-flex gap-3 justify-content-center">
-                    @if(request()->hasAny(['search', 'service_package_id', 'service_status', 'login_email', 'date_from', 'date_to']))
+                    @if(request()->hasAny(['search', 'service_package_id', 'service_package_search', 'service_status', 'login_email', 'date_from', 'date_to']))
                     <a href="{{ route('admin.customers.index') }}" class="btn btn-outline-primary btn-lg">
                         <i class="fas fa-sync-alt me-2"></i>Xem tất cả
                     </a>
@@ -606,6 +757,19 @@
             </div>
         </div>
     </div>
+
+    <!-- Service Package Dropdown Portal - Fixed position with inline styles for reliability -->
+    <div id="servicePackageDropdown" style="display: none; position: fixed; z-index: 999999; background: #fff; border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-height: 400px; overflow-y: auto; padding: 10px 0;">
+        <a class="dropdown-item" href="#" data-id="" style="padding: 12px 20px; cursor: pointer; display: block; color: #333; text-decoration: none; border-left: 3px solid transparent;">
+            <i class="fas fa-list me-2 text-muted"></i>Tất cả gói dịch vụ
+        </a>
+        <hr style="margin: 8px 15px; border-color: #eee;">
+        @foreach($servicePackages as $package)
+        <a class="dropdown-item" href="#" data-id="{{ $package->id }}" style="padding: 12px 20px; cursor: pointer; display: block; color: #333; text-decoration: none; border-left: 3px solid transparent;">
+            <i class="fas fa-cube me-2 text-primary"></i>{{ $package->name }}
+        </a>
+        @endforeach
+    </div>
     @endsection
 
 
@@ -620,6 +784,217 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // ============================================
+            // SEARCHABLE SERVICE PACKAGE DROPDOWN
+            // ============================================
+            const servicePackageSearch = document.getElementById('servicePackageSearch');
+            const servicePackageId = document.getElementById('servicePackageId');
+            const servicePackageDropdown = document.getElementById('servicePackageDropdown');
+
+            if (servicePackageSearch && servicePackageDropdown) {
+                console.log('✅ Service Package Search initialized');
+
+                // IMPORTANT: Move dropdown to body to avoid overflow/stacking context issues
+                document.body.appendChild(servicePackageDropdown);
+                console.log('📦 Dropdown moved to body');
+
+                const allItems = servicePackageDropdown.querySelectorAll('.dropdown-item');
+                console.log('Items found:', allItems.length);
+
+                // Function to position and show dropdown
+                function showDropdown() {
+                    const rect = servicePackageSearch.getBoundingClientRect();
+
+                    // Position dropdown below input field
+                    servicePackageDropdown.style.position = 'fixed';
+                    servicePackageDropdown.style.top = (rect.bottom + 5) + 'px';
+                    servicePackageDropdown.style.left = rect.left + 'px';
+                    servicePackageDropdown.style.width = Math.max(rect.width, 300) + 'px';
+                    servicePackageDropdown.style.display = 'block';
+                    servicePackageDropdown.style.zIndex = '999999';
+
+                    console.log('📦 Dropdown shown');
+                }
+
+                // Function to hide dropdown
+                function hideDropdown() {
+                    servicePackageDropdown.style.display = 'none';
+                    console.log('🔒 Dropdown hidden');
+                }
+
+                // Update position on scroll
+                window.addEventListener('scroll', function() {
+                    if (servicePackageDropdown.style.display === 'block') {
+                        showDropdown();
+                    }
+                });
+
+                // Resize handler
+                window.addEventListener('resize', function() {
+                    if (servicePackageDropdown.style.display === 'block') {
+                        showDropdown();
+                    }
+                });
+
+                // Show dropdown when input is focused
+                servicePackageSearch.addEventListener('focus', function() {
+                    console.log('🎯 Input focused');
+                    showDropdown();
+                    filterDropdownItems('');
+                });
+
+                // Show dropdown when clicking on input
+                servicePackageSearch.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    console.log('👆 Input clicked');
+                    showDropdown();
+                });
+
+                // Filter items as user types
+                servicePackageSearch.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase().trim();
+                    console.log('⌨️ Typing:', searchTerm);
+                    // Clear the hidden ID field when user types - allow text search
+                    servicePackageId.value = '';
+                    filterDropdownItems(searchTerm);
+                    showDropdown();
+                });
+
+                // Filter function
+                function filterDropdownItems(searchTerm) {
+                    let visibleCount = 0;
+                    allItems.forEach(item => {
+                        const text = item.textContent.toLowerCase();
+                        const isAllOption = item.dataset.id === '';
+
+                        if (searchTerm === '' || text.includes(searchTerm) || isAllOption) {
+                            item.style.display = 'block';
+                            visibleCount++;
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+
+                    // Update divider visibility
+                    const divider = servicePackageDropdown.querySelector('.dropdown-divider');
+                    if (divider) {
+                        divider.style.display = visibleCount > 1 ? 'block' : 'none';
+                    }
+
+                    // Show "no results" message if needed
+                    let noResultsMsg = servicePackageDropdown.querySelector('.no-results-message');
+                    if (visibleCount <= 1 && searchTerm !== '') {
+                        if (!noResultsMsg) {
+                            noResultsMsg = document.createElement('div');
+                            noResultsMsg.className = 'no-results-message text-muted text-center py-3';
+                            noResultsMsg.innerHTML = '<i class="fas fa-search me-2"></i>Không tìm thấy gói dịch vụ phù hợp';
+                            servicePackageDropdown.appendChild(noResultsMsg);
+                        }
+                        noResultsMsg.style.display = 'block';
+                    } else if (noResultsMsg) {
+                        noResultsMsg.style.display = 'none';
+                    }
+                }
+
+                // Handle item selection
+                allItems.forEach(item => {
+                    item.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const id = this.dataset.id;
+                        const name = id === '' ? '' : this.textContent.trim().replace(/^\s*[\uf0c8\uf03a]\s*/, ''); // Remove icon text
+
+                        servicePackageId.value = id;
+                        servicePackageSearch.value = name;
+                        hideDropdown();
+
+                        // Add selected styling
+                        allItems.forEach(i => i.classList.remove('active'));
+                        if (id !== '') {
+                            this.classList.add('active');
+                        }
+                    });
+                });
+
+                // Hide dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!servicePackageSearch.contains(e.target) && !servicePackageDropdown.contains(e.target)) {
+                        hideDropdown();
+                    }
+                });
+
+                // Prevent dropdown from closing when clicking inside it
+                servicePackageDropdown.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+
+                // Keyboard navigation
+                servicePackageSearch.addEventListener('keydown', function(e) {
+                    const visibleItems = Array.from(allItems).filter(item => item.style.display !== 'none');
+                    const currentIndex = visibleItems.findIndex(item => item.classList.contains('highlighted'));
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        showDropdown();
+                        const nextIndex = currentIndex < visibleItems.length - 1 ? currentIndex + 1 : 0;
+                        highlightItem(visibleItems, nextIndex);
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        showDropdown();
+                        const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleItems.length - 1;
+                        highlightItem(visibleItems, prevIndex);
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const highlightedItem = visibleItems.find(item => item.classList.contains('highlighted'));
+                        if (highlightedItem) {
+                            highlightedItem.click();
+                        } else if (visibleItems.length > 0) {
+                            visibleItems[0].click();
+                        }
+                    } else if (e.key === 'Escape') {
+                        hideDropdown();
+                        servicePackageSearch.blur();
+                    }
+                });
+
+                function highlightItem(items, index) {
+                    items.forEach(item => {
+                        item.classList.remove('highlighted');
+                        item.style.backgroundColor = '';
+                    });
+                    if (items[index]) {
+                        items[index].classList.add('highlighted');
+                        items[index].style.backgroundColor = '#e9ecef';
+                        items[index].scrollIntoView({
+                            block: 'nearest'
+                        });
+                    }
+                }
+
+                // Add hover effect
+                allItems.forEach(item => {
+                    item.addEventListener('mouseenter', function() {
+                        allItems.forEach(i => {
+                            i.classList.remove('highlighted');
+                            if (!i.classList.contains('active')) {
+                                i.style.backgroundColor = '';
+                            }
+                        });
+                        if (!this.classList.contains('active')) {
+                            this.style.backgroundColor = '#e9ecef';
+                        }
+                    });
+                    item.addEventListener('mouseleave', function() {
+                        if (!this.classList.contains('active')) {
+                            this.style.backgroundColor = '';
+                        }
+                    });
+                });
+            }
+            // ============================================
+            // END SEARCHABLE SERVICE PACKAGE DROPDOWN
+            // ============================================
+
             // Initialize tooltips
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
@@ -641,11 +1016,19 @@
             const servicePackageSelect = document.querySelector('select[name="service_package_id"]');
             const serviceStatusSelect = document.querySelector('select[name="service_status"]');
             const searchInput = document.querySelector('input[name="search"]');
-            
+
             // Hiển thị thông báo hữu ích khi filter không có kết quả
-            const customerCount = {{ $customers->total() }};
+            const customerCount = {
+                {
+                    $customers - > total()
+                }
+            };
             if (customerCount === 0) {
-                const hasFilters = {{ request()->hasAny(['search', 'service_package_id', 'service_status', 'date_from', 'date_to']) ? 'true' : 'false' }};
+                const hasFilters = {
+                    {
+                        request() - > hasAny(['search', 'service_package_id', 'service_package_search', 'service_status', 'date_from', 'date_to']) ? 'true' : 'false'
+                    }
+                };
                 if (hasFilters) {
                     // Tạo thông báo gợi ý
                     const emptyMessage = document.querySelector('.text-muted');
@@ -730,7 +1113,9 @@
                 csv += cells.join(',') + '\n';
             });
 
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([csv], {
+                type: 'text/csv;charset=utf-8;'
+            });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = `customers_selected_${new Date().toISOString().split('T')[0]}.csv`;
@@ -773,7 +1158,11 @@
                 const email = emailField?.value.trim();
                 const phone = phoneField?.value.trim();
 
-                console.log('📝 Form data:', { name, email, phone });
+                console.log('📝 Form data:', {
+                    name,
+                    email,
+                    phone
+                });
 
                 // Check CSRF token
                 const csrfToken = quickAddForm.querySelector('input[name="_token"]');
@@ -827,4 +1216,4 @@
             }
         }
     </script>
-@endsection
+    @endsection

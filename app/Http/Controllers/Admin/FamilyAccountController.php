@@ -19,37 +19,57 @@ class FamilyAccountController extends Controller
      */
     public function index(Request $request)
     {
-        $query = FamilyAccount::with(['servicePackage', 'members']);
-
-        // Search filters
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('family_name', 'like', "%{$search}%")
-                    ->orWhere('family_code', 'like', "%{$search}%")
-                    ->orWhere('owner_email', 'like', "%{$search}%")
-                    ->orWhere('owner_name', 'like', "%{$search}%");
-            });
-        }
-
-        // Status filter
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // Service package filter
-        if ($request->filled('service_package_id')) {
-            $query->where('service_package_id', $request->service_package_id);
-        }
-
-        $familyAccounts = $query->latest()->paginate(15)->withQueryString();
-
-        // Get service packages for filter
+        // Get service packages for family type với thống kê
         $servicePackages = ServicePackage::where('account_type', 'Tài khoản add family')
             ->orWhere('account_type', 'like', '%family%')
             ->active()
+            ->withCount(['familyAccounts', 'familyAccounts as active_families_count' => function ($q) {
+                $q->where('status', 'active');
+            }])
             ->orderBy('name')
             ->get();
+
+        // Nếu có filter theo package, lấy family accounts của package đó
+        $familyAccounts = collect();
+        $selectedPackage = null;
+        $emailSearchResults = collect();
+        $emailSearchQuery = null;
+
+        // Global email search
+        if ($request->filled('email_search')) {
+            $emailSearchQuery = trim($request->email_search);
+            $emailSearchResults = $this->searchByEmail($emailSearchQuery);
+        }
+
+        if ($request->filled('service_package_id')) {
+            $selectedPackage = ServicePackage::find($request->service_package_id);
+
+            $query = FamilyAccount::with(['servicePackage', 'members', 'customerServices'])
+                ->where('service_package_id', $request->service_package_id);
+
+            // Search filters
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('family_name', 'like', "%{$search}%")
+                        ->orWhere('family_code', 'like', "%{$search}%")
+                        ->orWhere('owner_email', 'like', "%{$search}%")
+                        ->orWhere('owner_name', 'like', "%{$search}%");
+                });
+            }
+
+            // Status filter
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            $familyAccounts = $query->latest()->paginate(20)->withQueryString();
+
+            // Cập nhật current_members
+            foreach ($familyAccounts as $account) {
+                $account->current_members = $account->customerServices->where('status', 'active')->count();
+            }
+        }
 
         // Statistics
         $stats = [
@@ -59,7 +79,103 @@ class FamilyAccountController extends Controller
             'suspended' => FamilyAccount::where('status', 'suspended')->count(),
         ];
 
-        return view('admin.family-accounts.index', compact('familyAccounts', 'servicePackages', 'stats'));
+        return view('admin.family-accounts.index', compact(
+            'familyAccounts', 
+            'servicePackages', 
+            'stats', 
+            'selectedPackage',
+            'emailSearchResults',
+            'emailSearchQuery'
+        ));
+    }
+
+    /**
+     * Search by email across all family-related data
+     */
+    private function searchByEmail(string $email)
+    {
+        $results = collect();
+
+        // 1. Search in CustomerService (login_email) with family account
+        $customerServices = \App\Models\CustomerService::with(['customer', 'familyAccount', 'servicePackage'])
+            ->whereNotNull('family_account_id')
+            ->where(function ($q) use ($email) {
+                $q->where('login_email', 'like', "%{$email}%")
+                  ->orWhereHas('customer', function ($cq) use ($email) {
+                      $cq->where('email', 'like', "%{$email}%")
+                        ->orWhere('name', 'like', "%{$email}%");
+                  });
+            })
+            ->get();
+
+        foreach ($customerServices as $service) {
+            $results->push([
+                'type' => 'customer_service',
+                'email' => $service->login_email ?: ($service->customer->email ?? 'N/A'),
+                'customer_name' => $service->customer->name ?? 'N/A',
+                'customer_code' => $service->customer->customer_code ?? 'N/A',
+                'customer_id' => $service->customer_id,
+                'family_id' => $service->family_account_id,
+                'family_name' => $service->familyAccount->family_name ?? 'N/A',
+                'family_code' => $service->familyAccount->family_code ?? 'N/A',
+                'service_package' => $service->servicePackage->name ?? 'N/A',
+                'status' => $service->status,
+                'expires_at' => $service->expires_at,
+                'source' => 'Dịch vụ khách hàng',
+            ]);
+        }
+
+        // 2. Search in FamilyAccount (owner_email)
+        $familyAccounts = FamilyAccount::with('servicePackage')
+            ->where('owner_email', 'like', "%{$email}%")
+            ->get();
+
+        foreach ($familyAccounts as $family) {
+            // Check if not already in results
+            $exists = $results->where('family_id', $family->id)->where('type', 'family_owner')->first();
+            if (!$exists) {
+                $results->push([
+                    'type' => 'family_owner',
+                    'email' => $family->owner_email,
+                    'customer_name' => $family->owner_name ?? 'Chủ Family',
+                    'customer_code' => '-',
+                    'customer_id' => null,
+                    'family_id' => $family->id,
+                    'family_name' => $family->family_name,
+                    'family_code' => $family->family_code,
+                    'service_package' => $family->servicePackage->name ?? 'N/A',
+                    'status' => $family->status,
+                    'expires_at' => $family->expires_at,
+                    'source' => 'Chủ sở hữu Family',
+                ]);
+            }
+        }
+
+        // 3. Search in FamilyMember (member_email)
+        $familyMembers = FamilyMember::with(['familyAccount.servicePackage', 'customer'])
+            ->where('member_email', 'like', "%{$email}%")
+            ->get();
+
+        foreach ($familyMembers as $member) {
+            $results->push([
+                'type' => 'family_member',
+                'email' => $member->member_email,
+                'customer_name' => $member->customer->name ?? $member->member_name ?? 'N/A',
+                'customer_code' => $member->customer->customer_code ?? 'N/A',
+                'customer_id' => $member->customer_id,
+                'family_id' => $member->family_account_id,
+                'family_name' => $member->familyAccount->family_name ?? 'N/A',
+                'family_code' => $member->familyAccount->family_code ?? 'N/A',
+                'service_package' => $member->familyAccount->servicePackage->name ?? 'N/A',
+                'status' => $member->status,
+                'expires_at' => $member->end_date ?? $member->expires_at,
+                'source' => 'Thành viên Family',
+            ]);
+        }
+
+        return $results->unique(function ($item) {
+            return $item['email'] . '-' . $item['family_id'] . '-' . $item['type'];
+        })->values();
     }
 
     /**
@@ -103,7 +219,7 @@ class FamilyAccountController extends Controller
             'service_package_id' => 'required|exists:service_packages,id',
             'owner_email' => 'required|email|max:255',
             'owner_name' => 'nullable|string|max:255',
-            'max_members' => 'required|integer|min:1|max:20',
+            'max_members' => 'required|integer|min:1',
             'expires_at' => 'required|date|after:today',
             'family_notes' => 'nullable|string',
             'internal_notes' => 'nullable|string',
@@ -123,8 +239,8 @@ class FamilyAccountController extends Controller
                 'status' => 'active',
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'created_by' => auth('admin')->id() ?? 1,
-                'managed_by' => auth('admin')->id() ?? 1,
+                'created_by' => 1,
+                'managed_by' => 1,
             ]);
 
             DB::commit();
@@ -145,13 +261,31 @@ class FamilyAccountController extends Controller
      */
     public function show(FamilyAccount $familyAccount)
     {
-        $familyAccount->load(['servicePackage', 'members.customer']);
+        $familyAccount->load([
+            'servicePackage',
+            'members.customer',
+            'customerServices.customer',
+            'customerServices.servicePackage'
+        ]);
 
-        // Group members by status
+        // Group members by status (giữ lại để hiển thị thông tin)
         $activeMembers = $familyAccount->members->where('status', 'active');
         $inactiveMembers = $familyAccount->members->whereIn('status', ['suspended', 'removed']);
 
-        return view('admin.family-accounts.show', compact('familyAccount', 'activeMembers', 'inactiveMembers'));
+        // Get customer services info - ĐÂY MỚI LÀ SỐ SLOT THỰC SỰ
+        $activeServices = $familyAccount->customerServices->where('status', 'active');
+        $totalServices = $familyAccount->customerServices->count();
+
+        // Cập nhật current_members dựa trên số CustomerService
+        $familyAccount->current_members = $activeServices->count();
+
+        return view('admin.family-accounts.show', compact(
+            'familyAccount',
+            'activeMembers',
+            'inactiveMembers',
+            'activeServices',
+            'totalServices'
+        ));
     }
 
     /**
@@ -195,7 +329,7 @@ class FamilyAccountController extends Controller
             'service_package_id' => 'required|exists:service_packages,id',
             'owner_email' => 'required|email|max:255',
             'owner_name' => 'nullable|string|max:255',
-            'max_members' => 'required|integer|min:1|max:20',
+            'max_members' => 'required|integer|min:1',
             'expires_at' => 'required|date',
             'status' => 'required|in:active,expired,suspended,cancelled',
             'family_notes' => 'nullable|string',
@@ -214,7 +348,7 @@ class FamilyAccountController extends Controller
                 'status' => $request->status,
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'managed_by' => auth('admin')->id() ?? 1,
+                'managed_by' => 1,
             ]);
 
             DB::commit();
@@ -374,7 +508,7 @@ class FamilyAccountController extends Controller
                 'activated_at' => Carbon::parse($request->start_date),
                 'expires_at' => $calculatedEndDate,
                 'status' => 'active',
-                'assigned_by' => Auth::guard('admin')->id(),
+                'assigned_by' => 1,
                 'internal_notes' => 'Dịch vụ được tạo tự động từ Family Account: ' . $familyAccount->family_name . ' (ID: ' . $familyAccount->id . '). Thành viên Family Member ID: ' . $familyMember->id,
             ]);
 
@@ -426,7 +560,7 @@ class FamilyAccountController extends Controller
             $member->update([
                 'status' => 'removed',
                 'removed_at' => now(),
-                'removed_by' => auth('admin')->id() ?? 1,
+                'removed_by' => 1,
             ]);
 
             // Update corresponding Customer Service status

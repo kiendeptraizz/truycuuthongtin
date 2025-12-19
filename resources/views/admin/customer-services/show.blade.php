@@ -111,6 +111,83 @@
                     </div>
                 </div>
 
+                <!-- Family Account Information -->
+                @if($customerService->family_account_id && $customerService->familyAccount)
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card border border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-home me-2"></i>
+                                    Thông tin Family Account
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <strong>Tên Family:</strong>
+                                        <div>{{ $customerService->familyAccount->family_name }}</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Mã Family:</strong>
+                                        <div><code class="bg-light px-2 py-1 rounded">{{ $customerService->familyAccount->family_code }}</code></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Email chủ Family:</strong>
+                                        <div>{{ $customerService->familyAccount->owner_email }}</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Slots sử dụng:</strong>
+                                        <div>
+                                            <span class="badge {{ $customerService->familyAccount->current_members >= $customerService->familyAccount->max_members ? 'bg-danger' : 'bg-success' }}">
+                                                {{ $customerService->familyAccount->current_members }}/{{ $customerService->familyAccount->max_members }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Trạng thái Family:</strong>
+                                        <div>
+                                            @php
+                                            $famStatusColors = ['active' => 'success', 'expired' => 'warning', 'suspended' => 'danger'];
+                                            $famStatusLabels = ['active' => 'Hoạt động', 'expired' => 'Hết hạn', 'suspended' => 'Tạm ngưng'];
+                                            @endphp
+                                            <span class="badge bg-{{ $famStatusColors[$customerService->familyAccount->status] ?? 'secondary' }}">
+                                                {{ $famStatusLabels[$customerService->familyAccount->status] ?? $customerService->familyAccount->status }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Hết hạn Family:</strong>
+                                        <div>
+                                            @if($customerService->familyAccount->expires_at)
+                                            {{ $customerService->familyAccount->expires_at->format('d/m/Y') }}
+                                            @else
+                                            <span class="text-muted">Chưa thiết lập</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <a href="{{ route('admin.family-accounts.show', $customerService->familyAccount) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-external-link-alt me-1"></i>
+                                        Xem chi tiết Family Account
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @elseif(str_contains(strtolower($customerService->servicePackage->account_type ?? ''), 'family'))
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Chú ý:</strong> Dịch vụ này thuộc loại "add family" nhưng chưa được gán vào Family Account nào.
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Service Details -->
                 <div class="row mt-4">
                     <div class="col-12">

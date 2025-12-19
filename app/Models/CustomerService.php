@@ -14,6 +14,7 @@ class CustomerService extends Model
         'assigned_by',
 
         'family_account_id',
+        'shared_credential_id',
         'login_email',
         'login_password',
         'activated_at',
@@ -62,21 +63,14 @@ class CustomerService extends Model
         return $this->belongsTo(ServicePackage::class);
     }
 
-    public function assignedBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'assigned_by');
-    }
-
-    public function createdBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'assigned_by'); // Sử dụng assigned_by làm created_by
-    }
-
-
-
     public function familyAccount(): BelongsTo
     {
         return $this->belongsTo(FamilyAccount::class);
+    }
+
+    public function sharedCredential(): BelongsTo
+    {
+        return $this->belongsTo(SharedAccountCredential::class);
     }
 
     public function profit(): HasOne
@@ -141,14 +135,15 @@ class CustomerService extends Model
     }
 
     // Scope để lấy các dịch vụ sắp hết hạn (mặc định 5 ngày)
-    // Bao gồm cả dịch vụ hết hạn trong ngày hôm nay (vì khách vẫn còn cả ngày để dùng)
+    // KHÔNG bao gồm dịch vụ hết hạn hôm nay (vì đã được tính vào "Đã hết hạn")
+    // Chỉ lấy dịch vụ hết hạn từ ngày mai trở đi trong vòng 5 ngày
     public function scopeExpiringSoon($query, $days = 5)
     {
-        $today = now()->startOfDay();
+        $tomorrow = now()->addDay()->startOfDay();
         $endDate = now()->addDays((int) $days)->endOfDay();
 
         return $query->where('status', 'active')
-            ->where('expires_at', '>=', $today)
+            ->where('expires_at', '>=', $tomorrow)
             ->where('expires_at', '<=', $endDate);
     }
 

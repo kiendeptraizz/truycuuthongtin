@@ -16,9 +16,17 @@
             </div>
 
             <div class="card-body">
-                <form method="POST" action="{{ route('admin.customer-services.update', $customerService) }}{{ request()->has('source') ? '?' . http_build_query(request()->only(['source', 'customer_id'])) : '' }}">
+                <form method="POST" action="{{ route('admin.customer-services.update', $customerService) }}">
                     @csrf
                     @method('PUT')
+                    
+                    <!-- Hidden inputs to preserve redirect info -->
+                    @if(request()->has('source'))
+                    <input type="hidden" name="redirect_source" value="{{ request()->get('source') }}">
+                    @endif
+                    @if(request()->has('customer_id'))
+                    <input type="hidden" name="redirect_customer_id" value="{{ request()->get('customer_id') }}">
+                    @endif
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -46,18 +54,49 @@
                             <label for="service_package_id" class="form-label">
                                 <i class="fas fa-box me-1"></i>
                                 Gói dịch vụ <span class="text-danger">*</span>
-                                <small class="text-muted ms-2">(Nhóm theo loại tài khoản)</small>
                             </label>
 
-                            <x-service-package-selector
-                                :service-packages="$servicePackages"
-                                :account-type-priority="$accountTypePriority"
-                                name="service_package_id"
-                                id="service_package_id"
-                                :required="true"
-                                :selected="old('service_package_id', $customerService->service_package_id)"
-                                placeholder="Chọn gói dịch vụ..."
-                            />
+                            <!-- Search Box with Autocomplete -->
+                            <div class="position-relative">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="servicePackageSearch" 
+                                       placeholder="🔍 Gõ để tìm kiếm gói dịch vụ..."
+                                       autocomplete="off">
+                                
+                                <!-- Hidden input to store actual value -->
+                                <input type="hidden" 
+                                       name="service_package_id" 
+                                       id="service_package_id" 
+                                       value="{{ old('service_package_id', $customerService->service_package_id) }}"
+                                       required>
+                                
+                                <!-- Dropdown Results -->
+                                <div id="servicePackageResults" 
+                                     class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                     style="display: none; max-height: 300px; overflow-y: auto; z-index: 1000; top: 100%; margin-top: 2px;">
+                                </div>
+                            </div>
+                            
+                            <!-- Display selected package -->
+                            <div id="selectedPackageDisplay" class="mt-2" style="display: {{ $customerService->servicePackage ? 'block' : 'none' }};">
+                                <div class="alert alert-success mb-0 py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong><i class="fas fa-check-circle me-1"></i>Đã chọn:</strong> 
+                                            <span id="selectedPackageName">{{ $customerService->servicePackage->name ?? '' }}</span>
+                                            <span id="selectedPackageType" class="badge bg-secondary ms-2">{{ $customerService->servicePackage->account_type ?? '' }}</span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0" id="clearSelection">
+                                            <i class="fas fa-times"></i> Đổi gói
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            @error('service_package_id')
+                            <div class="text-danger mt-1"><small>{{ $message }}</small></div>
+                            @enderror
                         </div>
 
                         <!-- Family Account Selection -->
@@ -80,11 +119,12 @@
                                         <option value="">Chọn Family Account</option>
                                         @foreach($availableFamilyAccounts as $family)
                                         <option value="{{ $family->id }}"
-                                            data-current-members="{{ $family->family_members_count }}"
-                                            data-max-members="{{ $family->max_members }}"
+                                            data-used-slots="{{ $family->used_slots }}"
+                                            data-available-slots="{{ $family->available_slots }}"
+                                            data-max-slots="{{ $family->max_members }}"
                                             {{ old('family_account_id', $currentFamilyMembership?->family_account_id) == $family->id ? 'selected' : '' }}>
                                             {{ $family->family_name }} 
-                                            ({{ $family->family_members_count }}/{{ $family->max_members }} members)
+                                            ({{ $family->used_slots }}/{{ $family->max_members }} slots - Còn: {{ $family->available_slots }})
                                             - {{ $family->owner_name }}
                                         </option>
                                         @endforeach
@@ -92,7 +132,7 @@
                                     @error('family_account_id')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
-                                    <div class="form-text">Chọn Family Account để thêm khách hàng này vào</div>
+                                    <div class="form-text">Mỗi dịch vụ được gán = 1 slot</div>
                                 </div>
                                 @if($currentFamilyMembership)
                                 <div class="col-md-6">
@@ -104,6 +144,66 @@
                                     </div>
                                 </div>
                                 @endif
+                            </div>
+                        </div>
+
+                        <!-- Shared Credential Selection for Shared Account Services -->
+                        <div id="shared-credential-selection" class="col-md-12 mb-3" 
+                             style="display: {{ str_contains(strtolower($customerService->servicePackage->account_type ?? ''), 'dùng chung') ? 'block' : 'none' }};">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-key me-2"></i>
+                                        Chọn tài khoản dùng chung
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <label for="shared_credential_id" class="form-label">
+                                                <i class="fas fa-user-shield me-2 text-warning"></i>
+                                                Tài khoản <span class="text-danger">*</span>
+                                            </label>
+                                            <select class="form-select @error('shared_credential_id') is-invalid @enderror"
+                                                id="shared_credential_id"
+                                                name="shared_credential_id">
+                                                <option value="">Chọn tài khoản</option>
+                                                @if(isset($sharedCredentials) && $sharedCredentials->count() > 0)
+                                                @foreach($sharedCredentials as $cred)
+                                                <option value="{{ $cred->id }}"
+                                                    data-email="{{ $cred->email }}"
+                                                    data-password="{{ $cred->password }}"
+                                                    data-service-package-id="{{ $cred->service_package_id }}"
+                                                    data-current-users="{{ $cred->current_users }}"
+                                                    data-max-users="{{ $cred->max_users }}"
+                                                    data-available-slots="{{ $cred->available_slots }}"
+                                                    {{ $customerService->login_email == $cred->email ? 'selected' : '' }}>
+                                                    {{ $cred->email }} ({{ $cred->current_users }}/{{ $cred->max_users }} slots - Còn: {{ $cred->available_slots }})
+                                                </option>
+                                                @endforeach
+                                                @endif
+                                            </select>
+                                            @if(isset($sharedCredentials))
+                                            <small class="text-muted d-block mt-1">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                Tổng: {{ $sharedCredentials->count() }} tài khoản dùng chung còn slot
+                                            </small>
+                                            @endif
+                                            <div id="no-credential-for-package" class="alert alert-warning mt-2" style="display: none;">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                                <strong>Không có tài khoản dùng chung nào</strong> cho gói dịch vụ này.
+                                                <hr class="my-2">
+                                                <a href="{{ route('admin.shared-accounts.credentials') }}" target="_blank" class="btn btn-sm btn-warning">
+                                                    <i class="fas fa-plus me-1"></i>Quản lý tài khoản dùng chung
+                                                </a>
+                                            </div>
+                                            @error('shared_credential_id')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                            <div class="form-text">Chọn tài khoản để tự động điền thông tin đăng nhập</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -244,78 +344,6 @@
                             @error('internal_notes')
                             <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
-                        </div>
-
-                        <div class="col-md-12 mb-3">
-                            <label for="supplier_id" class="form-label">
-                                <i class="fas fa-truck me-2 text-warning"></i>
-                                Nhà cung cấp
-                            </label>
-                            <select class="form-select @error('supplier_id') is-invalid @enderror"
-                                id="supplier_id"
-                                name="supplier_id">
-                                <option value="">Chọn nhà cung cấp (tùy chọn)</option>
-                                @foreach($suppliers as $supplier)
-                                <option value="{{ $supplier->id }}"
-                                    data-supplier-name="{{ $supplier->supplier_name }}"
-                                    data-supplier-code="{{ $supplier->supplier_code }}"
-                                    data-products="{{ $supplier->products->map(function($p) { return $p->product_name . ' - ' . number_format($p->price, 0, ',', '.') . ' VND'; })->implode('|') }}"
-                                    data-services="{{ $supplier->products->map(function($p) { return $p->id . ':' . $p->product_name . ':' . $p->price; })->implode('|') }}"
-                                    {{ old('supplier_id', $customerService->supplier_id) == $supplier->id ? 'selected' : '' }}>
-                                    {{ $supplier->supplier_code }} - {{ $supplier->supplier_name }}
-                                    @if($supplier->products->count() > 0)
-                                    ({{ $supplier->products->count() }} dịch vụ)
-                                    @else
-                                    (Chưa có dịch vụ)
-                                    @endif
-                                </option>
-                                @endforeach
-                            </select>
-                            @error('supplier_id')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <div class="form-text">Nhà cung cấp tài khoản dịch vụ này</div>
-                        </div>
-
-                        <!-- Thông tin chi tiết nhà cung cấp -->
-                        <div class="col-md-12 mb-3" id="supplier-details" style="display: none;">
-                            <div class="card border-warning">
-                                <div class="card-header bg-warning text-dark">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-info-circle me-2"></i>
-                                        Thông tin nhà cung cấp
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <strong>Mã NCC:</strong> <span id="supplier-code-display"></span><br>
-                                            <strong>Tên:</strong> <span id="supplier-name-display"></span>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <strong>Danh sách dịch vụ:</strong>
-                                            <ul id="supplier-products-list" class="mb-0 mt-1"></ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Chọn dịch vụ cụ thể -->
-                        <div class="col-md-12 mb-3" id="service-selection" style="display: none;">
-                            <label for="supplier_service_id" class="form-label">
-                                <i class="fas fa-laptop me-2 text-success"></i>
-                                Chọn dịch vụ cụ thể
-                            </label>
-                            <select class="form-select @error('supplier_service_id') is-invalid @enderror"
-                                id="supplier_service_id"
-                                name="supplier_service_id">
-                                <option value="">Chọn dịch vụ từ nhà cung cấp</option>
-                            </select>
-                            @error('supplier_service_id')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <div class="form-text">Chọn dịch vụ cụ thể mà nhà cung cấp sẽ cung cấp cho khách hàng này</div>
                         </div>
 
                         <!-- Thông tin lợi nhuận -->
@@ -613,100 +641,16 @@
             observer.observe(card, { attributes: true, attributeFilter: ['class'] });
         });
 
-        // Supplier handling code
-        const supplierSelect = document.getElementById('supplier_id');
-        const supplierDetails = document.getElementById('supplier-details');
-        const supplierCodeDisplay = document.getElementById('supplier-code-display');
-        const supplierNameDisplay = document.getElementById('supplier-name-display');
-        const supplierProductsList = document.getElementById('supplier-products-list');
-        const serviceSelection = document.getElementById('service-selection');
-        const supplierServiceSelect = document.getElementById('supplier_service_id');
-
-        // Handle supplier selection
-        supplierSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-
-            if (selectedOption.value) {
-                // Show supplier details
-                supplierDetails.style.display = 'block';
-
-                // Fill supplier information
-                supplierCodeDisplay.textContent = selectedOption.dataset.supplierCode;
-                supplierNameDisplay.textContent = selectedOption.dataset.supplierName;
-
-                // Fill products list
-                const products = selectedOption.dataset.products;
-                supplierProductsList.innerHTML = '';
-
-                if (products) {
-                    const productArray = products.split('|');
-                    productArray.forEach(function(product) {
-                        if (product.trim()) {
-                            const li = document.createElement('li');
-                            li.textContent = product;
-                            li.className = 'text-muted';
-                            supplierProductsList.appendChild(li);
-                        }
-                    });
-                } else {
-                    const li = document.createElement('li');
-                    li.textContent = 'Chưa có dịch vụ nào';
-                    li.className = 'text-muted fst-italic';
-                    supplierProductsList.appendChild(li);
-                }
-
-                // Handle service selection dropdown
-                const services = selectedOption.dataset.services;
-                supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
-
-                if (services) {
-                    serviceSelection.style.display = 'block';
-                    const serviceArray = services.split('|');
-                    serviceArray.forEach(function(service) {
-                        if (service.trim()) {
-                            const parts = service.split(':');
-                            if (parts.length === 3) {
-                                const serviceId = parts[0];
-                                const serviceName = parts[1];
-                                const servicePrice = parseInt(parts[2]);
-
-                                const option = document.createElement('option');
-                                option.value = serviceId;
-                                option.textContent = serviceName + ' - ' + servicePrice.toLocaleString('vi-VN') + ' VND';
-                                supplierServiceSelect.appendChild(option);
-                            }
-                        }
-                    });
-                } else {
-                    serviceSelection.style.display = 'none';
-                }
-            } else {
-                // Hide supplier details and service selection
-                supplierDetails.style.display = 'none';
-                serviceSelection.style.display = 'none';
-                supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
-            }
-        });
-
-        // Show supplier details if already selected (for existing data or validation errors)
-        if (supplierSelect.value) {
-            supplierSelect.dispatchEvent(new Event('change'));
-
-            // Restore selected service if any
-            const selectedServiceId = '{{ old("supplier_service_id", $customerService->supplier_service_id) }}';
-            if (selectedServiceId) {
-                setTimeout(function() {
-                    supplierServiceSelect.value = selectedServiceId;
-                }, 100);
-            }
-        }
-
         // Format profit amount input with thousand separators
         const profitAmountInput = document.getElementById('profit_amount');
         if (profitAmountInput) {
             // Format existing value on page load
             if (profitAmountInput.value) {
-                profitAmountInput.value = formatNumberInput(profitAmountInput.value);
+                // Remove all non-numeric characters first, then format
+                let cleanValue = profitAmountInput.value.replace(/[^0-9]/g, '');
+                if (cleanValue) {
+                    profitAmountInput.value = formatNumberInput(cleanValue);
+                }
             }
 
             // Format as user types
@@ -725,11 +669,254 @@
                 profitAmountInput.value = cleanValue;
             });
         }
+
+        // Service Package Autocomplete Search
+        const servicePackageSearch = document.getElementById('servicePackageSearch');
+        const servicePackageInput = document.getElementById('service_package_id');
+        const servicePackageResults = document.getElementById('servicePackageResults');
+        const selectedPackageDisplay = document.getElementById('selectedPackageDisplay');
+        const selectedPackageName = document.getElementById('selectedPackageName');
+        const clearSelectionBtn = document.getElementById('clearSelection');
+        
+        // Get all service packages data
+        const allServicePackages = {!! json_encode($servicePackages->map(function($pkg) {
+            return [
+                'id' => $pkg->id,
+                'name' => $pkg->name,
+                'account_type' => $pkg->account_type,
+                'category' => $pkg->category ? $pkg->category->name : 'Chưa phân loại'
+            ];
+        })->values()) !!};
+        
+        // Show selected package on load if exists
+        const currentPackageId = '{{ old('service_package_id', $customerService->service_package_id) }}';
+        if (currentPackageId) {
+            const currentPackage = allServicePackages.find(pkg => pkg.id == currentPackageId);
+            if (currentPackage) {
+                selectedPackageName.textContent = currentPackage.name;
+                const selectedPackageType = document.getElementById('selectedPackageType');
+                if (selectedPackageType) {
+                    selectedPackageType.textContent = currentPackage.account_type;
+                }
+                selectedPackageDisplay.style.display = 'block';
+                servicePackageSearch.value = '';
+                servicePackageSearch.placeholder = '🔍 Tìm để đổi gói dịch vụ...';
+                
+                // Initialize account type sections visibility
+                updateAccountTypeSections(currentPackage.account_type, currentPackage.id);
+            }
+        }
+        
+        // Search input handler
+        servicePackageSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            
+            if (searchTerm.length < 2) {
+                servicePackageResults.style.display = 'none';
+                return;
+            }
+            
+            // Filter packages
+            const filtered = allServicePackages.filter(pkg => {
+                return pkg.name.toLowerCase().includes(searchTerm) ||
+                       pkg.account_type.toLowerCase().includes(searchTerm) ||
+                       pkg.category.toLowerCase().includes(searchTerm);
+            });
+            
+            // Helper function to escape HTML attributes
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Store filtered results globally for click handler
+            window.filteredServicePackages = filtered;
+            
+            // Display results
+            if (filtered.length > 0) {
+                servicePackageResults.innerHTML = filtered.map((pkg, index) => `
+                    <div class="service-package-item px-3 py-2 border-bottom" 
+                         style="cursor: pointer;"
+                         onclick="selectServicePackage(${index})"
+                         onmouseover="this.style.backgroundColor='#f8f9fa'"
+                         onmouseout="this.style.backgroundColor=''">
+                        <div style="pointer-events: none;">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>${escapeHtml(pkg.name)}</strong>
+                                    <br>
+                                    <small class="text-muted">${escapeHtml(pkg.category)}</small>
+                                </div>
+                                <span class="badge bg-secondary">${escapeHtml(pkg.account_type)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                servicePackageResults.style.display = 'block';
+            } else {
+                servicePackageResults.innerHTML = '<div class="px-3 py-2 text-muted">❌ Không tìm thấy gói dịch vụ phù hợp</div>';
+                servicePackageResults.style.display = 'block';
+            }
+        });
+        
+        // Clear selection
+        clearSelectionBtn.addEventListener('click', function() {
+            servicePackageInput.value = '';
+            selectedPackageDisplay.style.display = 'none';
+            servicePackageSearch.value = '';
+            servicePackageSearch.placeholder = '🔍 Gõ để tìm kiếm gói dịch vụ...';
+            servicePackageSearch.focus();
+            
+            // Hide all account type sections
+            const familySelection = document.getElementById('family-selection');
+            const sharedCredentialSelection = document.getElementById('shared-credential-selection');
+            if (familySelection) {
+                familySelection.style.display = 'none';
+            }
+            if (sharedCredentialSelection) {
+                sharedCredentialSelection.style.display = 'none';
+            }
+        });
+        
+        // Hide results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!servicePackageSearch.contains(e.target) && !servicePackageResults.contains(e.target)) {
+                servicePackageResults.style.display = 'none';
+            }
+        });
+        
+        // Focus search when clicking on results area
+        servicePackageSearch.addEventListener('focus', function() {
+            if (this.value.length >= 2) {
+                const event = new Event('input');
+                this.dispatchEvent(event);
+            }
+        });
     });
 
     // Function to format number with thousand separators
     function formatNumberInput(number) {
-        return parseInt(number).toLocaleString('vi-VN');
+        // Ensure number is a string and remove any non-numeric characters
+        let cleanNumber = String(number).replace(/[^0-9]/g, '');
+        if (!cleanNumber) return '';
+        return parseInt(cleanNumber).toLocaleString('vi-VN');
     }
+    
+    // Global function to select service package from dropdown
+    function selectServicePackage(index) {
+        const pkg = window.filteredServicePackages ? window.filteredServicePackages[index] : null;
+        
+        if (!pkg) {
+            console.log('No package found at index:', index);
+            return;
+        }
+        
+        console.log('Selected package:', pkg.name, pkg.id, pkg.account_type);
+        
+        // Get DOM elements
+        const servicePackageInput = document.getElementById('service_package_id');
+        const selectedPackageName = document.getElementById('selectedPackageName');
+        const selectedPackageType = document.getElementById('selectedPackageType');
+        const selectedPackageDisplay = document.getElementById('selectedPackageDisplay');
+        const servicePackageSearch = document.getElementById('servicePackageSearch');
+        const servicePackageResults = document.getElementById('servicePackageResults');
+        
+        // Set values
+        servicePackageInput.value = pkg.id;
+        selectedPackageName.textContent = pkg.name;
+        if (selectedPackageType) {
+            selectedPackageType.textContent = pkg.account_type;
+        }
+        selectedPackageDisplay.style.display = 'block';
+        
+        // Clear search and hide results
+        servicePackageSearch.value = '';
+        servicePackageResults.style.display = 'none';
+        
+        // Update account type sections based on selected package
+        updateAccountTypeSections(pkg.account_type, pkg.id);
+    }
+    
+    // Function to update visibility of account type sections
+    function updateAccountTypeSections(accountType, packageId) {
+        const accountTypeLower = (accountType || '').toLowerCase();
+        
+        const familySelection = document.getElementById('family-selection');
+        const sharedCredentialSelection = document.getElementById('shared-credential-selection');
+        
+        // Hide all sections first
+        if (familySelection) familySelection.style.display = 'none';
+        if (sharedCredentialSelection) sharedCredentialSelection.style.display = 'none';
+        
+        // Show appropriate section based on account type
+        if (accountTypeLower.includes('add family') || accountTypeLower.includes('add team')) {
+            if (familySelection) {
+                familySelection.style.display = 'block';
+            }
+        } else if (accountTypeLower.includes('dùng chung') || accountTypeLower.includes('shared')) {
+            if (sharedCredentialSelection) {
+                sharedCredentialSelection.style.display = 'block';
+                // Filter shared credentials by selected package
+                filterSharedCredentialsByPackage(packageId);
+            }
+        }
+        // For "chính chủ" or "cá nhân" types, both sections stay hidden
+    }
+    
+    // Function to filter shared credentials dropdown by selected package
+    function filterSharedCredentialsByPackage(packageId) {
+        const select = document.getElementById('shared_credential_id');
+        if (!select) return;
+        
+        const options = select.querySelectorAll('option');
+        let hasVisibleOptions = false;
+        
+        options.forEach(option => {
+            if (option.value === '') {
+                // Keep the placeholder option visible
+                option.style.display = '';
+                return;
+            }
+            
+            const optionPackageId = option.getAttribute('data-service-package-id');
+            if (optionPackageId == packageId) {
+                option.style.display = '';
+                hasVisibleOptions = true;
+            } else {
+                option.style.display = 'none';
+                if (option.selected) {
+                    option.selected = false;
+                    select.value = '';
+                }
+            }
+        });
+        
+        // Show warning if no credentials for this package
+        const noCredWarning = document.getElementById('no-credential-for-package');
+        if (noCredWarning) {
+            noCredWarning.style.display = hasVisibleOptions ? 'none' : 'block';
+        }
+    }
+    
+    // Handle shared credential selection to auto-fill email/password
+    document.addEventListener('DOMContentLoaded', function() {
+        const sharedCredSelect = document.getElementById('shared_credential_id');
+        if (sharedCredSelect) {
+            sharedCredSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const email = selectedOption.getAttribute('data-email');
+                    const password = selectedOption.getAttribute('data-password');
+                    
+                    const emailInput = document.getElementById('login_email');
+                    const passwordInput = document.getElementById('login_password');
+                    
+                    if (emailInput && email) emailInput.value = email;
+                    if (passwordInput && password) passwordInput.value = password;
+                }
+            });
+        }
+    });
 </script>
 @endpush

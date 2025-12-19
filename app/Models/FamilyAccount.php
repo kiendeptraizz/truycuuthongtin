@@ -83,37 +83,38 @@ class FamilyAccount extends Model
         return $this->hasMany(FamilyMember::class)->where('status', 'active');
     }
 
-    public function createdBy(): BelongsTo
+    public function customerServices(): HasMany
     {
-        return $this->belongsTo(Admin::class, 'created_by');
+        return $this->hasMany(\App\Models\CustomerService::class, 'family_account_id');
     }
 
-    public function managedBy(): BelongsTo
+    public function activeCustomerServices(): HasMany
     {
-        return $this->belongsTo(Admin::class, 'managed_by');
+        return $this->hasMany(\App\Models\CustomerService::class, 'family_account_id')
+            ->where('status', 'active');
     }
 
     /**
      * Helper methods
      */
 
-    // Cập nhật số thành viên hiện tại
+    // Cập nhật số thành viên hiện tại (đếm theo CustomerService - mỗi dịch vụ = 1 slot)
     public function updateCurrentMembers(): void
     {
-        $this->current_members = $this->members()->where('status', 'active')->count();
+        $this->current_members = $this->customerServices()->where('status', 'active')->count();
         $this->save();
     }
 
-    // Accessor để luôn trả về số thành viên chính xác
+    // Accessor để luôn trả về số slot chính xác (đếm theo CustomerService - mỗi dịch vụ = 1 slot)
     public function getCurrentMembersAttribute($value): int
     {
-        // Nếu có relation members được load, tính toán từ collection
-        if ($this->relationLoaded('members')) {
-            return $this->members->where('status', 'active')->count();
+        // Nếu có relation customerServices được load, tính toán từ collection
+        if ($this->relationLoaded('customerServices')) {
+            return $this->customerServices->where('status', 'active')->count();
         }
 
         // Nếu không có relation, trả về giá trị từ database hoặc tính toán trực tiếp
-        return $value ?? $this->members()->where('status', 'active')->count();
+        return $value ?? $this->customerServices()->where('status', 'active')->count();
     }
 
     // Đồng bộ thông tin với Customer Services

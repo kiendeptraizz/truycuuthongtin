@@ -13,7 +13,7 @@ class UpdateExpiredServices extends Command
      *
      * @var string
      */
-    protected $signature = 'services:update-expired';
+    protected $signature = 'services:update-expired {--include-today : Bao gồm cả dịch vụ hết hạn trong ngày hôm nay}';
 
     /**
      * The console command description.
@@ -27,14 +27,21 @@ class UpdateExpiredServices extends Command
      */
     public function handle()
     {
-        $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn...');
+        $includeToday = $this->option('include-today');
 
-        // Lấy thời điểm hôm qua cuối ngày (23:59:59)
-        $yesterday = Carbon::now()->subDay()->endOfDay();
+        if ($includeToday) {
+            $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn (BAO GỒM HÔM NAY)...');
+            // Bao gồm cả dịch vụ hết hạn hôm nay
+            $cutoffDate = Carbon::now()->endOfDay();
+        } else {
+            $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn...');
+            // Chỉ lấy dịch vụ hết hạn từ hôm qua trở về trước (mặc định)
+            $cutoffDate = Carbon::now()->subDay()->endOfDay();
+        }
 
         // Tìm các dịch vụ có status = 'active' nhưng đã hết hạn
         $expiredServices = CustomerService::where('status', 'active')
-            ->where('expires_at', '<=', $yesterday)
+            ->where('expires_at', '<=', $cutoffDate)
             ->get();
 
         $count = $expiredServices->count();

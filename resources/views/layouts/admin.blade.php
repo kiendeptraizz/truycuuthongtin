@@ -31,87 +31,29 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome - Latest Version -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet"
-        crossorigin="anonymous" referrerpolicy="no-referrer">
-    <!-- Fallback Font Awesome từ jsdelivr -->
-    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" rel="stylesheet">
-    <!-- ICON RESET CSS - Xóa sạch tất cả icons cũ -->
-    <link href="{{ asset('css/icon-reset.css') }}" rel="stylesheet">
-    <!-- FINAL ICON FIX CSS - Icons cuối cùng với emoji -->
-    <link href="{{ asset('css/final-icon-fix.css') }}" rel="stylesheet">
-    <!-- Optimized Admin CSS -->
-    <link href="{{ asset('css/admin-optimized.css') }}" rel="stylesheet">
+
+    <!-- Font Awesome 6 - Local -->
+    <link rel="stylesheet" href="{{ asset('css/fontawesome/all.min.css') }}" />
+
+    <!-- Modern Admin CSS -->
+    <link href="{{ asset('css/modern-admin.css') }}" rel="stylesheet">
 
     <!-- Navigation Fix CSS -->
     <link href="{{ asset('css/navigation-fix.css') }}" rel="stylesheet">
 
     <style>
-        /* Minimal inline styles for critical rendering */
-        :root {
-            --primary: #667eea;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #3b82f6;
-            --dark: #374151;
-            --light: #f8fafc;
-        }
-
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: #f8fafc;
-            margin: 0;
-            font-size: 14px;
-            line-height: 1.5;
-            color: #374151;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
         /* Prevent white screen issues */
-        html,
-        body {
+        html, body {
             visibility: visible !important;
             opacity: 1 !important;
         }
-
-        .main-content {
-            min-height: calc(100vh - 60px);
-            flex: 1;
+        
+        /* Sidebar submenu chevron animation */
+        .sidebar .nav-link[data-bs-toggle="collapse"] .fa-chevron-down {
+            transition: transform 0.3s ease;
         }
-
-        /* Critical layout styles */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 240px;
-            height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            z-index: 1000;
-            overflow-y: auto;
-        }
-
-        .main-content {
-            margin-left: 240px;
-            min-height: 100vh;
-        }
-
-        @media (max-width: 1024px) {
-            .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-            }
-
-            .sidebar.show {
-                transform: translateX(0);
-            }
-
-            .main-content {
-                margin-left: 0;
-            }
+        .sidebar .nav-link[data-bs-toggle="collapse"][aria-expanded="true"] .fa-chevron-down {
+            transform: rotate(180deg);
         }
     </style>
 
@@ -167,10 +109,17 @@
                         Family Accounts
                     </a>
 
-                    <a class="nav-link {{ request()->routeIs('admin.shared-accounts.*') ? 'active' : '' }}"
+                    <a class="nav-link {{ request()->routeIs('admin.shared-accounts.index') || request()->routeIs('admin.shared-accounts.show') ? 'active' : '' }}"
                         href="{{ route('admin.shared-accounts.index') }}">
                         <i class="fas fa-share-nodes me-3"></i>
                         Shared Accounts
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.shared-accounts.credentials*') ? 'active' : '' }} ms-3"
+                        href="{{ route('admin.shared-accounts.credentials') }}"
+                        style="font-size: 0.85em;">
+                        <i class="fas fa-key me-3"></i>
+                        Quản lý tài khoản
                     </a>
 
                     <hr class="text-white-50 mx-3">
@@ -190,30 +139,34 @@
 
                     <hr class="text-white-50 mx-3">
 
-                    <!-- Zalo Marketing -->
-                    <a class="nav-link {{ request()->routeIs('admin.zalo.dashboard') || request()->routeIs('admin.zalo.conversion-funnel') ? 'active' : '' }}"
-                        href="{{ route('admin.zalo.dashboard') }}">
-                        <i class="fas fa-comments me-3"></i>
-                        Zalo Marketing
+                    <!-- Zalo Marketing (Dropdown) -->
+                    <a class="nav-link d-flex justify-content-between align-items-center {{ request()->routeIs('admin.zalo.*') ? 'active' : '' }}"
+                        data-bs-toggle="collapse" href="#zaloSubmenu" role="button"
+                        aria-expanded="{{ request()->routeIs('admin.zalo.*') ? 'true' : 'false' }}">
+                        <span>
+                            <i class="fas fa-comments me-3"></i>
+                            Zalo Marketing
+                        </span>
+                        <i class="fas fa-chevron-down small"></i>
                     </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.zalo.accounts.*') ? 'active' : '' }}"
-                        href="{{ route('admin.zalo.accounts.index') }}">
-                        <i class="fas fa-user-circle me-3"></i>
-                        Tài khoản Zalo
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.zalo.groups.*') ? 'active' : '' }}"
-                        href="{{ route('admin.zalo.groups.index') }}">
-                        <i class="fas fa-users-rectangle me-3"></i>
-                        Nhóm mục tiêu
-                    </a>
-
-                    <a class="nav-link {{ request()->routeIs('admin.zalo.campaigns.*') ? 'active' : '' }}"
-                        href="{{ route('admin.zalo.campaigns.index') }}">
-                        <i class="fas fa-paper-plane me-3"></i>
-                        Chiến dịch tin nhắn
-                    </a>
+                    <div class="collapse {{ request()->routeIs('admin.zalo.*') ? 'show' : '' }}" id="zaloSubmenu">
+                        <a class="nav-link ps-5 py-1 {{ request()->routeIs('admin.zalo.dashboard') || request()->routeIs('admin.zalo.conversion-funnel') ? 'active' : '' }}"
+                            href="{{ route('admin.zalo.dashboard') }}" style="font-size: 0.85em;">
+                            <i class="fas fa-chart-pie me-2"></i>Dashboard
+                        </a>
+                        <a class="nav-link ps-5 py-1 {{ request()->routeIs('admin.zalo.accounts.*') ? 'active' : '' }}"
+                            href="{{ route('admin.zalo.accounts.index') }}" style="font-size: 0.85em;">
+                            <i class="fas fa-user-circle me-2"></i>Tài khoản
+                        </a>
+                        <a class="nav-link ps-5 py-1 {{ request()->routeIs('admin.zalo.groups.*') ? 'active' : '' }}"
+                            href="{{ route('admin.zalo.groups.index') }}" style="font-size: 0.85em;">
+                            <i class="fas fa-users me-2"></i>Nhóm mục tiêu
+                        </a>
+                        <a class="nav-link ps-5 py-1 {{ request()->routeIs('admin.zalo.campaigns.*') ? 'active' : '' }}"
+                            href="{{ route('admin.zalo.campaigns.index') }}" style="font-size: 0.85em;">
+                            <i class="fas fa-paper-plane me-2"></i>Chiến dịch
+                        </a>
+                    </div>
 
                     <hr class="text-white-50 mx-3">
 
@@ -222,13 +175,22 @@
                     <a class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}"
                         href="{{ route('admin.revenue.index') }}">
                         <i class="fas fa-chart-line me-3"></i>
-                        Thống kê doanh thu
+                        Thống kê lợi nhuận
                     </a>
 
                     <a class="nav-link {{ request()->routeIs('admin.backup.*') ? 'active' : '' }}"
                         href="{{ route('admin.backup.index') }}">
                         <i class="fas fa-database me-3"></i>
                         Backup
+                    </a>
+
+                    <hr class="text-white-50 mx-3">
+
+                    <!-- Resource Management -->
+                    <a class="nav-link {{ request()->routeIs('admin.resources.*') ? 'active' : '' }}"
+                        href="{{ route('admin.resources.index') }}">
+                        <i class="fas fa-boxes me-3"></i>
+                        Quản lý Tài nguyên
                     </a>
 
                     <hr class="text-white-50 mx-3">
@@ -258,23 +220,6 @@
                             <div class="text-muted me-4 d-none d-md-block">
                                 <i class="fas fa-calendar me-2"></i>
                                 {{ now()->format('d/m/Y H:i') }}
-                            </div>
-                            <div class="dropdown">
-                                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-user me-2"></i>
-                                    <span class="d-none d-sm-inline">{{ Auth::guard('admin')->user()->name ?? 'Admin' }}</span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                    <li>
-                                        <form method="POST" action="{{ route('admin.logout') }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="dropdown-item">
-                                                <i class="fas fa-sign-out-alt me-2 text-danger"></i>
-                                                Đăng xuất
-                                            </button>
-                                        </form>
-                                    </li>
-                                </ul>
                             </div>
                         </div>
                     </div>
@@ -390,10 +335,6 @@
 
     <!-- Page-specific scripts -->
     @yield('scripts')
-
-    <!-- Push scripts stack -->
-    <!-- Final Icon Fix Script -->
-    <script src="{{ asset('js/final-icon-fix.js') }}"></script>
 
     @stack('scripts')
 </body>

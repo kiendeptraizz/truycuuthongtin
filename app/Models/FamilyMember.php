@@ -96,16 +96,6 @@ class FamilyMember extends Model
         return $this->belongsTo(Customer::class);
     }
 
-    public function addedBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'added_by');
-    }
-
-    public function removedBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'removed_by');
-    }
-
     /**
      * Đồng bộ thông tin member với Customer Service
      */

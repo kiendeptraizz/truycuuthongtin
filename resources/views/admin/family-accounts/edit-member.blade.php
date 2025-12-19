@@ -163,7 +163,7 @@
                                         </div>
                                         <div class="col-md-4">
                                             <small class="text-muted">Người thêm:</small><br>
-                                            <strong>{{ $member->addedBy->name ?? 'N/A' }}</strong>
+                                            <strong>System</strong>
                                         </div>
                                     </div>
                                 </div>

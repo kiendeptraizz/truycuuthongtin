@@ -3,11 +3,13 @@
 ## 📋 Vấn đề đã được giải quyết
 
 Trước đây, hệ thống có vấn đề sau:
-- Các dịch vụ đã hết hạn (theo `expires_at`) vẫn giữ `status = 'active'`
-- Filter "Đã hết hạn" hiển thị TẤT CẢ dịch vụ có `expires_at` đã qua (bao gồm cả cancelled)
-- Dẫn đến việc quản lý dịch vụ hết hạn không chính xác
+
+-   Các dịch vụ đã hết hạn (theo `expires_at`) vẫn giữ `status = 'active'`
+-   Filter "Đã hết hạn" hiển thị TẤT CẢ dịch vụ có `expires_at` đã qua (bao gồm cả cancelled)
+-   Dẫn đến việc quản lý dịch vụ hết hạn không chính xác
 
 ### Ví dụ trước khi sửa:
+
 ```
 - 138 dịch vụ có expires_at đã qua
   - 118 dịch vụ: status = 'active' (SAI!)
@@ -22,11 +24,13 @@ Trước đây, hệ thống có vấn đề sau:
 **File:** `app/Console/Commands/UpdateExpiredServices.php`
 
 Command này sẽ:
-- Tìm tất cả dịch vụ có `status = 'active'` nhưng `expires_at` đã qua
-- Tự động cập nhật `status` từ `'active'` sang `'expired'`
-- Hiển thị progress bar và thống kê kết quả
+
+-   Tìm tất cả dịch vụ có `status = 'active'` nhưng `expires_at` đã qua
+-   Tự động cập nhật `status` từ `'active'` sang `'expired'`
+-   Hiển thị progress bar và thống kê kết quả
 
 **Cách chạy thủ công:**
+
 ```bash
 php artisan services:update-expired
 ```
@@ -45,21 +49,24 @@ Schedule::command('services:update-expired')
 ```
 
 **Lưu ý:** Để scheduled task hoạt động, bạn cần:
+
 1. Thêm cron job trên server:
-   ```bash
-   * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
-   ```
+    ```bash
+    * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
+    ```
 2. Hoặc chạy trong development:
-   ```bash
-   php artisan schedule:work
-   ```
+    ```bash
+    php artisan schedule:work
+    ```
 
 ### 3. **Cập nhật Scope trong Model**
 
 **File:** `app/Models/CustomerService.php`
 
 #### Scope `expired()` - Đã được cập nhật
+
 Bây giờ chỉ lọc theo `status = 'expired'`:
+
 ```php
 public function scopeExpired($query)
 {
@@ -68,7 +75,9 @@ public function scopeExpired($query)
 ```
 
 #### Scope mới: `expiredByDate()`
+
 Lọc theo thời gian hết hạn (bất kể status):
+
 ```php
 public function scopeExpiredByDate($query)
 {
@@ -80,6 +89,7 @@ public function scopeExpiredByDate($query)
 ## 📊 Kết quả sau khi triển khai
 
 ### Trước khi chạy command:
+
 ```
 Status trong database:
 - active: 481 dịch vụ (trong đó 118 đã hết hạn!)
@@ -88,6 +98,7 @@ Status trong database:
 ```
 
 ### Sau khi chạy command:
+
 ```
 Status trong database:
 - active: 363 dịch vụ (chỉ còn dịch vụ còn hạn)
@@ -96,27 +107,32 @@ Status trong database:
 ```
 
 ### Filter "Đã hết hạn" trên UI:
-- **Trước:** Hiển thị 138 dịch vụ (bao gồm cả cancelled)
-- **Sau:** Hiển thị 119 dịch vụ (chỉ dịch vụ có status = expired)
+
+-   **Trước:** Hiển thị 138 dịch vụ (bao gồm cả cancelled)
+-   **Sau:** Hiển thị 119 dịch vụ (chỉ dịch vụ có status = expired)
 
 ## 🔍 Cách sử dụng
 
 ### 1. Xem dịch vụ đã hết hạn (theo status)
+
 ```php
 $expiredServices = CustomerService::expired()->get();
 ```
 
 ### 2. Xem dịch vụ đã hết hạn theo thời gian (bất kể status)
+
 ```php
 $expiredByDate = CustomerService::expiredByDate()->get();
 ```
 
 ### 3. Chạy command cập nhật thủ công
+
 ```bash
 php artisan services:update-expired
 ```
 
 ### 4. Kiểm tra scheduled tasks
+
 ```bash
 php artisan schedule:list
 ```
@@ -132,9 +148,11 @@ php artisan schedule:list
 ## 📝 Maintenance
 
 ### Kiểm tra xem có dịch vụ nào cần cập nhật không:
+
 ```bash
 php artisan tinker
 ```
+
 ```php
 CustomerService::where('status', 'active')
     ->where('expires_at', '<=', now()->subDay()->endOfDay())
@@ -142,6 +160,7 @@ CustomerService::where('status', 'active')
 ```
 
 ### Xem lịch sử scheduled tasks:
+
 ```bash
 tail -f storage/logs/laravel.log
 ```
@@ -155,14 +174,13 @@ tail -f storage/logs/laravel.log
 
 ## 🔗 Files liên quan
 
-- `app/Console/Commands/UpdateExpiredServices.php` - Command chính
-- `routes/console.php` - Schedule configuration
-- `app/Models/CustomerService.php` - Model với scopes
-- `app/Http/Controllers/Admin/CustomerServiceController.php` - Controller
+-   `app/Console/Commands/UpdateExpiredServices.php` - Command chính
+-   `routes/console.php` - Schedule configuration
+-   `app/Models/CustomerService.php` - Model với scopes
+-   `app/Http/Controllers/Admin/CustomerServiceController.php` - Controller
 
 ---
 
 **Ngày tạo:** 29/10/2025  
 **Version:** 1.0  
 **Status:** ✅ Active
-

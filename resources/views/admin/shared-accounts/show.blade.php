@@ -559,11 +559,7 @@
                                     @endif
                                 </td>
                                 <td class="d-none-lg">
-                                    @if($service->assignedBy)
-                                        <span style="font-size: 0.75rem;">{{ Str::limit($service->assignedBy->name, 10) }}</span>
-                                    @else
-                                        <span class="text-muted" style="font-size: 0.7rem;">-</span>
-                                    @endif
+                                    <span class="text-muted" style="font-size: 0.7rem;">-</span>
                                 </td>
                                 <td class="d-none-xxl logout-history">
                                     @if($latestLogout && $latestLogout->logout_at)

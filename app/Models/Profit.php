@@ -15,17 +15,12 @@ class Profit extends Model
     ];
 
     protected $casts = [
-        'profit_amount' => 'decimal:2',
+        'profit_amount' => 'integer',
     ];
 
     public function customerService(): BelongsTo
     {
         return $this->belongsTo(CustomerService::class);
-    }
-
-    public function createdBy(): BelongsTo
-    {
-        return $this->belongsTo(Admin::class, 'created_by');
     }
 
     // Scope để lấy profits theo ngày

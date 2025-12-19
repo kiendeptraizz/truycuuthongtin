@@ -87,13 +87,16 @@ class ProfitController extends Controller
         try {
             DB::beginTransaction();
 
+            // Parse profit_amount để xóa dấu chấm phân cách hàng nghìn
+            $profitAmount = parseCurrency($request->profit_amount);
+
             // Kiểm tra xem đã có profit cho đơn hàng này chưa
             $existingProfit = Profit::where('customer_service_id', $request->customer_service_id)->first();
 
             if ($existingProfit) {
                 // Cập nhật profit hiện có
                 $existingProfit->update([
-                    'profit_amount' => $request->profit_amount,
+                    'profit_amount' => $profitAmount,
                     'notes' => $request->notes,
                 ]);
                 $profit = $existingProfit;
@@ -101,7 +104,7 @@ class ProfitController extends Controller
                 // Tạo profit mới
                 $profit = Profit::create([
                     'customer_service_id' => $request->customer_service_id,
-                    'profit_amount' => $request->profit_amount,
+                    'profit_amount' => $profitAmount,
                     'notes' => $request->notes,
                     'created_by' => auth()->guard('admin')->id() ?? null,
                 ]);

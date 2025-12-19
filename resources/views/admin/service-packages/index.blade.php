@@ -356,9 +356,9 @@
                                 <i class="fas fa-user-circle me-2"></i>
                                 Loại tài khoản
                             </th>
-                            <th style="min-width: 180px;">
-                                <i class="fas fa-money-bill-wave me-2"></i>
-                                Giá & Lợi nhuận
+                            <th style="min-width: 150px;">
+                                <i class="fas fa-server me-2"></i>
+                                Số dịch vụ
                             </th>
                             <th style="min-width: 140px;">
                                 <i class="fas fa-users me-2"></i>
@@ -403,28 +403,39 @@
                                     <span class="badge bg-secondary">{{ $package->account_type }}</span>
                                 </td>
                                 <td>
+                                    @php
+                                        $serviceCount = $package->customerServices->count();
+                                        $activeServiceCount = $package->customerServices->where('status', 'active')->count();
+                                    @endphp
                                     <div>
-                                        <div class="fw-bold text-success mb-1">
-                                            <i class="fas fa-money-bill-wave me-1"></i>
-                                            {{ formatPrice($package->price) }}
-                                        </div>
-                                        @if($package->cost_price)
-                                            <small class="text-muted d-block">
-                                                <i class="fas fa-shopping-cart me-1"></i>
-                                                Nhập: {{ formatPrice($package->cost_price) }}
-                                            </small>
-                                            <div class="mt-1">
-                                                <span class="badge bg-success">
-                                                    <i class="fas fa-chart-line me-1"></i>
-                                                    +{{ formatPrice($package->getProfit()) }} ({{ $package->getProfitMargin() }}%)
-                                                </span>
+                                        @if($serviceCount > 0)
+                                            <div class="fw-bold text-primary mb-1">
+                                                <i class="fas fa-server me-1"></i>
+                                                {{ $serviceCount }} dịch vụ
                                             </div>
+                                            <div class="d-flex gap-2">
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check-circle me-1"></i>
+                                                    {{ $activeServiceCount }} hoạt động
+                                                </span>
+                                                @if($serviceCount > $activeServiceCount)
+                                                    <span class="badge bg-warning">
+                                                        <i class="fas fa-pause-circle me-1"></i>
+                                                        {{ $serviceCount - $activeServiceCount }} tạm dừng
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-minus me-1"></i>
+                                                Chưa có dịch vụ
+                                            </span>
                                         @endif
                                     </div>
                                 </td>
                                 <td>
                                     @php
-                                        $customerCount = $package->customerServices->count();
+                                        $customerCount = $package->customerServices->pluck('customer_id')->unique()->count();
                                     @endphp
                                     @if($customerCount > 0)
                                         <span class="badge bg-primary">

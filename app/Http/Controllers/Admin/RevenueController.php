@@ -126,6 +126,12 @@ class RevenueController extends Controller
      */
     public function getRevenueData(Request $request): JsonResponse
     {
+        Log::info('getRevenueData called', [
+            'start_date' => $request->get('start_date'),
+            'end_date' => $request->get('end_date'),
+            'group_by' => $request->get('group_by')
+        ]);
+
         $startDate = $request->get('start_date', Carbon::today()->toDateString());
         $endDate = $request->get('end_date', Carbon::today()->toDateString());
         $groupBy = $request->get('group_by', 'day'); // day, month, year
@@ -137,9 +143,11 @@ class RevenueController extends Controller
 
             // Validate date range
             if ($start > $end) {
+                Log::warning('Invalid date range', ['start' => $start, 'end' => $end]);
                 return response()->json(['error' => 'Start date cannot be after end date'], 400);
             }
         } catch (\Exception $e) {
+            Log::error('Date parse error', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
@@ -162,7 +170,7 @@ class RevenueController extends Controller
                 'revenue' => $order->servicePackage ? $order->servicePackage->price : 0,
                 'profit' => $order->profit ? $order->profit->profit_amount : 0,
                 'profit_notes' => $order->profit ? $order->profit->notes : '',
-                'profit_margin' => $order->servicePackage && $order->profit
+                'profit_margin' => $order->servicePackage && $order->profit && $order->servicePackage->price > 0
                     ? round(($order->profit->profit_amount / $order->servicePackage->price) * 100, 2)
                     : 0,
                 'created_at' => $order->created_at->format('d/m/Y H:i'),
@@ -183,6 +191,11 @@ class RevenueController extends Controller
                 ? round(($orders->sum('profit') / $orders->sum('revenue')) * 100, 2)
                 : 0,
         ];
+
+        Log::info('getRevenueData returning', [
+            'orders_count' => $orders->count(),
+            'summary' => $summary
+        ]);
 
         return response()->json([
             'orders' => $orders,
@@ -512,13 +525,16 @@ class RevenueController extends Controller
             'profit_notes' => 'nullable|string|max:1000',
         ]);
 
+        // Parse profit_amount để xóa dấu chấm phân cách hàng nghìn
+        $profitAmount = parseCurrency($request->profit_amount);
+
         $customerService = CustomerService::findOrFail($request->customer_service_id);
 
         // Kiểm tra xem đã có lợi nhuận chưa
         if ($customerService->profit) {
             // Cập nhật lợi nhuận hiện có
             $customerService->profit->update([
-                'profit_amount' => $request->profit_amount,
+                'profit_amount' => $profitAmount,
                 'notes' => $request->profit_notes,
             ]);
             $message = 'Lợi nhuận đã được cập nhật thành công!';
@@ -526,9 +542,9 @@ class RevenueController extends Controller
             // Tạo mới lợi nhuận
             Profit::create([
                 'customer_service_id' => $customerService->id,
-                'profit_amount' => $request->profit_amount,
+                'profit_amount' => $profitAmount,
                 'notes' => $request->profit_notes,
-                'created_by' => auth('admin')->id(),
+                'created_by' => 1,
             ]);
             $message = 'Lợi nhuận đã được thêm thành công!';
         }

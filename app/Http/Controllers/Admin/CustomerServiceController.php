@@ -8,6 +8,7 @@ use App\Models\ServicePackage;
 use App\Models\CustomerService;
 use App\Models\Profit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CustomerServiceController extends Controller
 {
@@ -16,11 +17,17 @@ class CustomerServiceController extends Controller
      */
     public function index(Request $request)
     {
-        $query = CustomerService::with(['customer', 'servicePackage.category']);
+        $query = CustomerService::with(['customer', 'servicePackage.category', 'familyAccount']);
 
-        // Filter by service package
+        // Filter by service package (by ID or by name search)
         if ($request->filled('service_package_id')) {
             $query->where('service_package_id', $request->service_package_id);
+        } elseif ($request->filled('service_package_search')) {
+            // Text-based search for service package name
+            $packageSearch = trim($request->service_package_search);
+            $query->whereHas('servicePackage', function ($q) use ($packageSearch) {
+                $q->where('name', 'like', "%{$packageSearch}%");
+            });
         }
 
         // Filter by service category
@@ -55,7 +62,10 @@ class CustomerServiceController extends Controller
                     $query->expiringSoon();
                     break;
                 case 'expired':
-                    $query->expired();
+                    // Lọc theo ngày hết hạn thực tế (đã qua ngày hết hạn hoặc hết hạn hôm nay)
+                    // Bất kể status là gì
+                    // Dịch vụ hết hạn ngày hôm nay được coi là "đã hết hạn" từ 00:00:00
+                    $query->where('expires_at', '<=', now()->startOfDay());
                     break;
                 case 'active':
                     $query->active();
@@ -105,17 +115,28 @@ class CustomerServiceController extends Controller
             });
         }
 
-        // Sắp xếp: dịch vụ sắp hết hạn lên trước, sau đó mới tới created_at
-        $customerServices = $query->orderByRaw('
-            CASE 
-                WHEN expires_at IS NOT NULL AND expires_at <= DATE_ADD(NOW(), INTERVAL 5 DAY) AND expires_at > NOW() 
-                THEN 0 
-                ELSE 1 
-            END
-        ')
-            ->orderBy('expires_at', 'asc')
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+        // Sắp xếp dựa trên filter
+        if ($request->filled('filter') && $request->filter === 'expired') {
+            // Khi lọc "Đã hết hạn": sắp xếp theo ngày hết hạn giảm dần (mới nhất lên đầu)
+            $customerServices = $query->orderBy('expires_at', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->paginate(15);
+        } else {
+            // Sắp xếp mặc định: dịch vụ sắp hết hạn lên trước, sau đó mới tới created_at
+            // Dịch vụ sắp hết hạn = hết hạn từ ngày mai đến 5 ngày tới
+            $customerServices = $query->orderByRaw('
+                CASE
+                    WHEN expires_at IS NOT NULL
+                    AND expires_at > CURDATE()
+                    AND expires_at <= DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+                    THEN 0
+                    ELSE 1
+                END
+            ')
+                ->orderBy('expires_at', 'asc')
+                ->orderBy('created_at', 'desc')
+                ->paginate(15);
+        }
 
         // Get data for filter dropdowns
         $servicePackages = ServicePackage::with('category')->orderBy('name')->get();
@@ -181,21 +202,47 @@ class CustomerServiceController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'service_package_id' => 'required|exists:service_packages,id',
-            'login_email' => 'required|email|max:255',
-            'login_password' => 'nullable|string|max:255',
-            'activated_at' => 'required|date',
-            'expires_at' => 'required|date|after:activated_at',
-            'status' => 'required|in:active,expired,cancelled',
-            'duration_days' => 'required|integer|min:1',
-            'cost_price' => 'required|string',
-            'price' => 'required|string',
-            'internal_notes' => 'nullable|string',
-            'profit_amount' => 'nullable|numeric|min:0',
-            'profit_notes' => 'nullable|string|max:1000',
+        // Log request data for debugging
+        Log::info('CustomerService Store Request', [
+            'profit_amount_original' => $request->profit_amount,
+            'all_data' => $request->except(['_token', 'login_password'])
         ]);
+
+        // Parse currency values BEFORE validation
+        if ($request->filled('profit_amount')) {
+            $parsedProfit = parseCurrency($request->profit_amount);
+            Log::info('Parsing profit_amount', [
+                'original' => $request->profit_amount,
+                'parsed' => $parsedProfit
+            ]);
+            $request->merge([
+                'profit_amount' => $parsedProfit
+            ]);
+        }
+
+        try {
+            $validatedData = $request->validate([
+                'customer_id' => 'required|exists:customers,id',
+                'service_package_id' => 'required|exists:service_packages,id',
+                'login_email' => 'required|email|max:255',
+                'login_password' => 'nullable|string|max:255',
+                'activated_at' => 'required|date',
+                'expires_at' => 'required|date|after:activated_at',
+                'status' => 'required|in:active,expired,cancelled',
+                'duration_days' => 'required|integer|min:1',
+                'cost_price' => 'required|string',
+                'price' => 'required|string',
+                'internal_notes' => 'nullable|string',
+                'profit_amount' => 'nullable|numeric|min:0',
+                'profit_notes' => 'nullable|string|max:1000',
+            ]);
+            Log::info('Validation passed');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed', [
+                'errors' => $e->errors()
+            ]);
+            throw $e;
+        }
 
         // Parse currency inputs
         $costPrice = parseCurrency($request->cost_price);
@@ -205,7 +252,7 @@ class CustomerServiceController extends Controller
         $customerService = CustomerService::create([
             'customer_id' => $request->customer_id,
             'service_package_id' => $request->service_package_id,
-            'assigned_by' => auth('admin')->id(),
+            'assigned_by' => 1,
             'login_email' => $request->login_email,
             'login_password' => $request->login_password,
             'activated_at' => $request->activated_at,
@@ -215,15 +262,17 @@ class CustomerServiceController extends Controller
             'cost_price' => $costPrice,
             'price' => $price,
             'internal_notes' => $request->internal_notes,
+            'family_account_id' => $request->family_account_id ?? null, // THÊM family_account_id
         ]);
 
         // Nếu có nhập lợi nhuận, tạo record profit
         if ($request->filled('profit_amount')) {
+            // Profit amount đã được parse ở trên
             Profit::create([
                 'customer_service_id' => $customerService->id,
                 'profit_amount' => $request->profit_amount,
                 'notes' => $request->profit_notes,
-                'created_by' => auth('admin')->id(),
+                'created_by' => 1,
             ]);
         }
 
@@ -237,7 +286,7 @@ class CustomerServiceController extends Controller
      */
     public function show(CustomerService $customerService)
     {
-        $customerService->load(['customer', 'servicePackage.category']);
+        $customerService->load(['customer', 'servicePackage.category', 'familyAccount']);
 
         return view('admin.customer-services.show', compact('customerService'));
     }
@@ -273,22 +322,35 @@ class CustomerServiceController extends Controller
         $hasFamilyMembership = $customerService->customer->activeFamilyMembership()->exists();
 
         // Get available family accounts for "add team" services
-        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['members'])
+        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['customerServices', 'servicePackage'])
             ->where('status', 'active')
             ->get()
             ->map(function ($family) {
-                $family->family_members_count = $family->members()->where('status', 'active')->count();
+                $family->used_slots = $family->customerServices()->where('status', 'active')->count();
+                $family->available_slots = $family->max_members - $family->used_slots;
                 return $family;
             })
             ->filter(function ($family) {
                 // Only show families that have available slots
-                return $family->family_members_count < $family->max_members;
+                return $family->used_slots < $family->max_members;
             });
 
         // Get current family account if exists
         $currentFamilyMembership = $customerService->customer->activeFamilyMembership()->first();
 
-        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts', 'currentFamilyMembership'));
+        // Get shared credentials for shared account services
+        $sharedCredentials = \App\Models\SharedAccountCredential::with(['servicePackage'])
+            ->where('status', 'active')
+            ->get()
+            ->map(function ($cred) {
+                $cred->available_slots = $cred->max_users - $cred->current_users;
+                return $cred;
+            })
+            ->filter(function ($cred) {
+                return $cred->available_slots > 0;
+            });
+
+        return view('admin.customer-services.edit', compact('customerService', 'customers', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts', 'currentFamilyMembership', 'sharedCredentials'));
     }
 
     /**
@@ -314,11 +376,14 @@ class CustomerServiceController extends Controller
 
         // Xử lý lợi nhuận
         if ($request->filled('profit_amount')) {
+            // Parse profit_amount để xóa dấu chấm phân cách hàng nghìn
+            $profitAmount = parseCurrency($request->profit_amount);
+
             // Kiểm tra xem đã có lợi nhuận chưa
             if ($customerService->profit) {
                 // Cập nhật lợi nhuận hiện có
                 $customerService->profit->update([
-                    'profit_amount' => $request->profit_amount,
+                    'profit_amount' => $profitAmount,
                     'notes' => $request->profit_notes,
                 ]);
                 $profitMessage = ' Lợi nhuận đã được cập nhật.';
@@ -326,9 +391,9 @@ class CustomerServiceController extends Controller
                 // Tạo mới lợi nhuận
                 Profit::create([
                     'customer_service_id' => $customerService->id,
-                    'profit_amount' => $request->profit_amount,
+                    'profit_amount' => $profitAmount,
                     'notes' => $request->profit_notes,
-                    'created_by' => auth('admin')->id(),
+                    'created_by' => 1,
                 ]);
                 $profitMessage = ' Lợi nhuận đã được ghi nhận.';
             }
@@ -354,15 +419,15 @@ class CustomerServiceController extends Controller
                     'end_date' => $request->expires_at,
                     'status' => 'active',
                     'removed_at' => null,
-                    'added_by' => auth('admin')->id(),
+                    'added_by' => 1,
                 ]
             );
             $familyMessage = ' Khách hàng đã được cập nhật trong Family Account.';
         }
 
         // Kiểm tra source parameter để xác định redirect về đâu
-        $source = $request->query('source');
-        $customerId = $request->query('customer_id');
+        $source = $request->input('redirect_source', $request->query('source'));
+        $customerId = $request->input('redirect_customer_id', $request->query('customer_id'));
 
         if ($source === 'customer' && $customerId) {
             // Nếu đến từ trang chi tiết khách hàng, redirect về trang đó
@@ -434,19 +499,35 @@ class CustomerServiceController extends Controller
         $hasFamilyMembership = $customer->activeFamilyMembership()->exists();
 
         // Get available family accounts for "add team" services
-        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['members'])
+        $availableFamilyAccounts = \App\Models\FamilyAccount::with(['customerServices', 'servicePackage'])
             ->where('status', 'active')
             ->get()
             ->map(function ($family) {
-                $family->family_members_count = $family->members()->where('status', 'active')->count();
+                $family->used_slots = $family->customerServices()->where('status', 'active')->count();
+                $family->available_slots = $family->max_members - $family->used_slots;
                 return $family;
             })
             ->filter(function ($family) {
                 // Only show families that have available slots
-                return $family->family_members_count < $family->max_members;
+                return $family->used_slots < $family->max_members;
             });
 
-        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts'));
+        // Get available shared credentials for "shared account" services
+        $sharedCredentials = \App\Models\SharedAccountCredential::with(['servicePackage'])
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->get()
+            ->map(function ($cred) {
+                $cred->current_users = $cred->customerServices()->where('status', 'active')->count();
+                $cred->available_slots = $cred->max_users - $cred->current_users;
+                return $cred;
+            })
+            ->filter(function ($cred) {
+                // Only show credentials that have available slots
+                return $cred->current_users < $cred->max_users;
+            });
+
+        return view('admin.customer-services.assign', compact('customer', 'servicePackages', 'suppliers', 'accountTypePriority', 'hasFamilyMembership', 'availableFamilyAccounts', 'sharedCredentials'));
     }
 
     /**
@@ -454,24 +535,52 @@ class CustomerServiceController extends Controller
      */
     public function assignService(Request $request, Customer $customer)
     {
-        $request->validate([
-            'service_package_id' => 'required|exists:service_packages,id',
-            'family_account_id' => 'nullable|exists:family_accounts,id',
-            'login_email' => 'required|email|max:255',
-            'login_password' => 'nullable|string|max:255',
-            'activated_at' => 'required|date',
-            'expires_at' => 'required|date|after:activated_at',
-            'duration_days' => 'required|integer|min:1',
-            'cost_price' => 'required|string',
-            'price' => 'required|string',
-            'internal_notes' => 'nullable|string',
-            'profit_amount' => 'nullable|numeric|min:0',
-            'profit_notes' => 'nullable|string|max:1000',
+        // Log request data for debugging
+        Log::info('AssignService Request', [
+            'customer_id' => $customer->id,
+            'profit_amount_original' => $request->profit_amount,
+            'all_data' => $request->except(['_token', 'login_password'])
         ]);
 
-        // Parse currency inputs
-        $costPrice = parseCurrency($request->cost_price);
-        $price = parseCurrency($request->price);
+        // Parse currency values BEFORE validation
+        if ($request->filled('profit_amount')) {
+            $parsedProfit = parseCurrency($request->profit_amount);
+            Log::info('Parsing profit_amount in assignService', [
+                'original' => $request->profit_amount,
+                'parsed' => $parsedProfit
+            ]);
+            $request->merge([
+                'profit_amount' => $parsedProfit
+            ]);
+        }
+
+        try {
+            $request->validate([
+                'service_package_id' => 'required|exists:service_packages,id',
+                'family_account_id' => 'nullable|exists:family_accounts,id',
+                'shared_credential_id' => 'nullable|exists:shared_account_credentials,id',
+                'login_email' => 'required|email|max:255',
+                'login_password' => 'nullable|string|max:255',
+                'activated_at' => 'required|date',
+                'expires_at' => 'required|date|after:activated_at',
+                'duration_days' => 'required|integer|min:1',
+                'cost_price' => 'nullable|string',
+                'price' => 'nullable|string',
+                'internal_notes' => 'nullable|string',
+                'profit_amount' => 'nullable|numeric|min:0',
+                'profit_notes' => 'nullable|string|max:1000',
+            ]);
+            Log::info('Validation passed in assignService');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed in assignService', [
+                'errors' => $e->errors()
+            ]);
+            throw $e;
+        }
+
+        // Parse currency inputs (default to 0 if not provided)
+        $costPrice = $request->filled('cost_price') ? parseCurrency($request->cost_price) : 0;
+        $price = $request->filled('price') ? parseCurrency($request->price) : 0;
 
         // Check if service package is "add family" type
         $servicePackage = ServicePackage::findOrFail($request->service_package_id);
@@ -483,22 +592,37 @@ class CustomerServiceController extends Controller
                 ])->withInput();
             }
 
-            // Check if family account has available slots
+            // Check if family account has available slots (mỗi CustomerService = 1 slot)
             $familyAccount = \App\Models\FamilyAccount::findOrFail($request->family_account_id);
-            $currentMembersCount = $familyAccount->members()->where('status', 'active')->count();
+            $currentServicesCount = $familyAccount->customerServices()->where('status', 'active')->count();
 
-            if ($currentMembersCount >= $familyAccount->max_members) {
+            if ($currentServicesCount >= $familyAccount->max_members) {
+                $availableSlots = $familyAccount->max_members - $currentServicesCount;
                 return back()->withErrors([
-                    'family_account_id' => 'Family Account này đã đầy. Vui lòng chọn Family Account khác.'
+                    'family_account_id' => "Family Account này đã đầy ({$currentServicesCount}/{$familyAccount->max_members} slots). Vui lòng chọn Family Account khác."
                 ])->withInput();
             }
+        }
+
+        // Check if service package is "shared account" type
+        $sharedCredentialId = null;
+        if ($servicePackage->account_type === 'Tài khoản dùng chung' && $request->filled('shared_credential_id')) {
+            $sharedCredential = \App\Models\SharedAccountCredential::findOrFail($request->shared_credential_id);
+            $currentUsersCount = $sharedCredential->customerServices()->where('status', 'active')->count();
+
+            if ($currentUsersCount >= $sharedCredential->max_users) {
+                return back()->withErrors([
+                    'shared_credential_id' => "Tài khoản này đã đầy ({$currentUsersCount}/{$sharedCredential->max_users} slots). Vui lòng chọn tài khoản khác."
+                ])->withInput();
+            }
+            $sharedCredentialId = $request->shared_credential_id;
         }
 
         // Tạo dịch vụ khách hàng
         $customerService = CustomerService::create([
             'customer_id' => $customer->id,
             'service_package_id' => $request->service_package_id,
-            'assigned_by' => auth('admin')->id(),
+            'assigned_by' => 1,
             'login_email' => $request->login_email,
             'login_password' => $request->login_password,
             'activated_at' => $request->activated_at,
@@ -508,15 +632,22 @@ class CustomerServiceController extends Controller
             'cost_price' => $costPrice,
             'price' => $price,
             'internal_notes' => $request->internal_notes,
+            'family_account_id' => $request->family_account_id ?? null,
+            'shared_credential_id' => $sharedCredentialId,
         ]);
 
         // Nếu có nhập lợi nhuận, tạo record profit
         if ($request->filled('profit_amount')) {
+            // Profit amount đã được parse ở trên trước validation
+            Log::info('Creating profit record', [
+                'profit_amount' => $request->profit_amount
+            ]);
+
             \App\Models\Profit::create([
                 'customer_service_id' => $customerService->id,
                 'profit_amount' => $request->profit_amount,
                 'notes' => $request->profit_notes,
-                'created_by' => auth('admin')->id(),
+                'created_by' => 1,
             ]);
         }
 
@@ -534,7 +665,7 @@ class CustomerServiceController extends Controller
                     'end_date' => $request->expires_at,     // Thêm ngày kết thúc
                     'status' => 'active', // Kích hoạt lại nếu thành viên đã bị xóa
                     'removed_at' => null, // Xóa dấu vết bị xóa
-                    'added_by' => auth('admin')->id(),
+                    'added_by' => 1,
                 ]
             );
         }

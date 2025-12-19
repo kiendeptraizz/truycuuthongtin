@@ -159,12 +159,30 @@ if (!function_exists('parseCurrency')) {
             return 0;
         }
 
-        // Remove currency symbols, spaces, and letters
+        // Convert to string if not already
+        $formattedAmount = (string) $formattedAmount;
+
+        // Remove currency symbols, spaces, and letters, keep only digits, dots, and commas
         $cleaned = preg_replace('/[^\d.,]/', '', $formattedAmount);
 
-        // Remove dots (thousand separators) and convert comma to dot for decimal
-        $cleaned = str_replace('.', '', $cleaned);
-        $cleaned = str_replace(',', '.', $cleaned);
+        // Check if this looks like a decimal number (has comma/dot at the end for cents)
+        // VD: 1,000.50 hoặc 1.000,50
+        if (preg_match('/[.,]\d{1,2}$/', $cleaned)) {
+            // This has decimal places
+            // If it ends with comma (European style): 1.000,50 -> 1000.50
+            if (preg_match('/,\d{1,2}$/', $cleaned)) {
+                $cleaned = str_replace('.', '', $cleaned); // Remove thousand separators (dots)
+                $cleaned = str_replace(',', '.', $cleaned); // Convert comma to dot for decimal
+            }
+            // If it ends with dot (US style): 1,000.50 -> 1000.50
+            else {
+                $cleaned = preg_replace('/,(?=\d{3})/', '', $cleaned); // Remove thousand separators (commas)
+            }
+        } else {
+            // This is just a whole number with thousand separators
+            // Remove all dots and commas as they are just separators
+            $cleaned = str_replace(['.', ','], '', $cleaned);
+        }
 
         return (float) $cleaned;
     }

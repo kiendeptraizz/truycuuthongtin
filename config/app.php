@@ -123,4 +123,18 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Family Account Settings
+    |--------------------------------------------------------------------------
+    |
+    | These configuration options determine the limits for family accounts.
+    | You can adjust the maximum number of members allowed per family.
+    |
+    */
+
+    'family_account' => [
+        'max_members' => env('FAMILY_MAX_MEMBERS', 50), // Tăng từ 20 lên 50, có thể tùy chỉnh
+    ],
+
 ];

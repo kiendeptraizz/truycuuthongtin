@@ -9,7 +9,6 @@ use App\Http\Controllers\Admin\CustomerServiceController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ContentSchedulerController;
 use App\Http\Controllers\Admin\InvoiceController;
-use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\LookupController;
 use App\Http\Controllers\Admin\CollaboratorController;
 use App\Http\Controllers\Admin\RevenueController;
@@ -18,6 +17,7 @@ use App\Http\Controllers\ZaloAccountController;
 use App\Http\Controllers\TargetGroupController;
 use App\Http\Controllers\MessageCampaignController;
 use App\Http\Controllers\ZaloDashboardController;
+use App\Http\Controllers\Admin\ResourceController;
 
 
 
@@ -73,15 +73,8 @@ Route::get('/test/create-lookup-data', function () {
     return 'Created test customer with code: LOOKUP001';
 });
 
-// Admin auth routes (không cần middleware)
-Route::prefix('admin')->name('admin.')->group(function () {
-    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-});
-
-// Admin routes (cần đăng nhập)
-Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.caching'])->group(function () {
+// Admin routes (Không cần đăng nhập)
+Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Icon demo page
@@ -171,6 +164,25 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
         ->name('shared-accounts.index');
     Route::get('shared-accounts/report', [\App\Http\Controllers\Admin\SharedAccountController::class, 'report'])
         ->name('shared-accounts.report');
+
+    // Shared Account Credentials Management
+    Route::get('shared-accounts/credentials', [\App\Http\Controllers\Admin\SharedAccountController::class, 'credentials'])
+        ->name('shared-accounts.credentials');
+    Route::get('shared-accounts/credentials/create', [\App\Http\Controllers\Admin\SharedAccountController::class, 'createCredential'])
+        ->name('shared-accounts.credentials.create');
+    Route::post('shared-accounts/credentials', [\App\Http\Controllers\Admin\SharedAccountController::class, 'storeCredential'])
+        ->name('shared-accounts.credentials.store');
+    Route::post('shared-accounts/credentials/bulk-import', [\App\Http\Controllers\Admin\SharedAccountController::class, 'bulkImportCredentials'])
+        ->name('shared-accounts.credentials.bulk-import');
+    Route::get('shared-accounts/credentials/{credential}/edit', [\App\Http\Controllers\Admin\SharedAccountController::class, 'editCredential'])
+        ->name('shared-accounts.credentials.edit');
+    Route::put('shared-accounts/credentials/{credential}', [\App\Http\Controllers\Admin\SharedAccountController::class, 'updateCredential'])
+        ->name('shared-accounts.credentials.update');
+    Route::delete('shared-accounts/credentials/{credential}', [\App\Http\Controllers\Admin\SharedAccountController::class, 'destroyCredential'])
+        ->name('shared-accounts.credentials.destroy');
+    Route::get('shared-accounts/credentials/by-package/{packageId}', [\App\Http\Controllers\Admin\SharedAccountController::class, 'getCredentialsByPackage'])
+        ->name('shared-accounts.credentials.by-package');
+
     Route::get('shared-accounts/{email}/edit', [\App\Http\Controllers\Admin\SharedAccountController::class, 'edit'])
         ->name('shared-accounts.edit');
     Route::put('shared-accounts/{email}', [\App\Http\Controllers\Admin\SharedAccountController::class, 'update'])
@@ -463,6 +475,46 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth', 'prevent.cachi
             ->name('campaigns.update-stats');
         Route::get('campaigns/{campaign}/report', [MessageCampaignController::class, 'report'])
             ->name('campaigns.report');
+    });
+
+    // ========================================================================
+    // 📦 QUẢN LÝ TÀI NGUYÊN (Resource Management)
+    // ========================================================================
+    Route::prefix('resources')->name('resources.')->group(function () {
+        // Danh mục tài nguyên
+        Route::get('/', [ResourceController::class, 'index'])->name('index');
+        Route::get('/create', [ResourceController::class, 'create'])->name('create');
+        Route::post('/', [ResourceController::class, 'store'])->name('store');
+        Route::get('/{resource}', [ResourceController::class, 'show'])->name('show');
+        Route::get('/{resource}/edit', [ResourceController::class, 'edit'])->name('edit');
+        Route::put('/{resource}', [ResourceController::class, 'update'])->name('update');
+        Route::delete('/{resource}', [ResourceController::class, 'destroy'])->name('destroy');
+
+        // Cập nhật hàng loạt tài khoản hết hạn
+        Route::post('/update-expired', [ResourceController::class, 'updateExpiredAccounts'])->name('update-expired');
+
+        // Tài khoản trong danh mục
+        Route::get('/{resource}/accounts/create', [ResourceController::class, 'createAccount'])->name('accounts.create');
+        Route::post('/{resource}/accounts', [ResourceController::class, 'storeAccount'])->name('accounts.store');
+
+        // Bulk import
+        Route::get('/{resource}/accounts/bulk-import', [ResourceController::class, 'bulkImportForm'])->name('accounts.bulk-import-form');
+        Route::post('/{resource}/accounts/bulk-import', [ResourceController::class, 'bulkImport'])->name('accounts.bulk-import');
+        Route::get('/{resource}/accounts/{account}/edit', [ResourceController::class, 'editAccount'])->name('accounts.edit');
+        Route::put('/{resource}/accounts/{account}', [ResourceController::class, 'updateAccount'])->name('accounts.update');
+        Route::delete('/{resource}/accounts/{account}', [ResourceController::class, 'destroyAccount'])->name('accounts.destroy');
+        Route::post('/{resource}/accounts/{account}/toggle', [ResourceController::class, 'toggleAvailable'])->name('accounts.toggle');
+        Route::post('/{resource}/accounts/{account}/mark-sold', [ResourceController::class, 'markAsSold'])->name('accounts.mark-sold');
+
+        // Bulk actions
+        Route::post('/{resource}/accounts/bulk-delete', [ResourceController::class, 'bulkDeleteAccounts'])->name('accounts.bulk-delete');
+        Route::post('/{resource}/accounts/bulk-update', [ResourceController::class, 'bulkUpdateAccounts'])->name('accounts.bulk-update');
+
+        // Subcategories (danh mục con)
+        Route::get('/{resource}/subcategories', [ResourceController::class, 'getSubcategories'])->name('subcategories.list');
+        Route::post('/{resource}/subcategories', [ResourceController::class, 'storeSubcategory'])->name('subcategories.store');
+        Route::put('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'updateSubcategory'])->name('subcategories.update');
+        Route::delete('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'destroySubcategory'])->name('subcategories.destroy');
     });
 });
 Route::get("/test-filter", function () {

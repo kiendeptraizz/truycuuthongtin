@@ -26,10 +26,20 @@
                         <i class="fas fa-arrow-left me-1"></i>
                         Quay lại danh sách
                     </a>
-                    <a href="{{ route('admin.family-accounts.edit', $familyAccount) }}" class="btn btn-primary">
+                    <a href="{{ route('admin.family-accounts.edit', $familyAccount) }}" class="btn btn-primary me-2">
                         <i class="fas fa-edit me-1"></i>
                         Chỉnh sửa
                     </a>
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteFamily()">
+                        <i class="fas fa-trash me-1"></i>
+                        Xóa Family
+                    </button>
+                    <form id="delete-family-form"
+                        action="{{ route('admin.family-accounts.destroy', $familyAccount) }}"
+                        method="POST" style="display: none;">
+                        @csrf
+                        @method('DELETE')
+                    </form>
                 </div>
             </div>
         </div>
@@ -76,18 +86,18 @@
                         <div class="col-6">
                             <small class="text-muted">Trạng thái:</small><br>
                             @php
-                                $statusColors = [
-                                    'active' => 'success',
-                                    'expired' => 'warning',
-                                    'suspended' => 'danger',
-                                    'cancelled' => 'secondary',
-                                ];
-                                $statusLabels = [
-                                    'active' => 'Hoạt động',
-                                    'expired' => 'Hết hạn',
-                                    'suspended' => 'Tạm ngưng',
-                                    'cancelled' => 'Đã hủy',
-                                ];
+                            $statusColors = [
+                            'active' => 'success',
+                            'expired' => 'warning',
+                            'suspended' => 'danger',
+                            'cancelled' => 'secondary',
+                            ];
+                            $statusLabels = [
+                            'active' => 'Hoạt động',
+                            'expired' => 'Hết hạn',
+                            'suspended' => 'Tạm ngưng',
+                            'cancelled' => 'Đã hủy',
+                            ];
                             @endphp
                             <span class="badge bg-{{ $statusColors[$familyAccount->status] ?? 'secondary' }}">
                                 {{ $statusLabels[$familyAccount->status] ?? $familyAccount->status }}
@@ -122,35 +132,44 @@
                         <div class="col-6">
                             <small class="text-muted">Ngày hết hạn:</small><br>
                             @if($familyAccount->expires_at)
-                                @php
-                                    $daysRemaining = $familyAccount->getDaysRemaining();
-                                    $isExpired = $familyAccount->isExpired();
-                                    $isExpiringSoon = $familyAccount->isExpiringSoon(7);
-                                @endphp
-                                <strong class="{{ $isExpired ? 'text-danger' : ($isExpiringSoon ? 'text-warning' : 'text-success') }}">
-                                    {{ $familyAccount->expires_at->format('d/m/Y') }}
-                                </strong>
-                                <br>
-                                <small class="text-muted">
-                                    @if($isExpired)
-                                        Đã hết hạn
-                                    @elseif($daysRemaining == 0)
-                                        Hết hạn hôm nay
-                                    @elseif($daysRemaining == 1)
-                                        Còn 1 ngày
-                                    @else
-                                        Còn {{ $daysRemaining }} ngày
-                                    @endif
-                                </small>
+                            @php
+                            $daysRemaining = $familyAccount->getDaysRemaining();
+                            $isExpired = $familyAccount->isExpired();
+                            $isExpiringSoon = $familyAccount->isExpiringSoon(7);
+                            @endphp
+                            <strong class="{{ $isExpired ? 'text-danger' : ($isExpiringSoon ? 'text-warning' : 'text-success') }}">
+                                {{ $familyAccount->expires_at->format('d/m/Y') }}
+                            </strong>
+                            <br>
+                            <small class="text-muted">
+                                @if($isExpired)
+                                Đã hết hạn
+                                @elseif($daysRemaining == 0)
+                                Hết hạn hôm nay
+                                @elseif($daysRemaining == 1)
+                                Còn 1 ngày
+                                @else
+                                Còn {{ $daysRemaining }} ngày
+                                @endif
+                            </small>
                             @else
-                                <span class="text-muted">Chưa thiết lập</span>
+                            <span class="text-muted">Chưa thiết lập</span>
                             @endif
                         </div>
                         <div class="col-6">
-                            <small class="text-muted">Thành viên:</small><br>
-                            <span class="badge {{ $familyAccount->current_members >= $familyAccount->max_members ? 'bg-danger' : 'bg-success' }} fs-6">
-                                {{ $activeMembers->count() }}/{{ $familyAccount->max_members }}
+                            <small class="text-muted">Slots đang sử dụng:</small><br>
+                            <span class="badge {{ $activeServices->count() >= $familyAccount->max_members ? 'bg-danger' : 'bg-success' }} fs-6">
+                                {{ $activeServices->count() }}/{{ $familyAccount->max_members }}
                             </span>
+                            <br>
+                            <small class="text-success mt-1 d-block">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Còn lại: <strong>{{ $familyAccount->max_members - $activeServices->count() }} slots</strong>
+                            </small>
+                            <small class="text-muted mt-1 d-block">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Mỗi dịch vụ = 1 slot
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -158,322 +177,260 @@
         </div>
     </div>
 
-    <!-- Members Section -->
-    <div class="row">
+    <!-- Services Using This Family Section -->
+    @if($totalServices > 0)
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">
-                            <i class="fas fa-users me-2"></i>
-                            Danh sách thành viên
-                            <span class="badge bg-primary">{{ $activeMembers->count() }}</span>
-                            @if($inactiveMembers->count() > 0)
-                                <span class="badge bg-secondary ms-2">{{ $inactiveMembers->count() }} đã xóa</span>
-                            @endif
-                        </h6>
-                        @if($activeMembers->count() < $familyAccount->max_members)
-                            <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                                <i class="fas fa-plus me-1"></i>
-                                Thêm thành viên
-                            </a>
-                        @else
-                            <span class="badge bg-warning">Family đã đầy</span>
+                    <h6 class="mb-0">
+                        <i class="fas fa-box-open me-2"></i>
+                        Dịch vụ đang sử dụng Family này (Mỗi dịch vụ = 1 slot)
+                        <span class="badge bg-primary">{{ $activeServices->count() }}</span>
+                        @if($totalServices > $activeServices->count())
+                        <span class="badge bg-secondary ms-2">{{ $totalServices - $activeServices->count() }} không hoạt động</span>
                         @endif
-                    </div>
+                    </h6>
                 </div>
                 <div class="card-body">
-                    <!-- Tabs -->
-                    <ul class="nav nav-tabs" id="memberTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">
-                                <i class="fas fa-check-circle text-success me-1"></i>
-                                Thành viên hoạt động ({{ $activeMembers->count() }})
-                            </button>
-                        </li>
-                        @if($inactiveMembers->count() > 0)
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="inactive-tab" data-bs-toggle="tab" data-bs-target="#inactive" type="button" role="tab">
-                                <i class="fas fa-times-circle text-muted me-1"></i>
-                                Đã xóa/Tạm dừng ({{ $inactiveMembers->count() }})
-                            </button>
-                        </li>
-                        @endif
-                    </ul>
-
-                    <div class="tab-content" id="memberTabsContent">
-                        <!-- Active Members Tab -->
-                        <div class="tab-pane fade show active" id="active" role="tabpanel">
-                            @if($activeMembers->count() > 0)
-                                <div class="table-responsive">
-                                    <table class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Khách hàng</th>
-                                                <th>Email thành viên</th>
-                                                <th>Thời gian hiệu lực</th>
-                                                <th>Trạng thái</th>
-                                                <th>Ngày tham gia</th>
-                                                <th>Hành động</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach ($activeMembers as $member)
-                                        <tr>
-                                            <td>
-                                                <span class="fw-bold">#{{ $member->id }}</span>
-                                            </td>
-                                            <td>
-                                                @if($member->customer)
-                                                    <div>
-                                                        <strong>{{ $member->customer->name }}</strong>
-                                                        <br>
-                                                        <small class="text-muted">{{ $member->customer->email }}</small>
-                                                        @if($member->customer->phone)
-                                                            <br>
-                                                            <small class="text-muted">{{ $member->customer->phone }}</small>
-                                                        @endif
-                                                    </div>
-                                                @else
-                                                    <span class="text-muted">Khách hàng đã bị xóa</span>
-                                                @endif
-                                            </td>
-                                            <td>{{ $member->member_email }}</td>
-                                            <td>
-                                                <div class="d-flex flex-column">
-                                                    <div class="mb-1">
-                                                        <small class="text-muted">Bắt đầu:</small>
-                                                        <span class="fw-bold">
-                                                            @if($member->start_date)
-                                                                {{ \Carbon\Carbon::parse($member->start_date)->format('d/m/Y') }}
-                                                            @else
-                                                                Chưa xác định
-                                                            @endif
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <small class="text-muted">Kết thúc:</small>
-                                                        @php
-                                                            $endDate = $member->end_date ? \Carbon\Carbon::parse($member->end_date) : null;
-                                                        @endphp
-                                                        <span class="fw-bold {{ $endDate && $endDate->isPast() ? 'text-danger' : 'text-success' }}">
-                                                            @if($endDate)
-                                                                {{ $endDate->format('d/m/Y') }}
-                                                            @else
-                                                                Không giới hạn
-                                                            @endif
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                @if($member->start_date && $member->end_date)
-                                                    @php
-                                                        $now = now();
-                                                        $startDate = \Carbon\Carbon::parse($member->start_date);
-                                                        $endDate = \Carbon\Carbon::parse($member->end_date);
-                                                        $isActive = $now->between($startDate, $endDate);
-                                                        $isExpired = $now->gt($endDate);
-                                                        $isUpcoming = $now->lt($startDate);
-                                                    @endphp
-                                                    
-                                                    @if($isActive)
-                                                        <span class="badge bg-success">
-                                                            <i class="fas fa-check-circle me-1"></i>
-                                                            Đang hoạt động
-                                                        </span>
-                                                    @elseif($isExpired)
-                                                        <span class="badge bg-danger">
-                                                            <i class="fas fa-times-circle me-1"></i>
-                                                            Đã hết hạn
-                                                        </span>
-                                                    @elseif($isUpcoming)
-                                                        <span class="badge bg-warning">
-                                                            <i class="fas fa-clock me-1"></i>
-                                                            Sắp hoạt động
-                                                        </span>
-                                                    @endif
-                                                @else
-                                                    @php
-                                                        $memberStatusColors = [
-                                                            'active' => 'success',
-                                                            'suspended' => 'warning',
-                                                            'removed' => 'danger',
-                                                        ];
-                                                        $memberStatusLabels = [
-                                                            'active' => 'Hoạt động',
-                                                            'suspended' => 'Tạm ngưng',
-                                                            'removed' => 'Đã xóa',
-                                                        ];
-                                                    @endphp
-                                                    <span class="badge bg-{{ $memberStatusColors[$member->status] ?? 'secondary' }}">
-                                                        {{ $memberStatusLabels[$member->status] ?? $member->status }}
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if($member->first_usage_at)
-                                                    <div>
-                                                        {{ $member->first_usage_at->format('d/m/Y') }}
-                                                        <br>
-                                                        <small class="text-muted">{{ $member->first_usage_at->diffForHumans() }}</small>
-                                                    </div>
-                                                @else
-                                                    <span class="text-muted">{{ $member->created_at->format('d/m/Y') }}</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if($member->status === 'active')
-                                                    <div class="btn-group" role="group">
-                                                        <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
-                                                           class="btn btn-sm btn-outline-primary" 
-                                                           title="Chỉnh sửa thành viên">
-                                                            <i class="fas fa-edit"></i> Sửa
-                                                        </a>
-                                                        <form method="POST" 
-                                                              action="{{ route('admin.family-accounts.remove-member', [$familyAccount, $member]) }}" 
-                                                              class="d-inline"
-                                                              onsubmit="return confirm('Bạn có chắc muốn xóa thành viên này?')">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thành viên">
-                                                                <i class="fas fa-trash-alt"></i> Xóa
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                @else
-                                                    <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
-                                                       class="btn btn-sm btn-outline-secondary" 
-                                                       title="Xem/Chỉnh sửa thành viên">
-                                                        <i class="fas fa-edit"></i> Sửa
-                                                    </a>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                            @else
-                                <div class="text-center py-5">
-                                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                                    <h5 class="text-muted">Chưa có thành viên hoạt động</h5>
-                                    <p class="text-muted mb-4">Family account này chưa có thành viên hoạt động nào</p>
-                                    <a href="{{ route('admin.family-accounts.add-member-form', $familyAccount) }}" class="btn btn-success">
-                                        <i class="fas fa-plus me-1"></i>
-                                        Thêm thành viên đầu tiên
-                                    </a>
+                    <!-- Search Box -->
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text"
+                                        class="form-control"
+                                        id="serviceSearch"
+                                        placeholder="Tìm kiếm theo tên, mã khách hàng, email, gói dịch vụ...">
                                 </div>
-                            @endif
-                        </div>
-
-                        <!-- Inactive Members Tab -->
-                        @if($inactiveMembers->count() > 0)
-                        <div class="tab-pane fade" id="inactive" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Khách hàng</th>
-                                            <th>Email thành viên</th>
-                                            <th>Thời gian hiệu lực</th>
-                                            <th>Trạng thái</th>
-                                            <th>Ngày xóa</th>
-                                            <th>Hành động</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach ($inactiveMembers as $member)
-                                        <tr class="table-secondary">
-                                            <td>
-                                                <span class="fw-bold">#{{ $member->id }}</span>
-                                            </td>
-                                            <td>
-                                                @if($member->customer)
-                                                    <div>
-                                                        <strong>{{ $member->customer->name }}</strong>
-                                                        <br>
-                                                        <small class="text-muted">{{ $member->customer->email }}</small>
-                                                        @if($member->customer->phone)
-                                                            <br>
-                                                            <small class="text-muted">{{ $member->customer->phone }}</small>
-                                                        @endif
-                                                    </div>
-                                                @else
-                                                    <span class="text-muted">Khách hàng đã bị xóa</span>
-                                                @endif
-                                            </td>
-                                            <td>{{ $member->member_email }}</td>
-                                            <td>
-                                                <div class="d-flex flex-column">
-                                                    <div class="mb-1">
-                                                        <small class="text-muted">Bắt đầu:</small>
-                                                        <span class="fw-bold">
-                                                            @if($member->start_date)
-                                                                {{ \Carbon\Carbon::parse($member->start_date)->format('d/m/Y') }}
-                                                            @else
-                                                                Chưa xác định
-                                                            @endif
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <small class="text-muted">Kết thúc:</small>
-                                                        @php
-                                                            $endDate = $member->end_date ? \Carbon\Carbon::parse($member->end_date) : null;
-                                                        @endphp
-                                                        <span class="fw-bold text-muted">
-                                                            @if($endDate)
-                                                                {{ $endDate->format('d/m/Y') }}
-                                                            @else
-                                                                Không giới hạn
-                                                            @endif
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                @if($member->status === 'removed')
-                                                    <span class="badge bg-danger">
-                                                        <i class="fas fa-times me-1"></i>Đã xóa
-                                                    </span>
-                                                @elseif($member->status === 'suspended')
-                                                    <span class="badge bg-warning">
-                                                        <i class="fas fa-pause me-1"></i>Tạm dừng
-                                                    </span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @if($member->removed_at)
-                                                    <div>
-                                                        {{ \Carbon\Carbon::parse($member->removed_at)->format('d/m/Y') }}
-                                                        <br>
-                                                        <small class="text-muted">{{ \Carbon\Carbon::parse($member->removed_at)->diffForHumans() }}</small>
-                                                    </div>
-                                                @else
-                                                    <span class="text-muted">-</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                <a href="{{ route('admin.family-accounts.edit-member-form', [$familyAccount, $member]) }}" 
-                                                   class="btn btn-sm btn-outline-secondary" 
-                                                   title="Xem chi tiết">
-                                                    <i class="fas fa-eye"></i> Xem
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="statusFilter">
+                                    <option value="">Tất cả trạng thái</option>
+                                    <option value="active">Hoạt động</option>
+                                    <option value="expired">Hết hạn</option>
+                                    <option value="cancelled">Đã hủy</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-outline-secondary" id="clearFilters">
+                                    <i class="fas fa-times me-1"></i>
+                                    Xóa bộ lọc
+                                </button>
                             </div>
                         </div>
-                        @endif
+                    </div>
+
+                    <div id="servicesListContainer">
+                        <div class="row g-2" id="servicesTableBody">
+                            @foreach($familyAccount->customerServices->sortByDesc('status') as $service)
+                            @php
+                            $statusColors = ['active' => 'success', 'expired' => 'warning', 'cancelled' => 'danger'];
+                            $statusLabels = ['active' => 'Hoạt động', 'expired' => 'Hết hạn', 'cancelled' => 'Đã hủy'];
+                            $borderColor = $service->status === 'active' ? 'success' : ($service->status === 'expired' ? 'warning' : 'secondary');
+                            @endphp
+                            <div class="col-12">
+                                <div class="card border-{{ $borderColor }} {{ $service->status !== 'active' ? 'bg-light' : '' }}">
+                                    <div class="card-body p-2">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <!-- Nút xem -->
+                                            <div>
+                                                @if($service->customer)
+                                                <a href="{{ route('admin.customers.show', $service->customer) }}"
+                                                    class="btn btn-sm btn-outline-primary" title="Xem khách hàng">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                @endif
+                                            </div>
+
+                                            <!-- Thông tin khách hàng -->
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                    @if($service->customer)
+                                                    <strong>{{ $service->customer->name }}</strong>
+                                                    <small class="text-muted">({{ $service->customer->customer_code ?? 'N/A' }})</small>
+                                                    @else
+                                                    <span class="text-muted">Đã xóa</span>
+                                                    @endif
+                                                    <span class="badge bg-{{ $statusColors[$service->status] ?? 'secondary' }}">
+                                                        {{ $statusLabels[$service->status] ?? ucfirst($service->status) }}
+                                                    </span>
+                                                </div>
+                                                <small class="text-muted">
+                                                    📧 {{ $service->login_email ?: ($service->customer->email ?? '-') }}
+                                                    @if($service->expires_at)
+                                                    &nbsp;|&nbsp; 📅 {{ \Carbon\Carbon::parse($service->expires_at)->format('d/m/Y') }}
+                                                    @endif
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    <div id="noResults" class="alert alert-info text-center" style="display: none;">
+                        <i class="fas fa-search me-2"></i>
+                        Không tìm thấy dịch vụ nào phù hợp với bộ lọc
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    @endif
 </div>
-@endsection
 
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('serviceSearch');
+        const statusFilter = document.getElementById('statusFilter');
+        const clearBtn = document.getElementById('clearFilters');
+        const tableBody = document.getElementById('servicesTableBody');
+        const noResults = document.getElementById('noResults');
+
+        // Store original rows
+        const services = {
+            !!json_encode($familyAccount - > customerServices - > map(function($service) {
+                return [
+                    'id' => $service - > id,
+                    'customer_name' => $service - > customer ? $service - > customer - > name : 'Đã xóa',
+                    'customer_code' => $service - > customer ? $service - > customer - > customer_code : null,
+                    'customer_email' => $service - > customer ? $service - > customer - > email : '',
+                    'login_email' => $service - > login_email,
+                    'customer_id' => $service - > customer ? $service - > customer - > id : null,
+                    'package_name' => $service - > servicePackage ? $service - > servicePackage - > name : 'N/A',
+                    'status' => $service - > status,
+                    'expires_at' => $service - > expires_at ? $service - > expires_at - > format('d/m/Y') : null,
+                ];
+            }) - > values()) !!
+        };
+
+        const statusColors = {
+            'active': 'success',
+            'expired': 'warning',
+            'cancelled': 'danger'
+        };
+
+        const statusLabels = {
+            'active': 'Hoạt động',
+            'expired': 'Hết hạn',
+            'cancelled': 'Đã hủy'
+        };
+
+        function renderTable(filteredServices) {
+            if (filteredServices.length === 0) {
+                tableBody.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }
+
+            noResults.style.display = 'none';
+
+            // Sort: active first, then others
+            filteredServices.sort((a, b) => {
+                if (a.status === 'active' && b.status !== 'active') return -1;
+                if (a.status !== 'active' && b.status === 'active') return 1;
+                return 0;
+            });
+
+            tableBody.innerHTML = filteredServices.map(service => {
+                const statusColor = statusColors[service.status] || 'secondary';
+                const statusLabel = statusLabels[service.status] || service.status;
+                const borderColor = service.status === 'active' ? 'success' : (service.status === 'expired' ? 'warning' : 'secondary');
+                const bgClass = service.status !== 'active' ? 'bg-light' : '';
+                const customerLink = service.customer_id ?
+                    `<a href="/admin/customers/${service.customer_id}" class="btn btn-sm btn-outline-primary" title="Xem khách hàng">
+                    <i class="fas fa-eye"></i>
+                </a>` : '';
+                const customerCode = service.customer_code ? `(${service.customer_code})` : '(N/A)';
+                const displayEmail = service.login_email || service.customer_email || '-';
+
+                return `
+                <div class="col-12">
+                    <div class="card border-${borderColor} ${bgClass}">
+                        <div class="card-body p-2">
+                            <div class="d-flex align-items-center gap-3">
+                                <div>${customerLink}</div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        ${service.customer_name ? `<strong>${service.customer_name}</strong> <small class="text-muted">${customerCode}</small>` : '<span class="text-muted">Đã xóa</span>'}
+                                        <span class="badge bg-${statusColor}">${statusLabel}</span>
+                                    </div>
+                                    <small class="text-muted">
+                                        📧 ${displayEmail}
+                                        ${service.expires_at ? `&nbsp;|&nbsp; 📅 ${service.expires_at}` : ''}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        function applyFilters() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const statusValue = statusFilter.value;
+
+            let filtered = services;
+
+            // Filter by search term
+            if (searchTerm) {
+                filtered = filtered.filter(service => {
+                    return (service.customer_name && service.customer_name.toLowerCase().includes(searchTerm)) ||
+                        (service.customer_code && service.customer_code.toLowerCase().includes(searchTerm)) ||
+                        (service.customer_email && service.customer_email.toLowerCase().includes(searchTerm)) ||
+                        (service.login_email && service.login_email.toLowerCase().includes(searchTerm)) ||
+                        (service.package_name && service.package_name.toLowerCase().includes(searchTerm));
+                });
+            }
+
+            // Filter by status
+            if (statusValue) {
+                filtered = filtered.filter(service => service.status === statusValue);
+            }
+
+            renderTable(filtered);
+        }
+
+        // Event listeners
+        searchInput.addEventListener('input', applyFilters);
+        statusFilter.addEventListener('change', applyFilters);
+
+        clearBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            statusFilter.value = '';
+            applyFilters();
+        });
+
+        // Initial render
+        renderTable(services);
+    });
+
+    // Confirm delete family account
+    function confirmDeleteFamily() {
+        const memberCount = {
+            {
+                $activeServices - > count()
+            }
+        };
+        let message = 'Bạn có chắc chắn muốn xóa Family Account "{{ addslashes($familyAccount->family_name) }}"?';
+
+        if (memberCount > 0) {
+            message += `\n\n⚠️ CẢNH BÁO: Family này đang có ${memberCount} dịch vụ khách hàng đang sử dụng!\nXóa sẽ gỡ bỏ liên kết các dịch vụ này khỏi Family.`;
+        }
+
+        if (confirm(message)) {
+            document.getElementById('delete-family-form').submit();
+        }
+    }
+</script>
+@endpush
+
+@endsection

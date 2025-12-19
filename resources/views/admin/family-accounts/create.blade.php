@@ -103,24 +103,23 @@
                                 @enderror
                             </div>
 
-                            <!-- Max Members -->
+                            <!-- Max Slots -->
                             <div class="col-md-6 mb-3">
                                 <label for="max_members" class="form-label">
-                                    <i class="fas fa-users me-1"></i>
-                                    Số Thành Viên Tối Đa <span class="text-danger">*</span>
+                                    <i class="fas fa-layer-group me-1"></i>
+                                    Số Slots Tối Đa <span class="text-danger">*</span>
                                 </label>
                                 <input type="number" 
                                        class="form-control @error('max_members') is-invalid @enderror" 
                                        id="max_members" 
                                        name="max_members" 
-                                       value="{{ old('max_members', 5) }}" 
-                                       min="1" 
-                                       max="20"
+                                       value="{{ old('max_members', 100) }}" 
+                                       min="1"
                                        required>
                                 @error('max_members')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
-                                <small class="form-text text-muted">Từ 1 đến 20 thành viên</small>
+                                <small class="form-text text-muted">Mỗi dịch vụ được gán = 1 slot</small>
                             </div>
 
                             <!-- Expires At -->
