@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Laravel Dev (all-in-one)",
+      "runtimeExecutable": "composer",
+      "runtimeArgs": ["run", "dev"],
+      "port": 8000
+    },
+    {
+      "name": "PHP Artisan Serve",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "serve"],
+      "port": 8000
+    },
+    {
+      "name": "Vite Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "Laravel Queue Listener",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "queue:listen", "--tries=1"],
+      "port": null
+    },
+    {
+      "name": "Laravel Pail (Logs)",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["artisan", "pail", "--timeout=0"],
+      "port": null
+    }
+  ]
+}

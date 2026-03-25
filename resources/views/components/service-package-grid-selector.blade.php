@@ -679,6 +679,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Apply filters
                 applyFilters();
+                autoCollapseEmptyCategories();
             });
         });
 
@@ -799,6 +800,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasVisiblePackages = visibleCategories.has(categoryName);
 
             section.style.display = hasVisiblePackages ? 'block' : 'none';
+            if (hasVisiblePackages) {
+                section.classList.remove('collapsed');
+            }
         });
 
         // Show/hide account type groups
