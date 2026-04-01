@@ -14,18 +14,15 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /app
 
-# Copy composer files first for caching
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-scripts
-
 # Copy application
 COPY . .
 
-# Run post-install scripts
-RUN composer dump-autoload --optimize
+# Install dependencies (no-dev, no post-scripts to avoid tinker discovery)
+RUN composer install --no-dev --optimize-autoloader --no-scripts \
+    && composer dump-autoload --optimize --no-scripts
 
 # Cache views
-RUN php artisan view:cache
+RUN php artisan view:cache 2>/dev/null || true
 
 # Expose port
 EXPOSE ${PORT:-8080}
