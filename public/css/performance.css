@@ -1,0 +1,293 @@
+/**
+ * Performance Optimization CSS
+ * Reduces animations and improves rendering performance
+ */
+
+/* Smooth scrolling for the whole page */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Enable GPU acceleration for commonly animated elements */
+.card,
+.modal,
+.dropdown-menu,
+.table-responsive,
+.btn,
+.nav-link,
+.form-control,
+.form-select {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Reduce transition durations for snappier feel */
+* {
+    transition-duration: 0.1s !important;
+}
+
+/* Disable all animations for maximum performance */
+.no-animations * {
+    animation: none !important;
+    transition: none !important;
+}
+
+/* Optimize table rendering */
+.table {
+    contain: style paint;
+}
+
+.table tbody {
+    contain: layout style paint;
+}
+
+.table tr {
+    contain: layout style paint;
+}
+
+/* Optimize scrolling performance */
+.table-responsive {
+    will-change: scroll-position;
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Reduce box-shadow complexity on hover states */
+.btn:hover,
+.card:hover,
+.nav-link:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Optimize font rendering */
+body {
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reduce paint areas for sticky elements */
+.sticky-column {
+    contain: layout style;
+}
+
+/* Optimize dropdown animations */
+.dropdown-menu {
+    animation: none !important;
+    transition: opacity 0.1s ease !important;
+}
+
+.dropdown-menu.show {
+    opacity: 1;
+}
+
+/* Reduce sidebar animation complexity */
+.sidebar .nav-link {
+    transition: background-color 0.1s ease, color 0.1s ease !important;
+}
+
+/* Optimize modal performance */
+.modal.fade .modal-dialog {
+    transition: transform 0.15s ease-out !important;
+}
+
+.modal-backdrop.fade {
+    transition: opacity 0.15s linear !important;
+}
+
+/* Reduce checkbox animation */
+.form-check-input {
+    transition: background-color 0.1s ease, border-color 0.1s ease !important;
+}
+
+/* Optimize card hover effects */
+.card {
+    transition: box-shadow 0.1s ease !important;
+}
+
+/* Optimize badge animations */
+.badge {
+    transition: none !important;
+}
+
+/* Optimize alert transitions */
+.alert {
+    transition: opacity 0.15s ease !important;
+}
+
+/* Reduce gradient complexity */
+.btn-primary,
+.btn-success,
+.btn-danger,
+.btn-warning,
+.btn-info {
+    background-image: none !important;
+}
+
+/* Optimize pagination */
+.pagination .page-link {
+    transition: color 0.1s ease, background-color 0.1s ease !important;
+}
+
+/* Lazy load images below the fold */
+img[loading="lazy"] {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+img[loading="lazy"].loaded,
+img[loading="lazy"]:not([src=""]) {
+    opacity: 1;
+}
+
+/* Reduce layout shifts */
+.card-body {
+    min-height: 50px;
+}
+
+/* Optimize input focus states */
+.form-control:focus,
+.form-select:focus {
+    transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+/* Content visibility for off-screen content */
+@supports (content-visibility: auto) {
+    .card:not(:first-child) {
+        content-visibility: auto;
+        contain-intrinsic-size: 0 200px;
+    }
+}
+
+/* Prefer reduced motion for users who requested it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ========== ADVANCED PERFORMANCE OPTIMIZATIONS ========== */
+
+/* Optimize will-change for interactive elements */
+.btn:hover,
+.nav-link:hover,
+.dropdown-item:hover {
+    will-change: background-color, color;
+}
+
+/* Reduce repaints on scroll */
+.table-responsive {
+    will-change: transform;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optimize sidebar performance */
+.sidebar {
+    will-change: transform;
+}
+
+.sidebar .nav-link {
+    contain: layout style;
+}
+
+/* Faster hover states */
+.btn {
+    transition: background-color 0.08s ease, border-color 0.08s ease !important;
+}
+
+.nav-link {
+    transition: background-color 0.08s ease !important;
+}
+
+/* Optimize checkbox interactions */
+.form-check-input {
+    transition: none !important;
+}
+
+/* Faster table row hover */
+.table tbody tr {
+    transition: background-color 0.05s ease !important;
+}
+
+/* Optimize modals - instant appearance */
+.modal.fade .modal-dialog {
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
+}
+
+.modal-backdrop {
+    transition: opacity 0.1s ease !important;
+}
+
+/* Instant dropdown appearance */
+.dropdown-menu {
+    transition: opacity 0.05s ease !important;
+}
+
+/* Optimize scrollbar for smoother scrolling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Use passive event listeners hint */
+.table-responsive,
+.sidebar,
+.modal-body {
+    touch-action: pan-y;
+}
+
+/* Reduce paint complexity */
+.card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
+.card:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+}
+
+/* Optimize badge rendering */
+.badge {
+    contain: layout style;
+}
+
+/* Faster alert transitions */
+.alert {
+    transition: opacity 0.1s ease !important;
+}
+
+/* Optimize sticky columns */
+.sticky-column {
+    will-change: transform;
+    backface-visibility: hidden;
+}
+
+/* Reduce complexity of gradients */
+.bg-gradient {
+    background-image: none !important;
+}
+
+/* Optimize font loading display */
+body {
+    font-display: swap;
+}
+

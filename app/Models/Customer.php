@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Customer extends Model
 {
@@ -20,6 +21,49 @@ class Customer extends Model
     protected $casts = [
         'is_collaborator' => 'boolean',
     ];
+
+    /**
+     * Format tên khách hàng theo đúng định dạng Tiếng Việt
+     * VD: "phùng văn đại" hoặc "PHÙNG VĂN ĐẠI" -> "Phùng Văn Đại"
+     * Mutator: Tự động format khi lưu vào database
+     * Accessor: Tự động format khi đọc từ database (backup)
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => $this->formatVietnameseName($value),
+            set: fn ($value) => $this->formatVietnameseName($value),
+        );
+    }
+
+    /**
+     * Lấy tên gốc chưa format (để dùng khi cần)
+     */
+    public function getRawNameAttribute(): ?string
+    {
+        return $this->attributes['name'] ?? null;
+    }
+
+    /**
+     * Format tên tiếng Việt - Viết hoa đầu mỗi từ
+     */
+    private function formatVietnameseName(?string $name): ?string
+    {
+        if (empty($name)) {
+            return $name;
+        }
+
+        // Chuyển về lowercase trước, sau đó viết hoa đầu mỗi từ
+        $name = mb_strtolower($name, 'UTF-8');
+        
+        // Tách các từ và viết hoa chữ cái đầu
+        $words = explode(' ', $name);
+        $formattedWords = array_map(function ($word) {
+            return mb_convert_case($word, MB_CASE_TITLE, 'UTF-8');
+        }, $words);
+
+        return implode(' ', $formattedWords);
+    }
 
     public function customerServices(): HasMany
     {

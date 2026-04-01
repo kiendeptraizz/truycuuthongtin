@@ -772,9 +772,6 @@
     let currentFilters = {};
 
     $(document).ready(function() {
-        console.log('=== REVENUE PAGE: Document Ready ===');
-        console.log('jQuery version:', $.fn.jquery);
-        console.log('CSRF token:', $('meta[name="csrf-token"]').attr('content'));
         
         // Setup CSRF token for AJAX requests
         $.ajaxSetup({
@@ -784,7 +781,6 @@
             timeout: 30000 // 30 seconds timeout
         });
 
-        console.log('Document ready, starting initialization...');
 
         // Initialize
         updateCurrentTime();
@@ -802,11 +798,9 @@
         });
 
         $('#start_date, #end_date, #group_by, #chart_type').on('change', function() {
-            console.log('Filter changed, reloading all data');
 
             // Force reload current tab data immediately
             const activeTab = $('.nav-pills .nav-link.active').attr('data-bs-target');
-            console.log('Current active tab on change:', activeTab);
 
             loadAllData();
         });
@@ -843,15 +837,11 @@
             $('#end_date').val(todayLocal);
         }
 
-        console.log('Date inputs ensured with local date:', todayLocal);
     }
 
     function loadInitialData() {
-        console.log('loadInitialData called');
         // Load growth comparisons first
-        console.log('Loading growth stats...');
         loadGrowthStats().then(function(data) {
-            console.log('Growth stats loaded successfully:', data);
         }).catch(function(xhr) {
             console.error('Growth stats failed:', xhr);
         });
@@ -860,10 +850,6 @@
     }
 
     function loadAllData() {
-        console.log('loadAllData called');
-        console.log('jQuery available:', typeof $ !== 'undefined');
-        console.log('Start date input exists:', $('#start_date').length > 0);
-        console.log('End date input exists:', $('#end_date').length > 0);
 
         currentFilters = {
             start_date: $('#start_date').val() || getLocalDateString(new Date()),
@@ -872,7 +858,6 @@
             chart_type: $('#chart_type').val() || 'line'
         };
 
-        console.log('Loading data with filters:', currentFilters);
 
         // Show loading states
         showLoadingStates();
@@ -883,13 +868,10 @@
             loadServiceStats(),
             loadGrowthStats()
         ]).then(() => {
-            console.log('All data loaded successfully');
 
             // Reload data for current active tab (especially important for services tab)
             const activeTab = $('.nav-pills .nav-link.active').attr('data-bs-target');
-            console.log('Current active tab:', activeTab);
             if (activeTab && activeTab !== '#overview') {
-                console.log('Reloading data for active tab:', activeTab);
                 handleTabChange(activeTab);
             }
         }).catch(error => {
@@ -946,7 +928,6 @@
             method: 'GET',
             data: currentFilters,
             success: function(response) {
-                console.log('Revenue data loaded:', response);
 
                 // Store orders data globally for export
                 window.currentOrdersData = response.orders;
@@ -986,7 +967,6 @@
         ];
 
         return Promise.all(promises).then(function(responses) {
-            console.log('All growth stats loaded:', responses);
 
             // Update comparison texts for each period
             if (responses[0]) { // day
@@ -1022,7 +1002,6 @@
                 period: period
             },
             success: function(response) {
-                console.log(`Growth stats for ${period} loaded:`, response);
                 return response;
             },
             error: function(xhr, status, error) {
@@ -1061,13 +1040,11 @@
     }
 
     function loadCategoryStats() {
-        console.log('Loading category stats with filters:', currentFilters);
         return $.ajax({
             url: '{{ route("admin.revenue.category-stats") }}',
             method: 'GET',
             data: currentFilters,
             success: function(response) {
-                console.log('Category stats response:', response);
                 updateCategoryStats(response);
             },
             error: function(xhr, status, error) {
@@ -1256,7 +1233,6 @@
     }
 
     function updateGrowthComparison(growth) {
-        console.log('updateGrowthComparison called with:', growth);
 
         if (!growth || !growth.current_period || !growth.previous_period || !growth.growth) {
             console.error('Invalid growth data structure:', growth);
@@ -1424,7 +1400,6 @@
     }
 
     function refreshOrdersList() {
-        console.log('Refreshing orders list...');
         loadAllData();
     }
 
@@ -1469,7 +1444,6 @@
     }
 
     function handleTabChange(target) {
-        console.log('Tab changed to:', target);
         switch (target) {
             case '#performance':
                 loadHourlyStats();
@@ -1479,7 +1453,6 @@
                 loadCustomerStats();
                 break;
             case '#services':
-                console.log('Loading category stats with current filters:', currentFilters);
                 loadCategoryStats();
                 break;
             case '#forecast':
@@ -1720,18 +1693,15 @@
     }
 
     function updateCategoryChart(categories) {
-        console.log('Updating category chart with data:', categories);
         const ctx = document.getElementById('categoryChart').getContext('2d');
 
         if (categoryChart) {
-            console.log('Destroying existing category chart');
             categoryChart.destroy();
             categoryChart = null;
         }
 
         const colors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69'];
 
-        console.log('Creating new category chart');
         categoryChart = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -1926,7 +1896,6 @@
         switch (period) {
             case 'today':
                 startDate = endDate = getLocalDateString(today);
-                console.log('Today filter: Using local date', startDate, 'instead of UTC', today.toISOString().split('T')[0]);
                 break;
             case 'yesterday':
                 const yesterday = new Date(today);
@@ -1941,7 +1910,6 @@
                 startOfWeek.setDate(today.getDate() - daysToSubtract);
                 startDate = getLocalDateString(startOfWeek);
                 endDate = getLocalDateString(today);
-                console.log('This week calculation: dayOfWeek =', dayOfWeek, ', daysToSubtract =', daysToSubtract);
                 break;
             case 'this_month':
                 startDate = getLocalDateString(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -1974,14 +1942,10 @@
         $('#start_date').val(startDate);
         $('#end_date').val(endDate);
 
-        console.log('Date range changed to:', period, 'from', startDate, 'to', endDate);
-        console.log('Today is:', getLocalDateString(today), '- Day of week:', today.getDay());
-        console.log('Today UTC vs Local: UTC=', today.toISOString().split('T')[0], ', Local=', getLocalDateString(today));
         loadAllData();
     }
 
     function refreshAllData() {
-        console.log('Refreshing all data including charts');
 
         // Destroy all existing charts to force recreation
         if (mainChart) {
@@ -2018,9 +1982,6 @@
     }
 
     function debugAjax() {
-        console.log('=== DEBUG AJAX ===');
-        console.log('Current filters:', currentFilters);
-        console.log('Testing revenue data API...');
 
         const testFilters = {
             start_date: getLocalDateString(new Date()),
@@ -2034,7 +1995,6 @@
             method: 'GET',
             data: testFilters,
             success: function(response) {
-                console.log('✅ Revenue API Success:', response);
                 alert('Revenue API hoạt động! Kiểm tra console để xem chi tiết.');
             },
             error: function(xhr, status, error) {
@@ -2043,13 +2003,11 @@
             }
         });
 
-        console.log('Testing service stats API...');
         $.ajax({
             url: '{{ route("admin.revenue.service-stats") }}',
             method: 'GET',
             data: testFilters,
             success: function(response) {
-                console.log('✅ Service Stats API Success:', response);
             },
             error: function(xhr, status, error) {
                 console.error('❌ Service Stats API Error:', xhr, status, error);
@@ -2060,12 +2018,10 @@
     // Placeholder functions for order actions
     function editProfit(orderId) {
         // TODO: Implement edit profit modal
-        console.log('Edit profit for order:', orderId);
     }
 
     function viewOrder(orderId) {
         // TODO: Implement view order details
-        console.log('View order:', orderId);
     }
 </script>
 @endpush

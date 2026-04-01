@@ -89,10 +89,15 @@ class BackupController extends Controller
      */
     public function download($filename)
     {
+        // Chỉ cho phép tên file, không cho path traversal (../../etc)
+        $filename = basename($filename);
         $filePath = $this->backupPath . '/' . $filename;
 
-        if (!file_exists($filePath)) {
-            abort(404, 'File backup không tồn tại');
+        // Kiểm tra file nằm trong thư mục backup
+        $realPath = realpath($filePath);
+        $realBackupPath = realpath($this->backupPath);
+        if (!$realPath || !$realBackupPath || !str_starts_with($realPath, $realBackupPath . DIRECTORY_SEPARATOR)) {
+            abort(403, 'Truy cập bị từ chối');
         }
 
         return Response::download($filePath);
@@ -103,7 +108,19 @@ class BackupController extends Controller
      */
     public function delete($filename)
     {
+        // Chỉ cho phép tên file, không cho path traversal
+        $filename = basename($filename);
         $filePath = $this->backupPath . '/' . $filename;
+
+        // Kiểm tra file nằm trong thư mục backup
+        $realPath = realpath($filePath);
+        $realBackupPath = realpath($this->backupPath);
+        if (!$realPath || !$realBackupPath || !str_starts_with($realPath, $realBackupPath . DIRECTORY_SEPARATOR)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Truy cập bị từ chối'
+            ], 403);
+        }
 
         if (!file_exists($filePath)) {
             return response()->json([
@@ -132,7 +149,7 @@ class BackupController extends Controller
      */
     public function restore(Request $request)
     {
-        $filename = $request->input('filename');
+        $filename = basename($request->input('filename'));
         $filePath = $this->backupPath . '/' . $filename;
 
         if (!file_exists($filePath) || pathinfo($filePath, PATHINFO_EXTENSION) !== 'sql') {
@@ -148,11 +165,11 @@ class BackupController extends Controller
             DB::statement('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;');
 
             $command = sprintf(
-                'mysql --host=%s --port=%s --user=%s --password="%s" --default-character-set=utf8mb4 %s < %s',
+                'mysql --host=%s --port=%s --user=%s --password=%s --default-character-set=utf8mb4 %s < %s',
                 escapeshellarg($dbConfig['host']),
                 escapeshellarg($dbConfig['port']),
                 escapeshellarg($dbConfig['username']),
-                $dbConfig['password'],
+                escapeshellarg($dbConfig['password']),
                 escapeshellarg($dbConfig['database']),
                 escapeshellarg($filePath)
             );

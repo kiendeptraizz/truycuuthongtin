@@ -1,7 +1,12 @@
 /**
  * Navigation Fix CSS
  * Prevents white screen and layout issues during browser navigation
+ * Updated for better split-screen support
  */
+
+/* ========================================
+   BASE VISIBILITY FIXES
+   ======================================== */
 
 /* Ensure page is always visible */
 html, body {
@@ -14,6 +19,7 @@ html, body {
 body {
     min-height: 100vh;
     background-color: #f8fafc;
+    overflow-x: hidden;
 }
 
 /* Ensure main content is always visible */
@@ -26,7 +32,10 @@ main {
     opacity: 1 !important;
 }
 
-/* Loading state improvements */
+/* ========================================
+   LOADING STATE IMPROVEMENTS
+   ======================================== */
+
 .btn[disabled] {
     pointer-events: none;
     opacity: 0.6;
@@ -41,22 +50,151 @@ main {
     100% { transform: rotate(360deg); }
 }
 
+/* ========================================
+   SIDEBAR & MAIN CONTENT LAYOUT
+   ======================================== */
+
 /* Prevent layout shift */
 .sidebar {
     position: fixed;
-    z-index: 1000;
+    z-index: 1040;
+    width: 260px;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    transition: transform 0.3s ease, width 0.3s ease;
+    will-change: transform;
 }
 
 .main-content {
-    margin-left: 240px;
+    margin-left: 260px;
     transition: margin-left 0.3s ease;
+    min-width: 0;
+    flex: 1;
 }
 
-@media (max-width: 768px) {
+/* Medium screens - Collapsed sidebar */
+@media (max-width: 1200px) and (min-width: 993px) {
+    .sidebar:not(.show) {
+        width: 70px;
+    }
+    
+    .sidebar.show {
+        width: 260px !important;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+    }
+    
     .main-content {
-        margin-left: 0;
+        margin-left: 70px;
     }
 }
+
+/* Small/Split screens - Hidden sidebar */
+@media (max-width: 992px) {
+    .sidebar {
+        transform: translateX(-100%) !important;
+        width: 260px;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0) !important;
+        width: 260px !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        z-index: 99999 !important;
+    }
+
+    /* Đảm bảo nav và menu items hiển thị khi sidebar mở */
+    .sidebar.show .nav {
+        display: flex !important;
+        flex-direction: column !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .sidebar.show .nav-link {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        font-size: 0.9rem !important;
+        padding: 0.85rem 1.25rem !important;
+        color: rgba(255, 255, 255, 0.7) !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+    }
+
+    .sidebar.show .nav-link i {
+        display: inline-block !important;
+        margin-right: 0.85rem !important;
+        font-size: 1rem !important;
+        width: 22px !important;
+        text-align: center !important;
+    }
+
+    .sidebar.show .nav-link span,
+    .sidebar.show .nav-link .fa-chevron-down {
+        display: inline !important;
+    }
+
+    .sidebar.show .nav-link::after {
+        display: none !important;
+    }
+
+    .sidebar.show .nav-link.active {
+        color: white !important;
+    }
+
+    .sidebar.show .brand {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .sidebar.show hr {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    .sidebar.show #zaloSubmenu {
+        position: static !important;
+        width: auto !important;
+        margin-left: 0 !important;
+        box-shadow: none !important;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+        width: 100%;
+    }
+}
+
+/* ========================================
+   SIDEBAR OVERLAY FOR MOBILE
+   ======================================== */
+
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1035;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.sidebar.show ~ .sidebar-overlay,
+body.sidebar-open .sidebar-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ========================================
+   ENSURE VISIBILITY
+   ======================================== */
 
 /* Ensure cards and content are visible */
 .card,
@@ -66,25 +204,65 @@ main {
     opacity: 1 !important;
 }
 
-/* Fix for potential z-index issues */
+/* ========================================
+   Z-INDEX HIERARCHY
+   ======================================== */
+
+.sidebar-overlay {
+    z-index: 1035;
+}
+
+.sidebar {
+    z-index: 1040;
+}
+
 .dropdown-menu {
     z-index: 1050;
 }
 
-.modal {
+.modal-backdrop {
     z-index: 1055;
 }
 
-.modal-backdrop {
-    z-index: 1050;
+.modal {
+    z-index: 1060;
 }
 
-/* Smooth transitions */
-* {
-    transition: opacity 0.2s ease, visibility 0.2s ease;
+.tooltip {
+    z-index: 1070;
 }
 
-/* Emergency fallback styles */
+.popover {
+    z-index: 1065;
+}
+
+/* ========================================
+   SMOOTH TRANSITIONS
+   ======================================== */
+
+/* Only apply transitions to specific properties to avoid performance issues */
+.sidebar,
+.main-content {
+    transition: transform 0.3s ease, margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* ========================================
+   PREVENT CONTENT OVERFLOW
+   ======================================== */
+
+.container-fluid {
+    overflow-x: hidden;
+}
+
+.row {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* ========================================
+   EMERGENCY FALLBACK STYLES
+   ======================================== */
+
 .emergency-fallback {
     position: fixed;
     top: 0;
@@ -92,7 +270,7 @@ main {
     right: 0;
     bottom: 0;
     background: #f8fafc;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     z-index: 9999;
@@ -106,7 +284,17 @@ main {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* Hide emergency fallback by default */
-.emergency-fallback {
-    display: none;
+/* ========================================
+   SCROLL BEHAVIOR
+   ======================================== */
+
+/* Prevent body scroll when sidebar is open on mobile */
+body.sidebar-open {
+    overflow: hidden;
+}
+
+@media (min-width: 993px) {
+    body.sidebar-open {
+        overflow: auto;
+    }
 }

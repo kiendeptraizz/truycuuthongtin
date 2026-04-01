@@ -376,7 +376,6 @@ function initializeCharts() {
 
 function updateCharts() {
     // Charts are already initialized with sample data
-    console.log('Charts updated with latest data');
 }
 
 function exportReport(format) {

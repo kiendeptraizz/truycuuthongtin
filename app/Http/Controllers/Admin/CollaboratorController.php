@@ -8,6 +8,7 @@ use App\Models\CollaboratorService;
 use App\Models\CollaboratorServiceAccount;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class CollaboratorController extends Controller
@@ -82,28 +83,32 @@ class CollaboratorController extends Controller
             'services.*.description' => 'nullable|string',
         ]);
 
-        // Tạo collaborator
-        $collaborator = Collaborator::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'status' => $validated['status'],
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $collaborator = DB::transaction(function () use ($validated) {
+            // Tạo collaborator
+            $collaborator = Collaborator::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'status' => $validated['status'],
+                'notes' => $validated['notes'] ?? null,
+            ]);
 
-        // Tạo các dịch vụ nếu có
-        if (!empty($validated['services'])) {
-            foreach ($validated['services'] as $serviceData) {
-                $collaborator->services()->create([
-                    'service_name' => $serviceData['service_name'],
-                    'price' => $serviceData['price'],
-                    'quantity' => $serviceData['quantity'],
-                    'warranty_period' => $serviceData['warranty_period'] ?? 0,
-                    'description' => $serviceData['description'] ?? null,
-                ]);
+            // Tạo các dịch vụ nếu có
+            if (!empty($validated['services'])) {
+                foreach ($validated['services'] as $serviceData) {
+                    $collaborator->services()->create([
+                        'service_name' => $serviceData['service_name'],
+                        'price' => $serviceData['price'],
+                        'quantity' => $serviceData['quantity'],
+                        'warranty_period' => $serviceData['warranty_period'] ?? 0,
+                        'description' => $serviceData['description'] ?? null,
+                    ]);
+                }
             }
-        }
+
+            return $collaborator;
+        });
 
         return redirect()->route('admin.collaborators.index')
             ->with('success', 'Cộng tác viên đã được tạo thành công!');

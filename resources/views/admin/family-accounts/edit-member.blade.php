@@ -202,8 +202,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Auto calculate end date when start date changes
     startDateInput.addEventListener('change', function() {
-        console.log('Start date changed to:', this.value);
-        console.log('End date user modified:', endDateInput.dataset.userModified);
         
         if (this.value) {
             const startDate = new Date(this.value);
@@ -211,18 +209,15 @@ document.addEventListener('DOMContentLoaded', function() {
             endDate.setDate(startDate.getDate() + packageDurationDays);
             
             const formattedEndDate = endDate.toISOString().split('T')[0];
-            console.log('Calculated end date:', formattedEndDate);
             
             // Always update end date unless user has manually changed it after page load
             if (!endDateInput.dataset.userModified) {
                 endDateInput.value = formattedEndDate;
-                console.log('End date updated automatically');
                 
                 // Update info text
                 const autoInfo = document.getElementById('auto-calculated-info');
                 autoInfo.innerHTML = `<i class="fas fa-check text-success"></i> Tự động tính: ${formatDate(endDate)} (${packageDurationDays} ngày)`;
             } else {
-                console.log('End date not updated - user has modified it');
             }
         }
     });

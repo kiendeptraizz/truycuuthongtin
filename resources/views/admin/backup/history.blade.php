@@ -334,7 +334,6 @@ function initializeChart() {
 function updateActivityChart() {
     if (window.activityChart) {
         // Update chart with new data
-        console.log('Activity chart updated');
     }
 }
 

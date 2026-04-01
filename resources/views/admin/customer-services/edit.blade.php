@@ -443,7 +443,6 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('Edit form JavaScript loaded');
         
         // Service package duration tracking
         let currentPackageDuration = {{ $customerService->servicePackage->default_duration_days ?? 30 }};
@@ -489,7 +488,6 @@
             const formattedEndDate = endDate.toISOString().split('T')[0];
             endDateInput.value = formattedEndDate;
             
-            console.log(`Updated end date: ${formattedEndDate} (${durationInDays} days from ${startDateInput.value})`);
             showAutoCalculationNotice(durationInDays);
         }
 
@@ -517,7 +515,6 @@
                 const newDuration = parseInt(selectedServiceCard.dataset.duration) || 365;
                 currentPackageDuration = newDuration;
                 
-                console.log('Service package changed, new duration:', newDuration);
                 
                 // Clear custom duration when package changes (optional)
                 if (customDurationInput) {
@@ -568,20 +565,16 @@
 
         // Family account handling for service packages
         const familySection = document.getElementById('family-selection');
-        console.log('Family section element:', familySection);
         
         function updateFamilyAccountVisibility() {
             const selectedServiceCard = document.querySelector('.service-package-card.selected');
-            console.log('Selected service card:', selectedServiceCard);
             
             if (selectedServiceCard) {
                 const accountType = selectedServiceCard.dataset.accountType;
-                console.log('Current account type:', accountType);
                 
                 if (accountType === 'Tài khoản add family') {
                     if (familySection) {
                         familySection.style.display = 'block';
-                        console.log('Family section shown for add family account type');
                     }
                 } else {
                     if (familySection) {
@@ -591,11 +584,9 @@
                         if (familySelect) {
                             familySelect.value = '';
                         }
-                        console.log('Family section hidden for non-family account type');
                     }
                 }
             } else {
-                console.log('No selected service card found');
             }
         }
 
@@ -607,7 +598,6 @@
         if (currentServicePackage && currentServicePackage.account_type === 'Tài khoản add family') {
             if (familySection) {
                 familySection.style.display = 'block';
-                console.log('Family section shown on page load for current add family service');
             }
         }
 
@@ -808,11 +798,9 @@
         const pkg = window.filteredServicePackages ? window.filteredServicePackages[index] : null;
         
         if (!pkg) {
-            console.log('No package found at index:', index);
             return;
         }
         
-        console.log('Selected package:', pkg.name, pkg.id, pkg.account_type);
         
         // Get DOM elements
         const servicePackageInput = document.getElementById('service_package_id');

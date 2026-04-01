@@ -31,20 +31,16 @@ class UpdateExpiredServices extends Command
 
         if ($includeToday) {
             $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn (BAO GỒM HÔM NAY)...');
-            // Bao gồm cả dịch vụ hết hạn hôm nay
             $cutoffDate = Carbon::now()->endOfDay();
         } else {
             $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn...');
-            // Chỉ lấy dịch vụ hết hạn từ hôm qua trở về trước (mặc định)
             $cutoffDate = Carbon::now()->subDay()->endOfDay();
         }
 
-        // Tìm các dịch vụ có status = 'active' nhưng đã hết hạn
-        $expiredServices = CustomerService::where('status', 'active')
+        // Đếm số dịch vụ cần cập nhật
+        $count = CustomerService::where('status', 'active')
             ->where('expires_at', '<=', $cutoffDate)
-            ->get();
-
-        $count = $expiredServices->count();
+            ->count();
 
         if ($count === 0) {
             $this->info('✓ Không có dịch vụ nào cần cập nhật.');
@@ -53,22 +49,10 @@ class UpdateExpiredServices extends Command
 
         $this->info("Tìm thấy {$count} dịch vụ cần cập nhật status...");
 
-        // Hiển thị progress bar
-        $bar = $this->output->createProgressBar($count);
-        $bar->start();
-
-        $updatedCount = 0;
-
-        foreach ($expiredServices as $service) {
-            $service->status = 'expired';
-            if ($service->save()) {
-                $updatedCount++;
-            }
-            $bar->advance();
-        }
-
-        $bar->finish();
-        $this->newLine(2);
+        // Batch update thay vì loop từng record
+        $updatedCount = CustomerService::where('status', 'active')
+            ->where('expires_at', '<=', $cutoffDate)
+            ->update(['status' => 'expired']);
 
         $this->info("✓ Đã cập nhật thành công {$updatedCount} dịch vụ từ 'active' sang 'expired'.");
 

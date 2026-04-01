@@ -18,69 +18,53 @@ use App\Http\Controllers\TargetGroupController;
 use App\Http\Controllers\MessageCampaignController;
 use App\Http\Controllers\ZaloDashboardController;
 use App\Http\Controllers\Admin\ResourceController;
+use App\Http\Controllers\Auth\AuthController;
 
 
 
-// Trang chủ - chuyển hướng đến admin dashboard trực tiếp
+// ============================================================================
+// 🔐 AUTHENTICATION ROUTES
+// ============================================================================
+
+// Trang chủ - chuyển hướng đến admin dashboard (nếu đã đăng nhập) hoặc login
 Route::get('/', function () {
-    return redirect()->route('admin.dashboard');
+    if (auth()->check()) {
+        return redirect()->route('admin.dashboard');
+    }
+    return redirect()->route('login');
 });
 
-// Trang tra cứu công khai
+// Login routes
+Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+// Change password (requires auth)
+Route::middleware('auth')->group(function () {
+    Route::get('/change-password', [AuthController::class, 'showChangePasswordForm'])->name('password.change');
+    Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.update');
+});
+
+// ============================================================================
+// 🔍 PUBLIC ROUTES (Không cần đăng nhập)
+// ============================================================================
+
+// Trang tra cứu công khai cho khách hàng
 Route::get('/tra-cuu', [LookupController::class, 'index'])->name('lookup.index');
-Route::post('/tra-cuu/search', [LookupController::class, 'search'])->name('lookup.search');
+Route::post('/tra-cuu/search', [LookupController::class, 'search'])
+    ->middleware('throttle:10,1') // 10 requests/phút - chống spam
+    ->name('lookup.search');
 
-// Demo routes (for testing components)
-Route::get('/demo/customer-search', function () {
-    return view('demo.customer-search-test');
-})->name('demo.customer-search');
+// ============================================================================
+// ⚠️  CÁC ROUTE TEST/DEMO ĐÃ BỊ XÓA CHO PRODUCTION
+// Nếu cần test, hãy uncomment và thêm middleware auth
+// ============================================================================
 
-Route::get('/demo/search-spacebar-test', function () {
-    return view('demo.search-spacebar-test');
-})->name('demo.search-spacebar-test');
-
-// Icon test route
-Route::get('/icon-test', function () {
-    return view('icon-test');
-})->name('icon-test');
-
-// Test route để tạo dữ liệu tra cứu
-Route::get('/test/create-lookup-data', function () {
-    $customer = \App\Models\Customer::where('customer_code', 'LOOKUP001')->first();
-    if (!$customer) {
-        $customer = \App\Models\Customer::create([
-            'name' => 'Khách hàng test tra cứu',
-            'email' => 'test@tracuu.com',
-            'phone' => '0123456789',
-            'customer_code' => 'LOOKUP001',
-            'status' => 'active'
-        ]);
-    }
-
-    $package = \App\Models\ServicePackage::first();
-    if ($package) {
-        \App\Models\CustomerService::create([
-            'customer_id' => $customer->id,
-            'service_package_id' => $package->id,
-            'login_email' => 'test@tracuu.com',
-            'login_password' => 'password123',
-            'status' => 'active',
-            'activated_at' => now(),
-            'expires_at' => now()->addMonths(1)
-        ]);
-    }
-
-    return 'Created test customer with code: LOOKUP001';
-});
-
-// Admin routes (Không cần đăng nhập)
-Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(function () {
+// ============================================================================
+// 🔒 ADMIN ROUTES (Yêu cầu đăng nhập)
+// ============================================================================
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
-
-    // Icon demo page
-    Route::get('icon-demo', function () {
-        return view('admin.icon-demo');
-    })->name('icon-demo');
 
     // Quản lý khách hàng
     Route::resource('customers', CustomerController::class);
@@ -115,6 +99,9 @@ Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(f
         ->name('service-packages.toggle-status');
 
     // Quản lý dịch vụ khách hàng
+    // Route bulk-delete phải đặt TRƯỚC resource route để tránh xung đột
+    Route::delete('customer-services/bulk-delete', [CustomerServiceController::class, 'bulkDelete'])
+        ->name('customer-services.bulk-delete');
     Route::resource('customer-services', CustomerServiceController::class);
 
     // Route nhắc nhở khách hàng
@@ -136,6 +123,19 @@ Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(f
         ->name('customers.assign-service');
     Route::post('customers/{customer}/assign-service', [CustomerServiceController::class, 'assignService'])
         ->name('customers.store-service');
+
+    // ========================================================================
+    // 🗃️ DỊCH VỤ ĐÃ LƯU TRỮ (Archived Services)
+    // ========================================================================
+    Route::prefix('archived-services')->name('archived-services.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'index'])->name('index');
+        Route::post('/{id}/restore', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'restore'])->name('restore');
+        Route::delete('/{id}/force-delete', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'forceDelete'])->name('force-delete');
+        Route::post('/bulk-restore', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'bulkRestore'])->name('bulk-restore');
+        Route::delete('/bulk-force-delete', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'bulkForceDelete'])->name('bulk-force-delete');
+        Route::post('/run-cleanup', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'runCleanup'])->name('run-cleanup');
+        Route::get('/expired-stats', [\App\Http\Controllers\Admin\ArchivedServiceController::class, 'getExpiredStats'])->name('expired-stats');
+    });
 
 
 
@@ -240,16 +240,6 @@ Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(f
         Route::delete('/delete', [ProfitController::class, 'deleteProfit'])->name('delete');
     });
 
-    // Test route for debugging
-    Route::get('test-profits', function () {
-        return view('test-profits');
-    })->name('test-profits');
-
-    // Direct test route
-    Route::get('test-profits-direct', function () {
-        return view('test-profits-direct');
-    })->name('test-profits-direct');
-
     // Account Conversion Routes (commented out - controller not found)
     // Route::get('account-conversion', [\App\Http\Controllers\Admin\AccountConversionController::class, 'index'])
     //     ->name('account-conversion.index');
@@ -257,199 +247,6 @@ Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(f
     //     ->name('account-conversion.preview');
     // Route::post('account-conversion/convert', [\App\Http\Controllers\Admin\AccountConversionController::class, 'convert'])
     //     ->name('account-conversion.convert');
-
-    // Quick conversion route for direct execution
-    Route::get('quick-convert', function () {
-        $emailsToConvert = [
-            '64jxcb2c@taikhoanvip.io.vn',
-            'gaschburdab0@outlook.com',
-            'leehoangtung435@gmail.com',
-            'Tanyaweatherfordpqxuw3hmn@hotmail.com',
-            '5fsyvtx1@taikhoanvip.io.vn',
-            'kiennezz18@gmail.com',
-            'dtkien18@gmail.com',
-            'kien83667@gmail.com',
-            'hainguyenthi2110@gmail.com',
-            'ohlhua1276@gmail.com',
-            'nguyenendummn789@gmail.com',
-        ];
-
-        $executeConversion = request()->get('execute', false);
-
-        $output = "🔄 SCRIPT TỰ ĐỘNG CHUYỂN ĐỔI TÀI KHOẢN\n";
-        $output .= str_repeat('=', 50) . "\n";
-        $output .= "Chế độ: " . ($executeConversion ? "THỰC HIỆN" : "KIỂM TRA") . "\n\n";
-
-        $totalStats = [
-            'services_found' => 0,
-            'services_converted' => 0,
-            'services_already_shared' => 0,
-            'services_no_mapping' => 0,
-            'errors' => 0
-        ];
-
-        foreach ($emailsToConvert as $index => $email) {
-            $output .= "📧 [" . ($index + 1) . "/" . count($emailsToConvert) . "] {$email}\n";
-
-            try {
-                $services = \App\Models\CustomerService::with(['servicePackage.category', 'customer'])
-                    ->where('login_email', $email)
-                    ->get();
-
-                if ($services->isEmpty()) {
-                    $output .= "  ⚠️  Không tìm thấy dịch vụ nào\n";
-                    continue;
-                }
-
-                $output .= "  📊 Tìm thấy {$services->count()} dịch vụ\n";
-                $totalStats['services_found'] += $services->count();
-
-                foreach ($services as $service) {
-                    $currentAccountType = $service->servicePackage->account_type;
-                    $currentPackageName = $service->servicePackage->name;
-                    $customerName = $service->customer->name;
-
-                    if ($currentAccountType === 'Tài khoản dùng chung') {
-                        $output .= "    ✓ {$customerName} - {$currentPackageName} (đã là tài khoản dùng chung)\n";
-                        $totalStats['services_already_shared']++;
-                        continue;
-                    }
-
-                    // Tìm gói tương ứng
-                    $targetPackage = \App\Models\ServicePackage::where('name', $currentPackageName)
-                        ->where('account_type', 'Tài khoản dùng chung')
-                        ->where('is_active', true)
-                        ->first();
-
-                    if (!$targetPackage) {
-                        // Thử tìm gói tương tự
-                        $baseName = trim(str_ireplace(['Plus', 'Pro', 'Premium', 'Advanced', 'Basic', '(Add Mail)', 'Add Mail'], '', $currentPackageName));
-                        $targetPackage = \App\Models\ServicePackage::where('account_type', 'Tài khoản dùng chung')
-                            ->where('is_active', true)
-                            ->where('name', 'like', "%{$baseName}%")
-                            ->first();
-                    }
-
-                    if ($targetPackage) {
-                        if ($executeConversion) {
-                            // Thực hiện chuyển đổi
-                            $service->update([
-                                'service_package_id' => $targetPackage->id,
-                                'internal_notes' => ($service->internal_notes ?? '') .
-                                    "\n[" . now()->format('d/m/Y H:i') . "] AUTO CONVERT: Chuyển đổi từ '{$currentPackageName}' ({$currentAccountType}) sang '{$targetPackage->name}' (Tài khoản dùng chung)"
-                            ]);
-                            $output .= "    ✅ {$customerName} - {$currentPackageName} → {$targetPackage->name} (ĐÃ CHUYỂN ĐỔI)\n";
-                        } else {
-                            $output .= "    🔄 {$customerName} - {$currentPackageName} → {$targetPackage->name} (SẼ CHUYỂN ĐỔI)\n";
-                        }
-                        $totalStats['services_converted']++;
-                    } else {
-                        $output .= "    ⚠️  {$customerName} - {$currentPackageName} (không tìm thấy gói tương ứng)\n";
-                        $totalStats['services_no_mapping']++;
-                    }
-                }
-            } catch (Exception $e) {
-                $output .= "  ❌ Lỗi: " . $e->getMessage() . "\n";
-                $totalStats['errors']++;
-            }
-
-            $output .= "\n";
-        }
-
-        $output .= str_repeat('=', 50) . "\n";
-        $output .= "📊 TỔNG KẾT:\n";
-        $output .= "- Tổng dịch vụ: {$totalStats['services_found']}\n";
-        $output .= "- " . ($executeConversion ? "Đã chuyển đổi" : "Sẽ chuyển đổi") . ": {$totalStats['services_converted']}\n";
-        $output .= "- Đã là dùng chung: {$totalStats['services_already_shared']}\n";
-        $output .= "- Không thể chuyển: {$totalStats['services_no_mapping']}\n";
-        $output .= "- Lỗi: {$totalStats['errors']}\n";
-        $output .= str_repeat('=', 50) . "\n";
-
-        if ($executeConversion) {
-            $output .= "✅ HOÀN THÀNH CHUYỂN ĐỔI!\n";
-        } else {
-            $output .= "✅ HOÀN THÀNH KIỂM TRA!\n";
-            $output .= "💡 Thêm ?execute=1 để thực hiện chuyển đổi thật.\n";
-        }
-
-        return response($output)->header('Content-Type', 'text/plain; charset=utf-8');
-    });
-
-    // Demo pages
-    Route::get('/demo/service-package-selector', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-
-        $accountTypePriority = [
-            'Tài khoản dùng chung' => 1,
-            'Tài khoản chính chủ' => 2,
-            'Tài khoản add family' => 3,
-            'Tài khoản cấp (dùng riêng)' => 4,
-        ];
-
-        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
-            $priority = $accountTypePriority[$package->account_type] ?? 999;
-            return [$priority, $package->name];
-        });
-
-        return view('admin.demo.service-package-selector', compact('servicePackages', 'accountTypePriority'));
-    })->name('demo.service-package-selector');
-
-    // Demo page for new grid selector
-    Route::get('/demo/service-package-grid', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-
-        $accountTypePriority = [
-            'Tài khoản dùng chung' => 1,
-            'Tài khoản chính chủ' => 2,
-            'Tài khoản add family' => 3,
-            'Tài khoản cấp (dùng riêng)' => 4,
-        ];
-
-        $servicePackages = $servicePackages->sortBy(function ($package) use ($accountTypePriority) {
-            $priority = $accountTypePriority[$package->account_type] ?? 999;
-            return [$priority, $package->name];
-        });
-
-        return view('admin.demo.service-package-grid-demo', compact('servicePackages', 'accountTypePriority'));
-    })->name('demo.service-package-grid');
-
-    // Demo page for category selector
-    Route::get('/demo/service-package-category', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-
-        $accountTypePriority = [
-            'Tài khoản dùng chung' => 1,
-            'Tài khoản chính chủ' => 2,
-            'Tài khoản add family' => 3,
-            'Tài khoản cấp (dùng riêng)' => 4
-        ];
-
-        return view('admin.demo.service-package-category-demo', compact('servicePackages', 'accountTypePriority'));
-    })->name('demo.service-package-category');
-
-    // Simple test page for category selector
-    Route::get('/test-category-selector', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-        return view('test-category-selector', compact('servicePackages'));
-    });
-
-    // Simple test page for category selector (inline)
-    Route::get('/simple-category-test', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-        return view('simple-category-test', compact('servicePackages'));
-    });
-
-    // Comparison page for all selectors
-    Route::get('/selector-comparison', function () {
-        $servicePackages = \App\Models\ServicePackage::with('category')->active()->get();
-        $accountTypePriority = [
-            'Tài khoản dùng chung' => 1,
-            'Tài khoản chính chủ' => 2,
-            'Tài khoản add family' => 3,
-            'Tài khoản cấp (dùng riêng)' => 4
-        ];
-        return view('selector-comparison', compact('servicePackages', 'accountTypePriority'));
-    });
 
     // ========================================================================
     // 📱 ZALO MARKETING MANAGEMENT
@@ -516,10 +313,4 @@ Route::prefix('admin')->name('admin.')->middleware(['prevent.caching'])->group(f
         Route::put('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'updateSubcategory'])->name('subcategories.update');
         Route::delete('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'destroySubcategory'])->name('subcategories.destroy');
     });
-});
-Route::get("/test-filter", function () {
-    $request = request();
-    $request->merge(["login_email" => "gaschburdab0@outlook.com"]);
-    $controller = new \App\Http\Controllers\Admin\CustomerController();
-    return $controller->index($request);
 });

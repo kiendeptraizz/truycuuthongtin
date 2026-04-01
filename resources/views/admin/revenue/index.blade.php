@@ -375,7 +375,6 @@ function loadRevenueData() {
         group_by: $('#group_by').val()
     };
     
-    console.log('Loading data with filters:', formData); // Debug log
 
     // Show loading states
     showLoadingState();

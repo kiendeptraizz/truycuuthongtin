@@ -2,7 +2,7 @@
     "name": "Truy Cứu Thông Tin",
     "short_name": "TraCuu",
     "description": "Hệ thống quản lý và tra cứu thông tin tài khoản số",
-    "start_url": "/admin/dashboard",
+    "start_url": "/tra-cuu",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#667eea",
@@ -21,5 +21,5 @@
     ],
     "categories": ["business", "productivity"],
     "lang": "vi",
-    "scope": "/admin/"
+    "scope": "/"
 }

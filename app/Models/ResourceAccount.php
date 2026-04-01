@@ -8,6 +8,12 @@ use Carbon\Carbon;
 
 class ResourceAccount extends Model
 {
+    protected $hidden = [
+        'password',
+        'two_factor_secret',
+        'recovery_codes',
+    ];
+
     protected $fillable = [
         'resource_category_id',
         'resource_subcategory_id',

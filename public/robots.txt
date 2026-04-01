@@ -1,2 +1,9 @@
 User-agent: *
-Disallow:
+Allow: /tra-cuu
+Disallow: /admin/
+Disallow: /login
+Disallow: /logout
+Disallow: /register
+Disallow: /password/
+
+Sitemap: https://domain.com/sitemap.xml

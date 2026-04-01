@@ -699,7 +699,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (activeFilters.length > 0) {
-        console.log('Bộ lọc đang áp dụng:', activeFilters.join(', '));
     }
 
     // Force show action buttons

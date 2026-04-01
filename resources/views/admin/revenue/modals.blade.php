@@ -281,7 +281,6 @@ function processExport() {
         include_charts: $('#include_charts').is(':checked')
     };
     
-    console.log('Export with options:', options);
     // TODO: Implement actual export
     $('#exportModal').modal('hide');
     alert('Tính năng xuất báo cáo đang được phát triển');

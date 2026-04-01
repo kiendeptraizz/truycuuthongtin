@@ -5,9 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 
 class CustomerService extends Model
 {
+    use SoftDeletes;
+
+    protected static function booted(): void
+    {
+        $clearCache = function () {
+            Cache::forget('dashboard_stats');
+            Cache::forget('dashboard_popular_services');
+            Cache::forget('revenue_general_stats');
+        };
+
+        static::created($clearCache);
+        static::updated($clearCache);
+        static::deleted($clearCache);
+    }
+
     protected $fillable = [
         'customer_id',
         'service_package_id',
@@ -49,9 +66,31 @@ class CustomerService extends Model
         'password_expires_at' => 'datetime',
         'two_factor_updated_at' => 'datetime',
         'is_password_shared' => 'boolean',
-        'recovery_codes' => 'array', // Tự động parse JSON
-        'shared_with_customers' => 'array', // Tự động parse JSON
+        'recovery_codes' => 'array',
+        'shared_with_customers' => 'array',
+        'deleted_at' => 'datetime',
     ];
+
+    /**
+     * Lấy số ngày đã hết hạn
+     */
+    public function getDaysExpired(): int
+    {
+        if (!$this->expires_at || !$this->isExpired()) {
+            return 0;
+        }
+        return $this->expires_at->startOfDay()->diffInDays(now()->startOfDay());
+    }
+
+    /**
+     * Scope để lấy các dịch vụ hết hạn quá X ngày
+     */
+    public function scopeExpiredMoreThanDays($query, int $days)
+    {
+        $cutoffDate = now()->subDays($days)->endOfDay();
+        return $query->where('status', 'expired')
+            ->where('expires_at', '<=', $cutoffDate);
+    }
 
     public function customer(): BelongsTo
     {
@@ -139,12 +178,13 @@ class CustomerService extends Model
     // Chỉ lấy dịch vụ hết hạn từ ngày mai trở đi trong vòng 5 ngày
     public function scopeExpiringSoon($query, $days = 5)
     {
-        $tomorrow = now()->addDay()->startOfDay();
-        $endDate = now()->addDays((int) $days)->endOfDay();
+        // Dùng whereDate để tránh vấn đề timezone
+        $tomorrow = now()->addDay()->format('Y-m-d');
+        $endDate = now()->addDays((int) $days)->format('Y-m-d');
 
         return $query->where('status', 'active')
-            ->where('expires_at', '>=', $tomorrow)
-            ->where('expires_at', '<=', $endDate);
+            ->whereDate('expires_at', '>=', $tomorrow)
+            ->whereDate('expires_at', '<=', $endDate);
     }
 
     // Scope để lấy các dịch vụ đã hết hạn
@@ -158,8 +198,9 @@ class CustomerService extends Model
     // Chỉ tính là hết hạn khi đã qua hết ngày hết hạn (sau 23:59:59 của ngày hôm qua)
     public function scopeExpiredByDate($query)
     {
-        $yesterday = now()->subDay()->endOfDay();
-        return $query->where('expires_at', '<=', $yesterday);
+        // Dùng whereDate để tránh vấn đề timezone
+        $yesterday = now()->subDay()->format('Y-m-d');
+        return $query->whereDate('expires_at', '<=', $yesterday);
     }
 
     // Scope để lấy các dịch vụ sắp hết hạn chưa được nhắc nhở

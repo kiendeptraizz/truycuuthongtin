@@ -42,6 +42,17 @@ Schedule::command('services:update-expired')
     ->runInBackground();
 
 // ============================================================================
+// 🗑️ TỰ ĐỘNG XÓA DỊCH VỤ HẾT HẠN QUÁ 30 NGÀY
+// ============================================================================
+
+// Soft delete các dịch vụ đã hết hạn quá 30 ngày
+// Chạy hàng ngày vào lúc 00:30 AM
+Schedule::command('services:cleanup-expired --days=30')
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// ============================================================================
 // 📧 CONTENT REMINDERS
 // ============================================================================
 

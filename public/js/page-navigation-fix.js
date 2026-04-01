@@ -55,13 +55,11 @@
                         checkPageContent();
                     }, config.checkInterval);
                 } else {
-                    console.log("Max checks reached, reloading page...");
                     window.location.reload();
                 }
                 return false;
             }
 
-            console.log("Page content check passed");
             return true;
         } catch (error) {
             console.error("Error checking page content:", error);
@@ -78,16 +76,10 @@
      * Handle page show event (back/forward navigation)
      */
     function handlePageShow(event) {
-        console.log(
-            "Page show event:",
-            event.persisted ? "from cache" : "fresh load"
-        );
-
         if (event.persisted) {
             // Page was loaded from cache
             setTimeout(() => {
                 if (!checkPageContent()) {
-                    console.log("Cache issue detected, reloading...");
                     window.location.reload();
                 }
             }, config.reloadDelay);
@@ -116,11 +108,8 @@
      * Handle popstate event (browser navigation)
      */
     function handlePopState(event) {
-        console.log("Pop state event detected");
-
         setTimeout(() => {
             if (!checkPageContent()) {
-                console.log("Navigation issue detected, reloading...");
                 window.location.reload();
             }
         }, config.checkInterval);
@@ -147,12 +136,10 @@
         // Additional safety check after a delay
         setTimeout(() => {
             if (!checkPageContent()) {
-                console.log("Delayed check failed, reloading...");
                 window.location.reload();
             }
         }, 1000);
 
-        console.log("Page navigation fix initialized");
     }
 
     // Initialize when script loads
@@ -173,9 +160,4 @@
         }),
     };
 
-    // Add console info
-    console.log("🔧 Page Navigation Fix loaded successfully");
-    console.log(
-        "📊 Debug info available at: window.pageNavigationFix.getStatus()"
-    );
 })();

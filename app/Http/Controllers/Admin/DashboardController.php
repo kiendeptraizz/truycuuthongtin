@@ -7,18 +7,26 @@ use App\Models\Customer;
 use App\Models\ServicePackage;
 use App\Models\CustomerService;
 use App\Models\ContentPost;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Thống kê tổng quan
-        $totalCustomers = Customer::count();
-        $totalServicePackages = ServicePackage::count();
-        $totalActiveServices = CustomerService::where('status', 'active')->count();
-        $expiringSoonServices = CustomerService::expiringSoon()->count();
+        // Thống kê tổng quan - cache 5 phút
+        $dashboardStats = Cache::remember('dashboard_stats', 300, function () {
+            return [
+                'totalCustomers' => Customer::count(),
+                'totalServicePackages' => ServicePackage::count(),
+                'totalActiveServices' => CustomerService::where('status', 'active')->count(),
+                'expiringSoonServices' => CustomerService::expiringSoon()->count(),
+            ];
+        });
 
-
+        $totalCustomers = $dashboardStats['totalCustomers'];
+        $totalServicePackages = $dashboardStats['totalServicePackages'];
+        $totalActiveServices = $dashboardStats['totalActiveServices'];
+        $expiringSoonServices = $dashboardStats['expiringSoonServices'];
 
         // Dịch vụ sắp hết hạn (5 ngày tới)
         $expiringSoon = CustomerService::with(['customer', 'servicePackage'])
@@ -30,7 +38,7 @@ class DashboardController extends Controller
         // Dịch vụ đã hết hạn
         $expiredServices = CustomerService::with(['customer', 'servicePackage'])
             ->where('expires_at', '<', now())
-            ->where('status', 'active') // Chỉ lấy những dịch vụ đang active nhưng đã hết hạn
+            ->where('status', 'active')
             ->orderBy('expires_at', 'desc')
             ->limit(15)
             ->get();
@@ -41,11 +49,13 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        // Dịch vụ phổ biến nhất
-        $popularServices = ServicePackage::withCount('customerServices')
-            ->orderBy('customer_services_count', 'desc')
-            ->limit(5)
-            ->get();
+        // Dịch vụ phổ biến nhất - cache 30 phút
+        $popularServices = Cache::remember('dashboard_popular_services', 1800, function () {
+            return ServicePackage::withCount('customerServices')
+                ->orderBy('customer_services_count', 'desc')
+                ->limit(5)
+                ->get();
+        });
 
         // Content posts cần chú ý
         $upcomingPosts = ContentPost::where('status', 'scheduled')

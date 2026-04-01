@@ -713,7 +713,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateEventDate(eventId, newDate) {
         // This would be used for drag & drop functionality
         // Implementation depends on your backend API
-        console.log('Update event', eventId, 'to', newDate);
     }
 });
 

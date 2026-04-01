@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SharedAccountCredential extends Model
 {
+    protected $hidden = [
+        'password',
+        'two_factor_secret',
+        'recovery_codes',
+    ];
+
     protected $fillable = [
         'service_package_id',
         'email',

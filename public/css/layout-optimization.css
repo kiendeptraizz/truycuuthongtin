@@ -1,0 +1,803 @@
+/* ========================================
+   RESPONSIVE LAYOUT OPTIMIZATION
+   Xử lý khi chia nhỏ màn hình (split screen)
+   ======================================== */
+
+/* CSS Variables cho responsive */
+:root {
+    --sidebar-width: 260px;
+    --sidebar-width-collapsed: 70px;
+    --header-height: 70px;
+    --content-min-width: 320px;
+}
+
+/* ========================================
+   SIDEBAR TOGGLE BUTTON VISIBILITY
+   ======================================== */
+
+/* Ẩn nút toggle khi sidebar hiển thị đầy đủ (>1200px) */
+.sidebar-toggle-btn {
+    display: none;
+}
+
+/* Hiển thị nút toggle khi sidebar bị thu gọn hoặc ẩn (<=1200px) */
+@media (max-width: 1200px) {
+    .sidebar-toggle-btn {
+        display: inline-flex !important;
+    }
+}
+
+/* ========================================
+   SIDEBAR RESPONSIVE
+   ======================================== */
+
+/* Medium screens - Thu gọn sidebar */
+@media (max-width: 1200px) and (min-width: 993px) {
+    .sidebar:not(.show) {
+        width: var(--sidebar-width-collapsed);
+        overflow: visible;
+    }
+    
+    .sidebar:not(.show) .brand h4,
+    .sidebar:not(.show) .nav-link span:not(.badge),
+    .sidebar:not(.show) .nav-link .fa-chevron-down,
+    .sidebar:not(.show) hr + .nav-link .me-3 + span {
+        display: none;
+    }
+    
+    .sidebar:not(.show) .brand {
+        padding: 1rem 0.5rem;
+    }
+    
+    .sidebar:not(.show) .brand img {
+        height: 35px !important;
+    }
+    
+    .sidebar:not(.show) .nav-link {
+        justify-content: center;
+        padding: 0.85rem;
+        margin: 0.2rem 0.5rem;
+    }
+    
+    .sidebar:not(.show) .nav-link i {
+        margin-right: 0;
+        font-size: 1.2rem;
+    }
+    
+    /* Tooltip on hover for collapsed sidebar */
+    .sidebar:not(.show) .nav-link {
+        position: relative;
+    }
+    
+    .sidebar:not(.show) .nav-link::after {
+        content: attr(data-title);
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #1e1b4b;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s ease;
+        z-index: 1001;
+        margin-left: 10px;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .sidebar:not(.show) .nav-link:hover::after {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    /* Hide submenu in collapsed mode */
+    .sidebar:not(.show) #zaloSubmenu {
+        position: absolute;
+        left: 100%;
+        top: 0;
+        width: 220px;
+        margin-left: 10px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    
+    .sidebar:not(.show) ~ .main-content,
+    .main-content {
+        margin-left: var(--sidebar-width-collapsed);
+    }
+
+    /* Khi sidebar được mở rộng (toggle) - overlay lên nội dung */
+    .sidebar.show {
+        width: var(--sidebar-width) !important;
+        z-index: 1040;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .sidebar.show .brand h4 {
+        display: block;
+    }
+    
+    .sidebar.show .nav-link {
+        justify-content: flex-start;
+        font-size: 0.9rem;
+    }
+    
+    .sidebar.show .nav-link i {
+        margin-right: 0.85rem;
+        font-size: 1rem;
+    }
+    
+    .sidebar.show .nav-link span:not(.badge),
+    .sidebar.show .nav-link .fa-chevron-down {
+        display: inline;
+    }
+    
+    .sidebar.show .nav-link::after {
+        display: none;
+    }
+    
+    .sidebar.show #zaloSubmenu {
+        position: static;
+        width: auto;
+        margin-left: 0;
+        box-shadow: none;
+    }
+}
+
+/* Small screens - Ẩn sidebar hoàn toàn */
+@media (max-width: 992px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: var(--sidebar-width);
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+        width: var(--sidebar-width) !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+        z-index: 99999 !important;
+    }
+
+    /* Hiển thị tất cả menu items khi sidebar mở */
+    .sidebar.show .nav {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .sidebar.show .nav-link {
+        display: flex !important;
+        font-size: 0.9rem !important;
+        justify-content: flex-start !important;
+    }
+
+    .sidebar.show .nav-link i {
+        margin-right: 0.85rem !important;
+    }
+
+    .sidebar.show .nav-link span,
+    .sidebar.show .nav-link .fa-chevron-down {
+        display: inline !important;
+    }
+
+    .sidebar.show .nav-link::after {
+        display: none !important;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+/* ========================================
+   HEADER RESPONSIVE
+   ======================================== */
+
+.main-header {
+    flex-wrap: wrap;
+    min-height: var(--header-height);
+    height: auto;
+    padding: 0.75rem 1rem;
+}
+
+.main-header > .d-flex {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .main-header {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .page-title {
+        font-size: 1.1rem !important;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .main-header .d-none.d-md-block {
+        display: none !important;
+    }
+    
+    .main-header .dropdown-toggle span {
+        display: none;
+    }
+    
+    #sidebarToggle {
+        padding: 0.4rem 0.6rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .page-title {
+        font-size: 1rem !important;
+        max-width: 150px;
+    }
+}
+
+/* ========================================
+   CONTENT AREA RESPONSIVE
+   ======================================== */
+
+.content-area {
+    padding: 1.5rem;
+    min-width: 0; /* Cho phép flex item shrink */
+}
+
+@media (max-width: 1200px) {
+    .content-area {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .content-area {
+        padding: 0.75rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .content-area {
+        padding: 0.5rem;
+    }
+}
+
+/* ========================================
+   CARDS RESPONSIVE
+   ======================================== */
+
+.card {
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.card-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.card-header h5,
+.card-header h6 {
+    flex: 1;
+    min-width: 0;
+}
+
+.card-header .btn-group,
+.card-header .d-flex {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    .card-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .card-header h5,
+    .card-header h6 {
+        font-size: 0.95rem;
+    }
+}
+
+/* Stats cards responsive */
+.row.g-4 {
+    --bs-gutter-x: 1rem;
+    --bs-gutter-y: 1rem;
+}
+
+@media (max-width: 992px) {
+    .row > [class*="col-lg-"] {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+@media (max-width: 768px) {
+    .row > [class*="col-md-"],
+    .row > [class*="col-lg-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* ========================================
+   TABLES RESPONSIVE
+   ======================================== */
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -0.5rem;
+    padding: 0 0.5rem;
+}
+
+.table {
+    min-width: 600px; /* Ensure table has minimum width */
+}
+
+/* Compact table on small screens */
+@media (max-width: 992px) {
+    .table thead th,
+    .table tbody td {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .table .btn-group {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .table .btn-sm {
+        width: 100%;
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem 0.6rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Hide less important columns */
+    .table .hide-on-mobile {
+        display: none;
+    }
+}
+
+/* ========================================
+   FORMS RESPONSIVE
+   ======================================== */
+
+.form-control,
+.form-select {
+    min-height: 42px;
+}
+
+@media (max-width: 768px) {
+    .form-control,
+    .form-select {
+        font-size: 16px; /* Prevent zoom on iOS */
+        min-height: 44px;
+    }
+    
+    .input-group {
+        flex-wrap: wrap;
+    }
+    
+    .input-group > .form-control,
+    .input-group > .form-select {
+        flex: 1 1 100%;
+        border-radius: var(--border-radius) !important;
+        margin-bottom: 0.5rem;
+    }
+    
+    .input-group > .input-group-text {
+        display: none;
+    }
+    
+    .input-group > .btn {
+        flex: 1 1 100%;
+        border-radius: var(--border-radius) !important;
+    }
+}
+
+/* Form row responsive */
+.row.g-3 {
+    --bs-gutter-x: 0.75rem;
+    --bs-gutter-y: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .row.g-3 > [class*="col-md-"],
+    .row.g-3 > [class*="col-lg-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* ========================================
+   BUTTONS RESPONSIVE
+   ======================================== */
+
+.btn-group {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+@media (max-width: 576px) {
+    .btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .btn-lg {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    /* Stack buttons on very small screens */
+    .d-flex.gap-2,
+    .d-flex.gap-3 {
+        flex-wrap: wrap;
+    }
+    
+    .d-flex.gap-2 > .btn,
+    .d-flex.gap-3 > .btn {
+        flex: 1 1 auto;
+        min-width: 100px;
+    }
+}
+
+/* ========================================
+   MODALS RESPONSIVE
+   ======================================== */
+
+.modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100% - 1rem);
+}
+
+@media (min-width: 576px) {
+    .modal-dialog {
+        max-width: 500px;
+        margin: 1.75rem auto;
+    }
+}
+
+@media (max-width: 576px) {
+    .modal-content {
+        border-radius: var(--border-radius);
+    }
+    
+    .modal-header,
+    .modal-footer {
+        padding: 0.75rem 1rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .modal-title {
+        font-size: 1rem;
+    }
+}
+
+/* ========================================
+   PAGINATION RESPONSIVE
+   ======================================== */
+
+.pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+@media (max-width: 576px) {
+    .page-link {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Hide some page numbers on very small screens */
+    .pagination .page-item:not(.active):not(:first-child):not(:last-child):not(:nth-child(2)):not(:nth-last-child(2)) {
+        display: none;
+    }
+}
+
+/* ========================================
+   ALERTS RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .alert {
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .alert i {
+        font-size: 1rem;
+    }
+    
+    .alert .btn-close {
+        padding: 0.5rem;
+    }
+}
+
+/* ========================================
+   DROPDOWN RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .dropdown-menu {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
+        max-height: 70vh;
+        overflow-y: auto;
+        transform: none !important;
+        margin: 0 !important;
+    }
+    
+    .dropdown-menu.show {
+        animation: slideUp 0.25s ease;
+    }
+    
+    .dropdown-item {
+        padding: 0.85rem 1.25rem;
+    }
+}
+
+/* ========================================
+   BADGES RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .badge {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
+    }
+}
+
+/* ========================================
+   UTILITY CLASSES FOR RESPONSIVE
+   ======================================== */
+
+/* Force wrap on small screens */
+@media (max-width: 768px) {
+    .flex-wrap-mobile {
+        flex-wrap: wrap !important;
+    }
+    
+    .w-100-mobile {
+        width: 100% !important;
+    }
+    
+    .mb-2-mobile {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .text-center-mobile {
+        text-align: center !important;
+    }
+}
+
+/* Hide/Show based on screen size */
+.hide-below-992 {
+    display: block;
+}
+
+.show-below-992 {
+    display: none;
+}
+
+@media (max-width: 992px) {
+    .hide-below-992 {
+        display: none !important;
+    }
+    
+    .show-below-992 {
+        display: block !important;
+    }
+}
+
+/* ========================================
+   SPLIT SCREEN SPECIFIC FIXES
+   ======================================== */
+
+/* Khi màn hình bị chia đôi (khoảng 600-900px) */
+@media (min-width: 600px) and (max-width: 900px) {
+    /* Đảm bảo sidebar ẩn hoàn toàn */
+    .sidebar:not(.show) {
+        transform: translateX(-100%);
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
+    
+    /* Thu gọn header */
+    .main-header {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .page-title {
+        font-size: 1rem !important;
+    }
+    
+    /* Thu gọn cards */
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    /* Thu gọn tables */
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Stack buttons */
+    .table .btn-group {
+        flex-direction: column;
+    }
+    
+    .table .btn-sm {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.4rem;
+    }
+}
+
+/* ========================================
+   PREVENT CONTENT OVERFLOW
+   ======================================== */
+
+/* Ngăn chặn nội dung tràn ra ngoài */
+.main-content {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.content-area {
+    overflow-x: auto;
+}
+
+/* Đảm bảo text không tràn */
+.text-truncate-responsive {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+    .text-truncate-responsive {
+        max-width: 120px;
+    }
+}
+
+@media (max-width: 576px) {
+    .text-truncate-responsive {
+        max-width: 80px;
+    }
+}
+
+/* ========================================
+   Z-INDEX HIERARCHY
+   ======================================== */
+
+.sidebar {
+    z-index: 1040;
+}
+
+.sidebar-overlay {
+    z-index: 1035;
+}
+
+.main-header {
+    z-index: 1030;
+}
+
+.dropdown-menu {
+    z-index: 1050;
+}
+
+.modal-backdrop {
+    z-index: 1055;
+}
+
+.modal {
+    z-index: 1060;
+}
+
+.toast-container {
+    z-index: 1070;
+}
+
+/* ========================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ======================================== */
+
+@media (hover: none) and (pointer: coarse) {
+    /* Tăng kích thước touch targets */
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .nav-link {
+        min-height: 44px;
+    }
+    
+    .form-control,
+    .form-select {
+        min-height: 44px;
+    }
+    
+    .page-link {
+        min-height: 44px;
+        min-width: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Disable hover effects on touch */
+    .card:hover {
+        transform: none;
+    }
+    
+    .btn:hover::before {
+        display: none;
+    }
+}
+
+/* ========================================
+   SCROLLBAR FOR SMALL SCREENS
+   ======================================== */
+
+@media (max-width: 768px) {
+    ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+}
+
+/* ========================================
+   SAFE AREA FOR MOBILE DEVICES
+   ======================================== */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .main-content {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .modal-footer {
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+}
+

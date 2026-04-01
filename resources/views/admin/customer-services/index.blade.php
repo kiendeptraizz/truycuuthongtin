@@ -5,7 +5,7 @@
 
 @section('styles')
 <style>
-    /* Searchable Dropdown Portal */
+    /* Searchable Dropdown Portal - Optimized */
     .service-dropdown-portal {
         display: none;
         position: fixed;
@@ -13,10 +13,11 @@
         background: #fff;
         border: 1px solid rgba(102, 126, 234, 0.3);
         border-radius: 12px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         max-height: 400px;
         overflow-y: auto;
         padding: 10px 0;
+        contain: layout style paint;
     }
 
     .service-dropdown-portal .dropdown-item {
@@ -25,18 +26,17 @@
         display: block;
         color: #333;
         text-decoration: none;
-        transition: all 0.2s ease;
         border-left: 3px solid transparent;
     }
 
     .service-dropdown-portal .dropdown-item:hover {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        background: rgba(102, 126, 234, 0.1);
         color: #667eea;
         border-left-color: #667eea;
     }
 
     .service-dropdown-portal .dropdown-item.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #667eea;
         color: white;
         border-left-color: white;
     }
@@ -53,22 +53,21 @@
     #servicePackageSearch {
         border-radius: 8px;
         border: 2px solid #e0e0e0;
-        transition: all 0.3s ease;
     }
 
     #servicePackageSearch:focus {
         border-color: #667eea;
-        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     }
 
-    /* Sticky column styles */
+    /* Sticky column styles - Optimized */
     .sticky-column {
         position: sticky !important;
         left: 0 !important;
         background: white !important;
         z-index: 10 !important;
         border-right: 2px solid #dee2e6 !important;
-        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        contain: layout style;
     }
 
     .table thead .sticky-column {
@@ -76,10 +75,10 @@
         font-weight: 600;
     }
 
-    /* Responsive table improvements */
+    /* Responsive table improvements - Optimized */
     .table-responsive {
         border-radius: 0.375rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        contain: layout style;
     }
 
     .table {
@@ -143,6 +142,180 @@
         font-size: 0.8rem;
         margin-top: 2px;
     }
+
+    /* ========================================
+       RESPONSIVE DESIGN FOR SPLIT SCREEN
+       ======================================== */
+    
+    /* Card header responsive */
+    .card-header .d-flex.justify-content-between {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .card-header .d-flex.gap-2 {
+        flex-wrap: wrap;
+        gap: 0.5rem !important;
+    }
+    
+    /* Filter form responsive */
+    @media (max-width: 1200px) {
+        .card-header .d-flex.gap-2 .btn {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.7rem;
+        }
+        
+        .card-header .d-flex.gap-2 .btn i {
+            margin-right: 0 !important;
+        }
+        
+        .card-header .d-flex.gap-2 .btn span,
+        .card-header .d-flex.gap-2 .btn:not([class*="btn-"]) {
+            font-size: 0;
+        }
+    }
+    
+    @media (max-width: 992px) {
+        .card-header .d-flex.justify-content-between {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+        
+        .card-header .d-flex.gap-2 {
+            justify-content: flex-start;
+        }
+        
+        .card-header .d-flex.gap-2 .btn {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        
+        /* Form filter responsive */
+        form.row.g-3 > div[class*="col-md"] {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+        
+        form.row.g-3 > .col-md-4 {
+            order: 1;
+        }
+        
+        form.row.g-3 > .col-md-3:nth-child(2) {
+            order: 2;
+        }
+        
+        form.row.g-3 > .col-md-3:nth-child(3) {
+            order: 3;
+        }
+        
+        form.row.g-3 > .col-md-2 {
+            order: 4;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .card-header h5 {
+            font-size: 1rem;
+        }
+        
+        .card-header small {
+            font-size: 0.75rem;
+        }
+        
+        .card-header .d-flex.gap-2 .btn {
+            padding: 0.35rem 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        /* Show only icons on small screens */
+        .card-header .d-flex.gap-2 .btn .me-1 + text,
+        .card-header .d-flex.gap-2 .btn:not(:has(i))::after {
+            display: none;
+        }
+    }
+    
+    /* Stats cards in split screen */
+    @media (max-width: 900px) {
+        .row.mb-4 .col-md-3 {
+            flex: 0 0 50%;
+            max-width: 50%;
+        }
+    }
+    
+    @media (max-width: 600px) {
+        .row.mb-4 .col-md-3 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+    }
+    
+    /* Table improvements for split screen */
+    @media (max-width: 900px) {
+        .table-responsive {
+            font-size: 0.75rem;
+        }
+        
+        .table thead th {
+            font-size: 0.7rem;
+            padding: 0.5rem 0.4rem;
+            min-width: 80px !important;
+        }
+        
+        .table tbody td {
+            padding: 0.5rem 0.4rem;
+        }
+        
+        .sticky-column {
+            min-width: 70px !important;
+        }
+        
+        .btn-group-vertical .btn {
+            font-size: 0.65rem;
+            padding: 0.2rem 0.35rem;
+        }
+    }
+    
+    /* Alert responsive */
+    @media (max-width: 768px) {
+        .alert h6 {
+            font-size: 0.9rem;
+        }
+        
+        .alert p {
+            font-size: 0.8rem;
+        }
+    }
+    
+    /* Results info responsive */
+    @media (max-width: 768px) {
+        .d-flex.justify-content-between.align-items-center.mb-3 {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 0.25rem;
+        }
+    }
+    
+    /* Bulk action bar responsive */
+    @media (max-width: 768px) {
+        #bulkActionBar .d-flex {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        #bulkActionBar .d-flex > div {
+            display: flex;
+            gap: 0.5rem;
+        }
+    }
+    
+    /* Service dropdown portal responsive */
+    @media (max-width: 768px) {
+        .service-dropdown-portal {
+            max-width: calc(100vw - 30px) !important;
+            left: 15px !important;
+            right: 15px !important;
+        }
+    }
 </style>
 @endsection
 
@@ -151,27 +324,27 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="flex-grow-1">
                         <h5 class="mb-0">Quản lý dịch vụ khách hàng</h5>
-                        <small class="text-muted">Theo dõi và quản lý các dịch vụ đã gán cho khách hàng</small>
+                        <small class="text-muted d-none d-md-inline">Theo dõi và quản lý các dịch vụ đã gán cho khách hàng</small>
                     </div>
-                    <div class="d-flex gap-2">
-                        <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary">
-                            <i class="fas fa-users me-1"></i>
-                            Tài khoản dùng chung
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ route('admin.shared-accounts.index') }}" class="btn btn-secondary btn-sm" title="Tài khoản dùng chung">
+                            <i class="fas fa-users"></i>
+                            <span class="d-none d-lg-inline ms-1">Tài khoản dùng chung</span>
                         </a>
-                        <a href="{{ route('admin.customer-services.daily-report') }}" class="btn btn-info">
-                            <i class="fas fa-chart-bar me-1"></i>
-                            Báo cáo hàng ngày
+                        <a href="{{ route('admin.customer-services.daily-report') }}" class="btn btn-info btn-sm" title="Báo cáo hàng ngày">
+                            <i class="fas fa-chart-bar"></i>
+                            <span class="d-none d-lg-inline ms-1">Báo cáo hàng ngày</span>
                         </a>
-                        <a href="{{ route('admin.customer-services.reminder-report') }}" class="btn btn-warning">
-                            <i class="fas fa-bell me-1"></i>
-                            Báo cáo nhắc nhở
+                        <a href="{{ route('admin.customer-services.reminder-report') }}" class="btn btn-warning btn-sm" title="Báo cáo nhắc nhở">
+                            <i class="fas fa-bell"></i>
+                            <span class="d-none d-lg-inline ms-1">Báo cáo nhắc nhở</span>
                         </a>
-                        <a href="{{ route('admin.customer-services.create') }}" class="btn btn-primary">
-                            <i class="fas fa-plus me-1"></i>
-                            Gán dịch vụ mới
+                        <a href="{{ route('admin.customer-services.create') }}" class="btn btn-primary btn-sm" title="Gán dịch vụ mới">
+                            <i class="fas fa-plus"></i>
+                            <span class="d-none d-md-inline ms-1">Gán dịch vụ mới</span>
                         </a>
                     </div>
                 </div>
@@ -267,20 +440,20 @@
                         <!-- Simple Filter -->
                         <div class="row mb-4">
                             <div class="col-12">
-                                <form method="GET" class="row g-3">
-                                    <div class="col-md-4">
+                                <form method="GET" class="row g-2 g-md-3">
+                                    <div class="col-12 col-lg-4">
                                         <input type="text"
                                             name="search"
-                                            class="form-control"
-                                            placeholder="Tìm theo tên, mã KH, email KH, SĐT, email đăng nhập, tên gói DV..."
+                                            class="form-control form-control-sm"
+                                            placeholder="Tìm theo SĐT, email đăng nhập, tên gói DV..."
                                             value="{{ request('search') }}">
-                                        <small class="text-muted">
+                                        <small class="text-muted d-none d-md-block">
                                             <i class="fas fa-info-circle me-1"></i>
                                             Có thể tìm theo email đăng nhập dịch vụ
                                         </small>
                                     </div>
-                                    <div class="col-md-3">
-                                        <select name="filter" class="form-select">
+                                    <div class="col-6 col-lg-3">
+                                        <select name="filter" class="form-select form-select-sm">
                                             <option value="">Tất cả trạng thái</option>
                                             <optgroup label="Trạng thái dịch vụ">
                                                 <option value="active" {{ request('filter') === 'active' ? 'selected' : '' }}>
@@ -317,28 +490,32 @@
                                             </optgroup>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-6 col-lg-3">
                                         <div class="service-package-wrapper position-relative">
                                             <input type="text"
                                                 id="servicePackageSearch"
                                                 name="service_package_search"
-                                                class="form-control"
+                                                class="form-control form-control-sm"
                                                 placeholder="Tìm gói dịch vụ..."
                                                 value="{{ request('service_package_search') ?? (request('service_package_id') ? $servicePackages->find(request('service_package_id'))?->name : '') }}"
                                                 autocomplete="off">
                                             <input type="hidden" name="service_package_id" id="servicePackageId" value="{{ request('service_package_id') }}">
                                         </div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <button type="submit" class="btn btn-primary w-100">
-                                            <i class="fas fa-search me-1"></i>Lọc
-                                        </button>
-                                        @if(request()->hasAny(['search', 'filter', 'service_package_id', 'service_package_search']))
-                                        <a href="{{ route('admin.customer-services.index') }}"
-                                            class="btn btn-secondary w-100 mt-1">
-                                            <i class="fas fa-times-circle me-1"></i>Xóa
-                                        </a>
-                                        @endif
+                                    <div class="col-12 col-lg-2">
+                                        <div class="d-flex gap-1">
+                                            <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                                                <i class="fas fa-search"></i>
+                                                <span class="d-none d-md-inline ms-1">Lọc</span>
+                                            </button>
+                                            @if(request()->hasAny(['search', 'filter', 'service_package_id', 'service_package_search']))
+                                            <a href="{{ route('admin.customer-services.index') }}"
+                                                class="btn btn-secondary btn-sm flex-grow-1">
+                                                <i class="fas fa-times-circle"></i>
+                                                <span class="d-none d-md-inline ms-1">Xóa</span>
+                                            </a>
+                                            @endif
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -355,13 +532,34 @@
                             </small>
                         </div>
 
+                        <!-- Bulk Action Bar -->
+                        <div id="bulkActionBar" class="alert alert-info d-none mb-3 no-auto-hide">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="fas fa-check-square me-2"></i>
+                                    Đã chọn <strong id="selectedCount">0</strong> dịch vụ
+                                </span>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="clearSelection()">
+                                        <i class="fas fa-times me-1"></i> Bỏ chọn
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmBulkDelete()">
+                                        <i class="fas fa-trash-alt me-1"></i> Xóa đã chọn
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Customer Services Table -->
                         @if($customerServices->count() > 0)
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead class="table-light">
                                     <tr>
-                                        <th class="sticky-column" style="position: sticky; left: 0; background: #f8f9fa; z-index: 10; min-width: 120px;">Thao tác</th>
+                                        <th style="width: 40px; text-align: center;">
+                                            <input type="checkbox" id="selectAll" class="form-check-input" title="Chọn tất cả">
+                                        </th>
+                                        <th class="sticky-column" style="position: sticky; left: 40px; background: #f8f9fa; z-index: 10; min-width: 120px;">Thao tác</th>
                                         <th style="min-width: 150px;">Khách hàng</th>
                                         <th style="min-width: 180px;">Dịch vụ</th>
                                         <th style="min-width: 150px;">Family</th>
@@ -400,8 +598,12 @@
                                         }
                                         @endphp
                                         <tr id="service-{{ $service->id }}" class="{{ $rowClass }}">
+                                        <!-- Cột Checkbox -->
+                                        <td style="text-align: center; vertical-align: middle;">
+                                            <input type="checkbox" class="form-check-input service-checkbox" value="{{ $service->id }}" data-name="{{ $service->customer->name }} - {{ $service->servicePackage->name }}">
+                                        </td>
                                         <!-- Cột Thao tác - Di chuyển lên đầu và sticky -->
-                                        <td class="sticky-column" style="position: sticky; left: 0; background: white; z-index: 5; border-right: 1px solid #dee2e6;">
+                                        <td class="sticky-column" style="position: sticky; left: 40px; background: white; z-index: 5; border-right: 1px solid #dee2e6;">
                                             <div class="btn-group-vertical d-flex flex-column gap-1" style="min-width: 100px;">
                                                 <div class="btn-group">
                                                     <a href="{{ route('admin.customer-services.show', $service) }}"
@@ -618,11 +820,33 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-                <form id="deleteForm" method="POST" class="d-inline">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Xóa</button>
-                </form>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="executeDelete()">Xóa</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Delete Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Xác nhận xóa nhiều</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Bạn có chắc chắn muốn xóa <strong id="bulkDeleteCount">0</strong> dịch vụ đã chọn?</p>
+                <div id="bulkDeleteList" class="small text-muted" style="max-height: 200px; overflow-y: auto;"></div>
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="fas fa-exclamation-circle me-1"></i>
+                    Hành động này không thể hoàn tác!
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-danger" id="confirmBulkDeleteBtn" onclick="executeBulkDelete()">
+                    <i class="fas fa-trash-alt me-1"></i> Xóa tất cả
+                </button>
             </div>
         </div>
     </div>
@@ -631,11 +855,162 @@
 
 @section('scripts')
 <script>
+    let currentDeleteUrl = '';
+    
     function confirmDelete(serviceName, deleteUrl) {
         document.getElementById('serviceToDelete').textContent = serviceName;
-        document.getElementById('deleteForm').action = deleteUrl;
+        currentDeleteUrl = deleteUrl;
         new bootstrap.Modal(document.getElementById('deleteModal')).show();
     }
+    
+    function executeDelete() {
+        if (!currentDeleteUrl) return;
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const btn = document.getElementById('confirmDeleteBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xóa...';
+        
+        fetch(currentDeleteUrl, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok || response.redirected) {
+                // Reload trang hiện tại (giữ nguyên page và filter)
+                location.reload();
+            } else {
+                throw new Error('Có lỗi xảy ra khi xóa');
+            }
+        })
+        .catch(error => {
+            alert(error.message);
+            btn.disabled = false;
+            btn.innerHTML = 'Xóa';
+        });
+    }
+
+    // ============ BULK DELETE FUNCTIONS ============
+    
+    // Update bulk action bar visibility
+    function updateBulkActionBar() {
+        const checkboxes = document.querySelectorAll('.service-checkbox:checked');
+        const bulkActionBar = document.getElementById('bulkActionBar');
+        const selectedCount = document.getElementById('selectedCount');
+        
+        if (checkboxes.length > 0) {
+            bulkActionBar.classList.remove('d-none');
+            selectedCount.textContent = checkboxes.length;
+        } else {
+            bulkActionBar.classList.add('d-none');
+        }
+        
+        // Update "Select All" checkbox state
+        const allCheckboxes = document.querySelectorAll('.service-checkbox');
+        const selectAllCheckbox = document.getElementById('selectAll');
+        if (allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkboxes.length > 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+    }
+    
+    // Clear all selections
+    function clearSelection() {
+        document.querySelectorAll('.service-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('selectAll').checked = false;
+        document.getElementById('selectAll').indeterminate = false;
+        updateBulkActionBar();
+    }
+    
+    // Show bulk delete confirmation modal
+    function confirmBulkDelete() {
+        const checkboxes = document.querySelectorAll('.service-checkbox:checked');
+        if (checkboxes.length === 0) return;
+        
+        document.getElementById('bulkDeleteCount').textContent = checkboxes.length;
+        
+        // Build list of services to delete
+        let listHtml = '<ul class="list-unstyled mb-0">';
+        checkboxes.forEach((cb, index) => {
+            if (index < 10) {
+                listHtml += `<li><i class="fas fa-circle fa-xs me-2 text-danger"></i>${cb.dataset.name}</li>`;
+            }
+        });
+        if (checkboxes.length > 10) {
+            listHtml += `<li class="text-muted"><i class="fas fa-ellipsis-h me-2"></i>và ${checkboxes.length - 10} dịch vụ khác...</li>`;
+        }
+        listHtml += '</ul>';
+        document.getElementById('bulkDeleteList').innerHTML = listHtml;
+        
+        new bootstrap.Modal(document.getElementById('bulkDeleteModal')).show();
+    }
+    
+    // Execute bulk delete
+    function executeBulkDelete() {
+        const checkboxes = document.querySelectorAll('.service-checkbox:checked');
+        if (checkboxes.length === 0) return;
+        
+        const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const btn = document.getElementById('confirmBulkDeleteBtn');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Đang xóa...';
+        
+        fetch('{{ route("admin.customer-services.bulk-delete") }}', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ ids: ids })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                throw new Error(data.message || 'Có lỗi xảy ra khi xóa');
+            }
+        })
+        .catch(error => {
+            alert(error.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-trash-alt me-1"></i> Xóa tất cả';
+        });
+    }
+    
+    // Event listeners for checkboxes - using event delegation for better performance
+    document.addEventListener('DOMContentLoaded', function() {
+        // Select All checkbox
+        document.getElementById('selectAll')?.addEventListener('change', function() {
+            const isChecked = this.checked;
+            requestAnimationFrame(() => {
+                document.querySelectorAll('.service-checkbox').forEach(cb => cb.checked = isChecked);
+                updateBulkActionBar();
+            });
+        }, { passive: true });
+        
+        // Use event delegation for individual checkboxes (faster than attaching to each)
+        document.querySelector('tbody')?.addEventListener('change', function(e) {
+            if (e.target.classList.contains('service-checkbox')) {
+                requestAnimationFrame(updateBulkActionBar);
+            }
+        }, { passive: true });
+    });
+
+    // ============ END BULK DELETE FUNCTIONS ============
 
     function markReminded(serviceId) {
         const notes = prompt('Ghi chú về việc nhắc nhở (tùy chọn):');

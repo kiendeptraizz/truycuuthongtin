@@ -53,7 +53,7 @@
 
     /* Layout */
     --sidebar-width: 260px;
-    --sidebar-collapsed-width: 80px;
+    --sidebar-collapsed-width: 70px;
     --header-height: 70px;
 
     /* Effects */
@@ -1078,17 +1078,121 @@ body {
    RESPONSIVE DESIGN
    ======================================== */
 
-@media (max-width: 1024px) {
+/* Large screens - Full sidebar */
+@media (min-width: 1201px) {
+    .sidebar {
+        width: var(--sidebar-width);
+    }
+    
+    .main-content {
+        margin-left: var(--sidebar-width);
+    }
+}
+
+/* Medium screens - Collapsed sidebar */
+@media (max-width: 1200px) and (min-width: 993px) {
+    .sidebar:not(.show) {
+        width: var(--sidebar-collapsed-width);
+    }
+    
+    .sidebar:not(.show) .brand h4 {
+        display: none;
+    }
+    
+    .sidebar:not(.show) .brand {
+        padding: 1rem 0.5rem;
+    }
+    
+    .sidebar:not(.show) .nav-link {
+        justify-content: center;
+        padding: 0.85rem;
+        margin: 0.2rem 0.5rem;
+        font-size: 0;
+    }
+    
+    .sidebar:not(.show) .nav-link i {
+        margin-right: 0;
+        font-size: 1.2rem;
+    }
+    
+    .sidebar:not(.show) hr {
+        margin: 0.5rem 0.75rem;
+    }
+    
+    .sidebar:not(.show) #zaloSubmenu {
+        display: none;
+    }
+    
+    .sidebar:not(.show) .nav-link .fa-chevron-down {
+        display: none;
+    }
+    
+    .main-content {
+        margin-left: var(--sidebar-collapsed-width);
+    }
+    
+    /* Khi sidebar mở rộng qua toggle */
+    .sidebar.show {
+        width: var(--sidebar-width) !important;
+        z-index: 1040;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .sidebar.show .brand h4 {
+        display: block;
+    }
+    
+    .sidebar.show .nav-link {
+        justify-content: flex-start;
+        font-size: 0.9rem;
+    }
+    
+    .sidebar.show .nav-link i {
+        margin-right: 0.85rem;
+    }
+    
+    .sidebar.show #zaloSubmenu {
+        display: block;
+    }
+    
+    .sidebar.show .nav-link .fa-chevron-down {
+        display: inline;
+    }
+    
+    .main-header {
+        padding: 0 1.25rem;
+    }
+    
+    .content-area {
+        padding: 1.25rem;
+    }
+}
+
+/* Small/Split screens - Hidden sidebar */
+@media (max-width: 992px) {
     .sidebar {
         transform: translateX(-100%);
+        width: var(--sidebar-width);
     }
 
     .sidebar.show {
         transform: translateX(0);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Restore sidebar text when shown */
+    .sidebar.show .brand h4,
+    .sidebar.show .nav-link {
+        font-size: inherit;
+    }
+    
+    .sidebar.show .nav-link i {
+        margin-right: 0.85rem;
     }
 
     .main-content {
-        margin-left: 0;
+        margin-left: 0 !important;
+        width: 100%;
     }
 
     .main-header {
@@ -1121,6 +1225,35 @@ body {
 
     .page-title {
         font-size: 1.25rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .content-area {
+        padding: 0.5rem;
+    }
+
+    .card-body {
+        padding: 0.75rem;
+    }
+
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .page-title {
+        font-size: 1rem;
+    }
+    
+    .main-header {
+        padding: 0.5rem 0.75rem;
     }
 }
 

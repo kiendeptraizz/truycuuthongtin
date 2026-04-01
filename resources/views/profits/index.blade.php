@@ -202,7 +202,6 @@
 let ordersData = [];
 
 $(document).ready(function() {
-    console.log('Page ready - profits management');
     
     // Test jQuery
     if (typeof $ === 'undefined') {
@@ -210,14 +209,12 @@ $(document).ready(function() {
         alert('jQuery not loaded!');
         return;
     } else {
-        console.log('jQuery loaded successfully');
     }
     
     $('#current-date').text(new Date().toLocaleDateString('vi-VN'));
     
     // Setup CSRF token
     const csrfToken = $('meta[name="csrf-token"]').attr('content');
-    console.log('CSRF Token:', csrfToken);
     
     if (!csrfToken) {
         console.error('CSRF token not found!');
@@ -234,26 +231,20 @@ $(document).ready(function() {
     setupProfitForm();
     
     // Test route URLs
-    console.log('Testing route URLs...');
-    console.log('Orders URL: /admin/profits/today-orders');
-    console.log('Stats URL: /admin/profits/today-statistics');
     
     // Auto load data after 1 second
     setTimeout(function() {
-        console.log('Auto loading data...');
         loadData();
     }, 1000);
 });
 
 function testData() {
-    console.log('Testing data...');
     alert('Check console for test results');
     
     // Test basic fetch
     fetch('/admin/profits/today-orders')
         .then(response => response.json())
         .then(data => {
-            console.log('Fetch test result:', data);
             alert('Fetch test completed. Count: ' + (data.data ? data.data.length : 0));
         })
         .catch(error => {
@@ -264,9 +255,6 @@ function testData() {
 
 function testBasic() {
     alert('JavaScript works! jQuery version: ' + (typeof $ !== 'undefined' ? $.fn.jquery : 'NOT LOADED'));
-    console.log('jQuery:', typeof $);
-    console.log('Window location:', window.location.href);
-    console.log('CSRF token:', $('meta[name="csrf-token"]').attr('content'));
 }
 
 // Add profit for an order
@@ -337,7 +325,6 @@ function setupProfitForm() {
             method: 'POST',
             data: formData,
             success: function(response) {
-                console.log('Store profit response:', response);
                 if (response.success) {
                     $('#profitModal').modal('hide');
                     alert('✅ ' + response.message);
@@ -364,17 +351,14 @@ function setupProfitForm() {
 }
 
 function loadData() {
-    console.log('Loading data...');
     $('#orders-tbody').html('<tr><td colspan="7" class="text-center">Đang tải...</td></tr>');
     
     // Load statistics first
-    console.log('Making AJAX request to: /admin/profits/today-statistics');
     $.ajax({
         url: '/admin/profits/today-statistics',
         method: 'GET',
         timeout: 10000,
         success: function(response) {
-            console.log('Statistics success:', response);
             if (response.success) {
                 $('#total-orders').text(response.data.total_orders || 0);
                 $('#orders-with-profit').text(response.data.orders_with_profit || 0);
@@ -392,13 +376,11 @@ function loadData() {
     });
     
     // Load orders
-    console.log('Making AJAX request to: /admin/profits/today-orders');
     $.ajax({
         url: '/admin/profits/today-orders',
         method: 'GET',
         timeout: 10000,
         success: function(response) {
-            console.log('Orders success:', response);
             if (response.success && response.data) {
                 // Save orders data globally
                 ordersData = response.data;

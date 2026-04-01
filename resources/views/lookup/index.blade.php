@@ -4,7 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tra cứu dịch vụ - KienUnlocked</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Tra Cứu Thông Tin Dịch Vụ - KienUnlocked</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Tra cứu thông tin dịch vụ, tài khoản số nhanh chóng. Nhập mã khách hàng, email hoặc số điện thoại để kiểm tra trạng thái dịch vụ.">
+    <meta name="keywords" content="tra cứu dịch vụ, kiểm tra tài khoản, KienUnlocked, tra cứu thông tin">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="{{ url('/tra-cuu') }}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ url('/tra-cuu') }}">
+    <meta property="og:title" content="Tra Cứu Thông Tin Dịch Vụ - KienUnlocked">
+    <meta property="og:description" content="Tra cứu thông tin dịch vụ, tài khoản số nhanh chóng. Nhập mã khách hàng, email hoặc SĐT.">
+    <meta property="og:image" content="{{ asset('logo.svg') }}">
+    <meta property="og:locale" content="vi_VN">
+
+    <!-- Mobile Web App -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Tra Cứu">
+    <meta name="mobile-web-app-capable" content="yes">
 
     <!-- Favicon and App Icons -->
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
@@ -15,8 +36,8 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Font Awesome - Local -->
+    <link rel="stylesheet" href="{{ asset('css/fontawesome/all.min.css') }}" />
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -302,6 +323,73 @@
 
         .search-btn i {
             margin-right: 0.5rem;
+        }
+
+        .search-hints {
+            padding-top: 0.5rem;
+        }
+
+        .search-hints small {
+            color: #6b7280;
+        }
+
+        .search-hints strong {
+            color: #667eea;
+        }
+
+        /* Feature Cards */
+        .features-section {
+            animation: fadeInUp 1s ease;
+            animation-delay: 0.3s;
+            animation-fill-mode: both;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--primary-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .feature-icon-success {
+            background: var(--success-gradient);
+        }
+
+        .feature-icon-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .feature-card h5 {
+            color: white;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            margin: 0;
         }
 
         /* Autocomplete suggestions */
@@ -786,14 +874,17 @@
                 <div class="header">
                     <a href="{{ route('lookup.index') }}" class="logo-container">
                         <div class="logo-icon">
-                            <i class="fas fa-search"></i>
+                            <i class="fas fa-unlock-alt"></i>
                         </div>
                         <div class="logo-text">
                             <h1>KienUnlocked</h1>
-                            <p>Service Lookup Portal</p>
+                            <p>Tra cứu dịch vụ</p>
                         </div>
                     </a>
-                    <p class="subtitle">✨ Tra cứu thông tin dịch vụ của bạn một cách nhanh chóng và dễ dàng</p>
+                    <p class="subtitle">
+                        <i class="fas fa-sparkles me-2"></i>
+                        Tra cứu thông tin dịch vụ của bạn một cách nhanh chóng và dễ dàng
+                    </p>
                 </div>
 
                 <!-- Search Card -->
@@ -801,32 +892,85 @@
                     <form id="lookupForm">
                         <div class="search-wrapper">
                             <div class="search-input-group">
-                                <i class="fas fa-search search-icon-left"></i>
+                                <i class="fas fa-user search-icon-left"></i>
                                 <input
                                     type="text"
                                     class="search-input"
                                     id="searchInput"
-                                    placeholder="Nhập mã khách hàng, email hoặc số điện thoại..."
+                                    placeholder="Nhập mã KH, email, SĐT hoặc tên..."
                                     autocomplete="off"
                                     required>
                                 <button type="submit" class="search-btn" id="searchBtn">
-                                    <i class="fas fa-search"></i>
+                                    <i class="fas fa-search me-2"></i>
                                     <span>Tra cứu</span>
                                 </button>
                             </div>
                             <div class="autocomplete-suggestions" id="autocompleteSuggestions"></div>
                         </div>
                     </form>
+                    <div class="search-hints mt-3 text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Bạn có thể tra cứu bằng: <strong>Mã khách hàng</strong>, <strong>Email</strong>, <strong>Số điện thoại</strong> hoặc <strong>Tên</strong>
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Features Section -->
+                <div class="features-section mt-4" id="featuresSection">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <div class="feature-icon">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <h5>Tra cứu nhanh</h5>
+                                <p>Kết quả hiển thị ngay lập tức</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <div class="feature-icon feature-icon-success">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <h5>Cập nhật 24/7</h5>
+                                <p>Thông tin luôn mới nhất</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <div class="feature-icon feature-icon-warning">
+                                    <i class="fas fa-lock"></i>
+                                </div>
+                                <h5>Bảo mật cao</h5>
+                                <p>Thông tin được mã hóa an toàn</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Loading State -->
                 <div class="loading-container" id="loadingContainer">
                     <div class="loader"></div>
-                    <p class="loading-text">Đang tìm kiếm thông tin của bạn...</p>
+                    <p class="loading-text">
+                        <i class="fas fa-search me-2"></i>
+                        Đang tìm kiếm thông tin của bạn...
+                    </p>
                 </div>
 
                 <!-- Results Container -->
                 <div class="results-container" id="resultsContainer"></div>
+
+                <!-- Footer -->
+                <footer class="text-center py-4 mt-4">
+                    <p class="text-white-50 mb-0" style="font-size: 0.9rem;">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Thông tin của bạn được bảo mật an toàn
+                    </p>
+                    <p class="text-white-50 mt-2" style="font-size: 0.8rem;">
+                        © {{ date('Y') }} KienUnlocked. All rights reserved.
+                    </p>
+                </footer>
             </div>
         </div>
     </div>
@@ -878,17 +1022,25 @@
                 showLoading();
 
                 // Perform AJAX search
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
                 fetch('{{ route("lookup.search") }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json'
                         },
                         body: JSON.stringify({
                             code: query
                         })
                     })
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok && response.status !== 404) {
+                            throw new Error('HTTP error! status: ' + response.status);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         hideLoading();
                         if (data.success) {
@@ -900,14 +1052,15 @@
                     })
                     .catch(error => {
                         hideLoading();
-                        displayError('Có lỗi xảy ra. Vui lòng thử lại sau.');
                         console.error('Search error:', error);
+                        displayError('Có lỗi xảy ra: ' + error.message);
                     });
             }
 
             function showLoading() {
                 loadingContainer.classList.add('active');
                 resultsContainer.classList.remove('active');
+                document.getElementById('featuresSection').style.display = 'none';
                 searchBtn.disabled = true;
             }
 

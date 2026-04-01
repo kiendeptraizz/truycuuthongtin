@@ -142,7 +142,6 @@
 @section('scripts')
 <script>
 $(document).ready(function() {
-    console.log('Page ready');
     $('#current-date').text(new Date().toLocaleDateString('vi-VN'));
     
     // Setup CSRF token
@@ -157,14 +156,12 @@ $(document).ready(function() {
 });
 
 function testData() {
-    console.log('Testing data...');
     alert('Check console for test results');
     
     // Test basic fetch
     fetch('/admin/profits/today-orders')
         .then(response => response.json())
         .then(data => {
-            console.log('Fetch test result:', data);
             alert('Fetch test completed. Count: ' + (data.data ? data.data.length : 0));
         })
         .catch(error => {
@@ -174,13 +171,11 @@ function testData() {
 }
 
 function loadData() {
-    console.log('Loading data...');
     $('#orders-tbody').html('<tr><td colspan="7" class="text-center">Đang tải...</td></tr>');
     
     // Load statistics
     $.get('/admin/profits/today-statistics')
         .done(function(response) {
-            console.log('Statistics loaded:', response);
             if (response.success) {
                 $('#total-orders').text(response.data.total_orders || 0);
                 $('#orders-with-profit').text(response.data.orders_with_profit || 0);
@@ -195,7 +190,6 @@ function loadData() {
     // Load orders
     $.get('/admin/profits/today-orders')
         .done(function(response) {
-            console.log('Orders loaded:', response);
             if (response.success && response.data) {
                 let html = '';
                 if (response.data.length === 0) {
