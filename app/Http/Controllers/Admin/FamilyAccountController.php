@@ -239,8 +239,8 @@ class FamilyAccountController extends Controller
                 'status' => 'active',
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'created_by' => 1,
-                'managed_by' => 1,
+                'created_by' => auth()->id(),
+                'managed_by' => auth()->id(),
             ]);
 
             DB::commit();
@@ -348,7 +348,7 @@ class FamilyAccountController extends Controller
                 'status' => $request->status,
                 'family_notes' => $request->family_notes,
                 'internal_notes' => $request->internal_notes,
-                'managed_by' => 1,
+                'managed_by' => auth()->id(),
             ]);
 
             DB::commit();
@@ -508,7 +508,7 @@ class FamilyAccountController extends Controller
                 'activated_at' => Carbon::parse($request->start_date),
                 'expires_at' => $calculatedEndDate,
                 'status' => 'active',
-                'assigned_by' => 1,
+                'assigned_by' => auth()->id(),
                 'internal_notes' => 'Dịch vụ được tạo tự động từ Family Account: ' . $familyAccount->family_name . ' (ID: ' . $familyAccount->id . '). Thành viên Family Member ID: ' . $familyMember->id,
             ]);
 

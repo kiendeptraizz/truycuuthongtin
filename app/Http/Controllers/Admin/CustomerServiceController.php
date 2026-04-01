@@ -153,7 +153,7 @@ class CustomerServiceController extends Controller
                 'total_services' => $todayActivated->count(),
                 'unique_customers' => $todayActivated->pluck('customer_id')->unique()->count(),
                 'revenue_estimate' => $todayActivated->sum(function ($service) {
-                    return $service->servicePackage->price ?? 0;
+                    return $service->price ?? ($service->servicePackage->price ?? 0);
                 }),
                 'top_packages' => $todayActivated->groupBy('servicePackage.name')
                     ->map(function ($group) {
@@ -252,7 +252,7 @@ class CustomerServiceController extends Controller
         $customerService = CustomerService::create([
             'customer_id' => $request->customer_id,
             'service_package_id' => $request->service_package_id,
-            'assigned_by' => 1,
+            'assigned_by' => auth()->id(),
             'login_email' => $request->login_email,
             'login_password' => $request->login_password,
             'activated_at' => $request->activated_at,
@@ -272,7 +272,7 @@ class CustomerServiceController extends Controller
                 'customer_service_id' => $customerService->id,
                 'profit_amount' => $request->profit_amount,
                 'notes' => $request->profit_notes,
-                'created_by' => 1,
+                'created_by' => auth()->id(),
             ]);
         }
 
@@ -393,7 +393,7 @@ class CustomerServiceController extends Controller
                     'customer_service_id' => $customerService->id,
                     'profit_amount' => $profitAmount,
                     'notes' => $request->profit_notes,
-                    'created_by' => 1,
+                    'created_by' => auth()->id(),
                 ]);
                 $profitMessage = ' Lợi nhuận đã được ghi nhận.';
             }
@@ -622,7 +622,7 @@ class CustomerServiceController extends Controller
         $customerService = CustomerService::create([
             'customer_id' => $customer->id,
             'service_package_id' => $request->service_package_id,
-            'assigned_by' => 1,
+            'assigned_by' => auth()->id(),
             'login_email' => $request->login_email,
             'login_password' => $request->login_password,
             'activated_at' => $request->activated_at,
@@ -647,7 +647,7 @@ class CustomerServiceController extends Controller
                 'customer_service_id' => $customerService->id,
                 'profit_amount' => $request->profit_amount,
                 'notes' => $request->profit_notes,
-                'created_by' => 1,
+                'created_by' => auth()->id(),
             ]);
         }
 
