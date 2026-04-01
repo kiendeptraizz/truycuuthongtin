@@ -459,7 +459,9 @@
                                                     placeholder="Nhập số tiền lãi (VD: 70.000)"
                                                     value="{{ old('profit_amount') }}"
                                                     inputmode="numeric"
-                                                    maxlength="20">
+                                                    maxlength="20"
+                                                    data-currency="VND"
+                                                    data-show-currency="false">
                                                 <span class="input-group-text">VNĐ</span>
                                             </div>
                                             @error('profit_amount')
@@ -507,24 +509,18 @@
 
 @push('scripts')
 <script>
-    // Define PHP variables for JavaScript
     const hasFamilyMembership = @json($hasFamilyMembership ?? false);
 
-    // Function to format number with thousand separators (Vietnamese format: 70.000)
     function formatNumberInput(number) {
-        // Remove non-digits first
         const cleanNumber = String(number).replace(/\D/g, '');
         if (!cleanNumber) return '';
-        
-        // Format with dots as thousand separators
         return cleanNumber.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
 
     // =====================================================
-    // GLOBAL FUNCTIONS - Defined outside DOMContentLoaded
+    // GLOBAL FUNCTIONS
     // =====================================================
-    
-    // Main function to handle account type logic
+
     window.handleAccountTypeLogic = function() {
         const serviceSelect = document.getElementById('service_package_id');
         const familyWarning = document.getElementById('family-warning');
@@ -534,11 +530,7 @@
         const noCredentialWarning = document.getElementById('no-credential-for-package');
         const submitBtn = document.querySelector('button[type="submit"]');
 
-        console.log('🔄 handleAccountTypeLogic called');
-        console.log('📦 Service select value:', serviceSelect?.value);
-
         if (!serviceSelect || !serviceSelect.value) {
-            console.log('⚠️ No service selected');
             if (familyWarning) familyWarning.style.display = 'none';
             if (familySelection) familySelection.style.display = 'none';
             if (sharedCredentialSelection) sharedCredentialSelection.style.display = 'none';
@@ -548,53 +540,31 @@
         }
 
         const selectedCard = document.querySelector(`[data-package-id="${serviceSelect.value}"]`);
-        console.log('🎴 Selected card:', selectedCard);
-        
-        if (!selectedCard) {
-            console.log('❌ No card found for package ID:', serviceSelect.value);
-            return;
-        }
+        if (!selectedCard) return;
 
         const accountType = selectedCard.getAttribute('data-account-type') || '';
         const selectedPackageId = serviceSelect.value;
 
-        console.log('📝 Account type from card:', `"${accountType}"`);
-        console.log('🔢 Selected package ID:', selectedPackageId);
-
-        // Hide all by default
         if (familySelection) familySelection.style.display = 'none';
         if (sharedCredentialSelection) sharedCredentialSelection.style.display = 'none';
         if (familyWarning) familyWarning.style.display = 'none';
         if (noFamilyWarning) noFamilyWarning.style.display = 'none';
         if (noCredentialWarning) noCredentialWarning.style.display = 'none';
 
-        // Check for different account types (case-insensitive and flexible matching)
         const accountTypeLower = accountType.toLowerCase();
-        console.log('🔍 Account type lowercase:', `"${accountTypeLower}"`);
-        
-        // Check for family/add family type
+
         if (accountTypeLower.includes('add family') || accountTypeLower.includes('family')) {
-            console.log('✅ Detected: Family account type');
             if (familySelection) {
                 familySelection.style.display = 'block';
                 window.filterFamilyAccountsByPackage && window.filterFamilyAccountsByPackage(selectedPackageId);
             }
-        } 
-        // Check for shared account type
-        else if (accountTypeLower.includes('dùng chung') || accountTypeLower.includes('shared')) {
-            console.log('✅ Detected: Shared account type - showing credential selection');
+        } else if (accountTypeLower.includes('dùng chung') || accountTypeLower.includes('shared')) {
             if (sharedCredentialSelection) {
                 sharedCredentialSelection.style.display = 'block';
-                console.log('✅ Set sharedCredentialSelection display to block');
                 window.filterSharedCredentialsByPackage && window.filterSharedCredentialsByPackage(selectedPackageId);
-            } else {
-                console.log('❌ sharedCredentialSelection element NOT FOUND!');
             }
-        } else {
-            console.log('ℹ️ Other account type:', accountType);
         }
 
-        // Reset submit button
         if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-save me-1"></i>Gán dịch vụ';
@@ -603,37 +573,20 @@
         }
     };
 
-    // Alias for backward compatibility
     window.handleFamilyAccountLogic = window.handleAccountTypeLogic;
 
-    // Filter shared credentials function
     window.filterSharedCredentialsByPackage = function(packageId) {
         const sharedSelect = document.getElementById('shared_credential_id');
         const noCredentialWarning = document.getElementById('no-credential-for-package');
-        
-        if (!sharedSelect) {
-            console.log('❌ shared_credential_id select not found');
-            return;
-        }
-        
+        if (!sharedSelect) return;
+
         const options = sharedSelect.querySelectorAll('option');
         let hasVisibleOptions = false;
-
-        console.log('🔍 Filtering shared credentials for package ID:', packageId);
-        console.log('📋 Total options:', options.length - 1);
-
-        // Reset selection
         sharedSelect.value = '';
 
         options.forEach(option => {
-            if (option.value === '') {
-                option.style.display = '';
-                return;
-            }
-
+            if (option.value === '') { option.style.display = ''; return; }
             const optionPackageId = option.getAttribute('data-service-package-id');
-            console.log(`  Option: ${option.textContent.substring(0, 40)}... | Package ID: ${optionPackageId} | Match: ${optionPackageId === packageId}`);
-            
             if (optionPackageId === packageId) {
                 option.style.display = '';
                 hasVisibleOptions = true;
@@ -642,31 +595,22 @@
             }
         });
 
-        console.log('✅ Has matching options:', hasVisibleOptions);
-
         if (noCredentialWarning) {
             noCredentialWarning.style.display = hasVisibleOptions ? 'none' : 'block';
         }
     };
 
-    // Filter family accounts function
     window.filterFamilyAccountsByPackage = function(packageId) {
         const familySelect = document.getElementById('family_account_id');
         const noFamilyWarning = document.getElementById('no-family-for-package');
-        
         if (!familySelect) return;
-        
+
         const options = familySelect.querySelectorAll('option');
         let hasVisibleOptions = false;
-
         familySelect.value = '';
 
         options.forEach(option => {
-            if (!option.value) {
-                option.style.display = '';
-                return;
-            }
-
+            if (!option.value) { option.style.display = ''; return; }
             const familyPackageId = option.getAttribute('data-service-package-id');
             if (familyPackageId === packageId) {
                 option.style.display = '';
@@ -688,11 +632,7 @@
     // DOMContentLoaded
     // =====================================================
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 DOM Content Loaded - Assign Service Form');
-
         const serviceSelect = document.getElementById('service_package_id');
-        const activatedInput = document.getElementById('activated_at');
-        const expiresInput = document.getElementById('expires_at');
         const supplierSelect = document.getElementById('supplier_id');
         const supplierDetails = document.getElementById('supplier-details');
         const supplierCodeDisplay = document.getElementById('supplier-code-display');
@@ -701,43 +641,28 @@
         const serviceSelection = document.getElementById('service-selection');
         const supplierServiceSelect = document.getElementById('supplier_service_id');
 
-        console.log('📋 Main elements check:', {
-            serviceSelect: !!serviceSelect,
-            sharedCredentialSelection: !!document.getElementById('shared-credential-selection'),
-            shared_credential_id: !!document.getElementById('shared_credential_id')
-        });
-
-        // Listen for changes on service select
+        // =====================================================
+        // SERVICE PACKAGE SELECTION
+        // =====================================================
         if (serviceSelect) {
             serviceSelect.addEventListener('change', function() {
-                console.log('📢 Service select CHANGE event fired, value:', this.value);
                 window.handleAccountTypeLogic();
             });
-            
-            // Also listen for input event
             serviceSelect.addEventListener('input', function() {
-                console.log('📢 Service select INPUT event fired, value:', this.value);
                 window.handleAccountTypeLogic();
             });
         }
 
-        // Add click listeners to all package cards
         document.querySelectorAll('.package-card').forEach(card => {
             card.addEventListener('click', function() {
-                console.log('📢 Package card CLICKED, package ID:', this.dataset.packageId);
-                // Wait a bit for the grid selector to update the hidden input
-                setTimeout(function() {
-                    window.handleAccountTypeLogic();
-                }, 100);
+                setTimeout(function() { window.handleAccountTypeLogic(); }, 100);
             });
         });
 
-        // MutationObserver to watch for changes in the hidden input value
         if (serviceSelect) {
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
-                        console.log('📢 Service select VALUE attribute changed');
                         window.handleAccountTypeLogic();
                     }
                 });
@@ -745,309 +670,179 @@
             observer.observe(serviceSelect, { attributes: true });
         }
 
-        // Initial check after a delay
         setTimeout(function() {
-            console.log('⏰ Initial check - service value:', serviceSelect?.value);
-            if (serviceSelect && serviceSelect.value) {
-                window.handleAccountTypeLogic();
-            }
+            if (serviceSelect && serviceSelect.value) window.handleAccountTypeLogic();
         }, 500);
 
-        // Additional check after grid might be fully loaded
         setTimeout(function() {
-            console.log('⏰ Secondary check - service value:', serviceSelect?.value);
-            if (serviceSelect && serviceSelect.value) {
-                window.handleAccountTypeLogic();
-            }
+            if (serviceSelect && serviceSelect.value) window.handleAccountTypeLogic();
         }, 1000);
+
+        // =====================================================
+        // SUPPLIER SELECTION
+        // =====================================================
+        if (supplierSelect) {
+            supplierSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+
+                if (selectedOption.value) {
+                    if (supplierDetails) supplierDetails.style.display = 'block';
+                    if (supplierCodeDisplay) supplierCodeDisplay.textContent = selectedOption.dataset.supplierCode;
+                    if (supplierNameDisplay) supplierNameDisplay.textContent = selectedOption.dataset.supplierName;
+
+                    const products = selectedOption.dataset.products;
+                    if (supplierProductsList) {
+                        supplierProductsList.innerHTML = '';
+                        if (products) {
+                            products.split('|').forEach(function(product) {
+                                if (product.trim()) {
+                                    const li = document.createElement('li');
+                                    li.textContent = product;
+                                    li.className = 'text-muted';
+                                    supplierProductsList.appendChild(li);
+                                }
+                            });
+                        } else {
+                            const li = document.createElement('li');
+                            li.textContent = 'Chưa có dịch vụ nào';
+                            li.className = 'text-muted fst-italic';
+                            supplierProductsList.appendChild(li);
+                        }
+                    }
+
+                    const services = selectedOption.dataset.services;
+                    if (supplierServiceSelect) {
+                        supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
+                    }
+
+                    if (services && serviceSelection) {
+                        serviceSelection.style.display = 'block';
+                        services.split('|').forEach(function(service) {
+                            if (service.trim()) {
+                                const parts = service.split(':');
+                                if (parts.length === 3 && supplierServiceSelect) {
+                                    const option = document.createElement('option');
+                                    option.value = parts[0];
+                                    option.textContent = parts[1] + ' - ' + parseInt(parts[2]).toLocaleString('vi-VN') + ' VND';
+                                    supplierServiceSelect.appendChild(option);
+                                }
+                            }
+                        });
+                    } else if (serviceSelection) {
+                        serviceSelection.style.display = 'none';
+                    }
+                } else {
+                    if (supplierDetails) supplierDetails.style.display = 'none';
+                    if (serviceSelection) serviceSelection.style.display = 'none';
+                    if (supplierServiceSelect) supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
+                }
+            });
+
+            if (supplierSelect.value) {
+                supplierSelect.dispatchEvent(new Event('change'));
+                const selectedServiceId = '{{ old("supplier_service_id") }}';
+                if (selectedServiceId && supplierServiceSelect) {
+                    setTimeout(function() { supplierServiceSelect.value = selectedServiceId; }, 100);
+                }
+            }
+        }
+
+        // =====================================================
+        // FAMILY ACCOUNT SELECTION
+        // =====================================================
+        const familyAccountSelect = document.getElementById('family_account_id');
+        const familyDetails = document.getElementById('family-details');
+        const familyCodeDisplay = document.getElementById('family-code-display');
+        const familyEmailDisplay = document.getElementById('family-email-display');
+        const familyServiceDisplay = document.getElementById('family-service-display');
+        const familySlotsDisplay = document.getElementById('family-slots-display');
+
+        if (familyAccountSelect) {
+            familyAccountSelect.addEventListener('change', function() {
+                if (this.value) {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (familyCodeDisplay) familyCodeDisplay.textContent = selectedOption.dataset.familyCode;
+                    if (familyEmailDisplay) familyEmailDisplay.textContent = selectedOption.dataset.primaryEmail;
+                    if (familyServiceDisplay) familyServiceDisplay.textContent = selectedOption.dataset.serviceName;
+                    if (familySlotsDisplay) familySlotsDisplay.textContent = selectedOption.dataset.usedSlots + '/' + selectedOption.dataset.maxSlots + ' (Còn: ' + selectedOption.dataset.availableSlots + ' slots)';
+                    if (familyDetails) familyDetails.style.display = 'block';
+                } else {
+                    if (familyDetails) familyDetails.style.display = 'none';
+                }
+            });
+
+            if (familyAccountSelect.value) {
+                familyAccountSelect.dispatchEvent(new Event('change'));
+            }
+        }
+
+        // =====================================================
+        // SHARED CREDENTIAL SELECTION
+        // =====================================================
+        const sharedCredentialSelect = document.getElementById('shared_credential_id');
+        const sharedCredentialDetails = document.getElementById('shared-credential-details');
+        const credEmailDisplay = document.getElementById('cred-email-display');
+        const credSlotsDisplay = document.getElementById('cred-slots-display');
+        const loginEmailInput = document.getElementById('login_email');
+        const loginPasswordInput = document.getElementById('login_password');
+
+        if (sharedCredentialSelect) {
+            sharedCredentialSelect.addEventListener('change', function() {
+                if (this.value) {
+                    const selectedOption = this.options[this.selectedIndex];
+                    const email = selectedOption.dataset.email;
+                    const password = selectedOption.dataset.password;
+
+                    if (credEmailDisplay) credEmailDisplay.textContent = email;
+                    if (credSlotsDisplay) credSlotsDisplay.textContent = selectedOption.dataset.currentUsers + '/' + selectedOption.dataset.maxUsers + ' (Còn: ' + selectedOption.dataset.availableSlots + ' slots)';
+                    if (loginEmailInput && email) loginEmailInput.value = email;
+                    if (loginPasswordInput && password) loginPasswordInput.value = password;
+                    if (sharedCredentialDetails) sharedCredentialDetails.style.display = 'block';
+                } else {
+                    if (sharedCredentialDetails) sharedCredentialDetails.style.display = 'none';
+                    if (loginEmailInput) loginEmailInput.value = '';
+                    if (loginPasswordInput) loginPasswordInput.value = '';
+                }
+            });
+
+            if (sharedCredentialSelect.value) {
+                sharedCredentialSelect.dispatchEvent(new Event('change'));
+            }
+        }
 
         // =====================================================
         // FORMAT PROFIT AMOUNT INPUT
         // =====================================================
         const profitAmountInput = document.getElementById('profit_amount');
         if (profitAmountInput) {
-            console.log('💰 Initializing profit amount formatter');
-            
-            // Format existing value on page load
             if (profitAmountInput.value) {
                 profitAmountInput.value = formatNumberInput(profitAmountInput.value);
             }
 
-            // Format as user types
             profitAmountInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/[^\d]/g, ''); // Chỉ giữ lại số
-                if (value) {
-                    e.target.value = formatNumberInput(value);
-                } else {
-                    e.target.value = '';
-                }
+                let value = e.target.value.replace(/[^\d]/g, '');
+                e.target.value = value ? formatNumberInput(value) : '';
             });
 
-            // Prevent non-numeric characters except backspace, delete, arrow keys
             profitAmountInput.addEventListener('keydown', function(e) {
-                // Allow: backspace, delete, tab, escape, enter
                 if ([8, 9, 27, 13, 46].indexOf(e.keyCode) !== -1 ||
-                    // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
                     (e.keyCode === 65 && e.ctrlKey === true) ||
                     (e.keyCode === 67 && e.ctrlKey === true) ||
                     (e.keyCode === 86 && e.ctrlKey === true) ||
                     (e.keyCode === 88 && e.ctrlKey === true) ||
-                    // Allow: home, end, left, right, down, up
                     (e.keyCode >= 35 && e.keyCode <= 40)) {
                     return;
                 }
-                // Ensure that it is a number and stop the keypress
                 if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
                     e.preventDefault();
                 }
             });
         }
 
-        function initializeServicePackageHandlers() {
-            // Main logic moved to global functions and DOMContentLoaded
-            console.log('✅ Service package handlers initialized');
-
-            // Removed - this was conflicting with duration calculator
-            // activatedInput.addEventListener('change', function() {
-            //     console.log('Activation date changed to:', this.value);
-            //     updateExpiryDateForSelectedService();
-            // });
-
-            // Handle supplier selection
-            supplierSelect.addEventListener('change', function() {
-                const selectedOption = this.options[this.selectedIndex];
-
-                if (selectedOption.value) {
-                    // Show supplier details
-                    supplierDetails.style.display = 'block';
-
-                    // Fill supplier information
-                    supplierCodeDisplay.textContent = selectedOption.dataset.supplierCode;
-                    supplierNameDisplay.textContent = selectedOption.dataset.supplierName;
-
-                    // Fill products list
-                    const products = selectedOption.dataset.products;
-                    supplierProductsList.innerHTML = '';
-
-                    if (products) {
-                        const productArray = products.split('|');
-                        productArray.forEach(function(product) {
-                            if (product.trim()) {
-                                const li = document.createElement('li');
-                                li.textContent = product;
-                                li.className = 'text-muted';
-                                supplierProductsList.appendChild(li);
-                            }
-                        });
-                    } else {
-                        const li = document.createElement('li');
-                        li.textContent = 'Chưa có dịch vụ nào';
-                        li.className = 'text-muted fst-italic';
-                        supplierProductsList.appendChild(li);
-                    }
-
-                    // Handle service selection dropdown
-                    const services = selectedOption.dataset.services;
-                    supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
-
-                    if (services) {
-                        serviceSelection.style.display = 'block';
-                        const serviceArray = services.split('|');
-                        serviceArray.forEach(function(service) {
-                            if (service.trim()) {
-                                const parts = service.split(':');
-                                if (parts.length === 3) {
-                                    const serviceId = parts[0];
-                                    const serviceName = parts[1];
-                                    const servicePrice = parseInt(parts[2]);
-
-                                    const option = document.createElement('option');
-                                    option.value = serviceId;
-                                    option.textContent = serviceName + ' - ' + servicePrice.toLocaleString('vi-VN') + ' VND';
-                                    supplierServiceSelect.appendChild(option);
-                                }
-                            }
-                        });
-                    } else {
-                        serviceSelection.style.display = 'none';
-                    }
-                } else {
-                    // Hide supplier details and service selection
-                    supplierDetails.style.display = 'none';
-                    serviceSelection.style.display = 'none';
-                    supplierServiceSelect.innerHTML = '<option value="">Chọn dịch vụ từ nhà cung cấp</option>';
-                }
-            });
-
-            // Show supplier details if already selected (for form validation errors)
-            if (supplierSelect.value) {
-                supplierSelect.dispatchEvent(new Event('change'));
-
-                // Restore selected service if any
-                const selectedServiceId = '{{ old("supplier_service_id") }}';
-                if (selectedServiceId) {
-                    setTimeout(function() {
-                        supplierServiceSelect.value = selectedServiceId;
-                    }, 100);
-                }
-            }
-
-            // Handle family account selection
-            const familyAccountSelect = document.getElementById('family_account_id');
-            const familyDetails = document.getElementById('family-details');
-            const familyCodeDisplay = document.getElementById('family-code-display');
-            const familyEmailDisplay = document.getElementById('family-email-display');
-            const familyServiceDisplay = document.getElementById('family-service-display');
-            const familySlotsDisplay = document.getElementById('family-slots-display');
-
-            if (familyAccountSelect) {
-                familyAccountSelect.addEventListener('change', function() {
-                    if (this.value) {
-                        const selectedOption = this.options[this.selectedIndex];
-
-                        // Fill family information
-                        familyCodeDisplay.textContent = selectedOption.dataset.familyCode;
-                        familyEmailDisplay.textContent = selectedOption.dataset.primaryEmail;
-                        familyServiceDisplay.textContent = selectedOption.dataset.serviceName;
-                        familySlotsDisplay.textContent = selectedOption.dataset.usedSlots + '/' + selectedOption.dataset.maxSlots + ' (Còn: ' + selectedOption.dataset.availableSlots + ' slots)';
-
-                        familyDetails.style.display = 'block';
-                    } else {
-                        familyDetails.style.display = 'none';
-                    }
-                });
-
-                // Show family details if already selected
-                if (familyAccountSelect.value) {
-                    familyAccountSelect.dispatchEvent(new Event('change'));
-                }
-            }
-
-            // Handle shared credential selection
-            const sharedCredentialSelect = document.getElementById('shared_credential_id');
-            const sharedCredentialDetails = document.getElementById('shared-credential-details');
-            const credEmailDisplay = document.getElementById('cred-email-display');
-            const credSlotsDisplay = document.getElementById('cred-slots-display');
-            const loginEmailInput = document.getElementById('login_email');
-            const loginPasswordInput = document.getElementById('login_password');
-
-            if (sharedCredentialSelect) {
-                sharedCredentialSelect.addEventListener('change', function() {
-                    if (this.value) {
-                        const selectedOption = this.options[this.selectedIndex];
-
-                        // Fill credential information
-                        const email = selectedOption.dataset.email;
-                        const password = selectedOption.dataset.password;
-                        const currentUsers = selectedOption.dataset.currentUsers;
-                        const maxUsers = selectedOption.dataset.maxUsers;
-                        const availableSlots = selectedOption.dataset.availableSlots;
-
-                        credEmailDisplay.textContent = email;
-                        credSlotsDisplay.textContent = currentUsers + '/' + maxUsers + ' (Còn: ' + availableSlots + ' slots)';
-
-                        // Auto-fill login email and password
-                        if (loginEmailInput && email) {
-                            loginEmailInput.value = email;
-                        }
-                        if (loginPasswordInput && password) {
-                            loginPasswordInput.value = password;
-                        }
-
-                        sharedCredentialDetails.style.display = 'block';
-                    } else {
-                        sharedCredentialDetails.style.display = 'none';
-                        // Clear login fields when no credential selected
-                        if (loginEmailInput) loginEmailInput.value = '';
-                        if (loginPasswordInput) loginPasswordInput.value = '';
-                    }
-                });
-
-                // Show credential details if already selected
-                if (sharedCredentialSelect.value) {
-                    sharedCredentialSelect.dispatchEvent(new Event('change'));
-                }
-            }
-
-            // Clean currency values before form submission (remove dots for proper validation)
-            const form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    console.log('🚀 Form submit event triggered');
-
-                    // Check form validity
-                    if (!form.checkValidity()) {
-                        console.log('❌ Form is INVALID');
-
-                        // Find invalid fields
-                        const invalidFields = [];
-                        const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
-                        inputs.forEach(input => {
-                            if (!input.checkValidity()) {
-                                invalidFields.push({
-                                    name: input.name,
-                                    id: input.id,
-                                    message: input.validationMessage,
-                                    value: input.value
-                                });
-                            }
-                        });
-
-                        console.log('❌ Invalid fields:', invalidFields);
-
-                        // Don't prevent default - let browser show validation messages
-                        return;
-                    }
-
-                    console.log('✅ Form is VALID - proceeding with submit');
-
-                    // Backend sẽ tự động parse currency values, không cần clean ở đây
-
-                    // Log all form data
-                    const formData = new FormData(form);
-                    console.log('📋 Form data being submitted:');
-                    for (let [key, value] of formData.entries()) {
-                        console.log(`  ${key}: ${value}`);
-                    }
-                });
-            }
-
-        } // End of initializeServicePackageHandlers()
-
-        // DISABLED: Observer for grid component changes
-        // Đã tắt để không tự động điền thời hạn từ gói dịch vụ
-        /*
-        const gridContainer = document.querySelector('.service-package-grid-container');
-        if (gridContainer) {
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'childList' || mutation.type === 'attributes') {
-                        // Check if a new card was selected
-                        const selectedCard = gridContainer.querySelector('.package-card.selected');
-                        if (selectedCard && serviceSelect.value) {
-                            console.log('Grid selection detected via observer');
-                            updateExpiryDateForSelectedService();
-                        }
-                    }
-                });
-            });
-
-            observer.observe(gridContainer, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['class']
-            });
-        }
-        */
-
-        // ===== Duration Calculator Logic =====
-        setTimeout(function() {
-            console.log('⏰ Initializing Duration Calculator (delayed)...');
-            initializeDurationCalculator();
-        }, 200);
-
-        function initializeDurationCalculator() {
+        // =====================================================
+        // DURATION CALCULATOR
+        // =====================================================
+        (function initializeDurationCalculator() {
             const durationUnitSelect = document.getElementById('duration_unit');
             const customDurationInput = document.getElementById('custom_duration');
             const durationDaysHidden = document.getElementById('duration_days');
@@ -1055,192 +850,73 @@
             const activatedAtInput = document.getElementById('activated_at');
             const expiresAtInput = document.getElementById('expires_at');
 
-            console.log('📊 Duration Calculator Elements Found:', {
-                'durationUnitSelect': durationUnitSelect ? '✅ Found' : '❌ Not found',
-                'customDurationInput': customDurationInput ? '✅ Found' : '❌ Not found',
-                'durationDaysHidden': durationDaysHidden ? '✅ Found' : '❌ Not found',
-                'durationCalculatedText': durationCalculatedText ? '✅ Found' : '❌ Not found',
-                'activatedAtInput': activatedAtInput ? '✅ Found' : '❌ Not found',
-                'expiresAtInput': expiresAtInput ? '✅ Found' : '❌ Not found'
-            });
+            if (!durationUnitSelect || !customDurationInput || !durationDaysHidden) return;
 
-            if (durationUnitSelect && customDurationInput && durationDaysHidden) {
-                console.log('Duration calculator initialized successfully');
+            function calculateDuration() {
+                const unit = durationUnitSelect.value;
+                const value = parseInt(customDurationInput.value) || 0;
+                let days = 0;
 
-                function calculateDuration() {
-                    console.log('🔄 calculateDuration() called');
-
-                    const unit = durationUnitSelect.value;
-                    const value = parseInt(customDurationInput.value) || 0;
-                    let days = 0;
-
-                    console.log('📊 Duration calculation - unit:', unit, 'value:', value);
-
-                    if (value === 0) {
-                        // No value entered yet
-                        if (durationCalculatedText) {
-                            durationCalculatedText.innerHTML = '<i class="fas fa-info-circle me-1"></i>Nhập thời hạn để tự động tính ngày hết hạn';
-                        }
-                        if (durationDaysHidden) {
-                            durationDaysHidden.value = '';
-                        }
-                        console.log('⚠️ No duration value entered');
-                        return;
+                if (value === 0) {
+                    if (durationCalculatedText) {
+                        durationCalculatedText.innerHTML = '<i class="fas fa-info-circle me-1"></i>Nhập thời hạn để tự động tính ngày hết hạn';
                     }
-
-                    if (unit === 'days') {
-                        days = value;
-                        if (durationCalculatedText) {
-                            durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} ngày`;
-                        }
-                    } else if (unit === 'months') {
-                        days = value * 30; // 1 tháng = 30 ngày
-                        if (durationCalculatedText) {
-                            durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} tháng (${days} ngày)`;
-                        }
-                    } else if (unit === 'years') {
-                        days = value * 365; // 1 năm = 365 ngày
-                        if (durationCalculatedText) {
-                            durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} năm (${days} ngày)`;
-                        }
-                    }
-
-                    if (durationDaysHidden) {
-                        durationDaysHidden.value = days;
-                        console.log('✅ Duration in days updated to:', days);
-                    } else {
-                        console.log('❌ durationDaysHidden element not found');
-                    }
-
-                    // Tự động tính ngày hết hạn
-                    console.log('🔄 Calling updateExpiresDate...');
-                    updateExpiresDate();
+                    durationDaysHidden.value = '';
+                    return;
                 }
 
-                function updateExpiresDate() {
-                    console.log('🔄 updateExpiresDate() called');
-                    console.log('📅 Current values:', {
-                        'activated': activatedAtInput?.value,
-                        'duration_days': durationDaysHidden?.value,
-                        'activatedAtInput exists': !!activatedAtInput,
-                        'expiresAtInput exists': !!expiresAtInput,
-                        'durationDaysHidden exists': !!durationDaysHidden
-                    });
-
-                    if (activatedAtInput && activatedAtInput.value && durationDaysHidden && durationDaysHidden.value) {
-                        const activatedDate = new Date(activatedAtInput.value + 'T00:00:00');
-                        const days = parseInt(durationDaysHidden.value) || 0;
-
-                        console.log('📊 Date calculation:', {
-                            'activated_date': activatedDate.toDateString(),
-                            'days_to_add': days
-                        });
-
-                        if (days > 0 && expiresAtInput) {
-                            const expiresDate = new Date(activatedDate);
-                            expiresDate.setDate(expiresDate.getDate() + days);
-
-                            // Format date to YYYY-MM-DD
-                            const year = expiresDate.getFullYear();
-                            const month = String(expiresDate.getMonth() + 1).padStart(2, '0');
-                            const day = String(expiresDate.getDate()).padStart(2, '0');
-
-                            const newExpiresDate = `${year}-${month}-${day}`;
-                            expiresAtInput.value = newExpiresDate;
-
-                            console.log('✅ Successfully updated expires date:', newExpiresDate, `(+${days} days from ${activatedAtInput.value})`);
-
-                            // Trigger change event để notify other listeners
-                            expiresAtInput.dispatchEvent(new Event('change'));
-                        } else {
-                            console.log('❌ Days is 0 or expiresAtInput not found');
-                        }
-                    } else {
-                        console.log('❌ Missing required fields:', {
-                            'activatedAtInput': !!activatedAtInput,
-                            'activatedAtInput.value': activatedAtInput?.value,
-                            'durationDaysHidden': !!durationDaysHidden,
-                            'durationDaysHidden.value': durationDaysHidden?.value
-                        });
+                if (unit === 'days') {
+                    days = value;
+                    if (durationCalculatedText) {
+                        durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} ngày`;
+                    }
+                } else if (unit === 'months') {
+                    days = value * 30;
+                    if (durationCalculatedText) {
+                        durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} tháng (${days} ngày)`;
+                    }
+                } else if (unit === 'years') {
+                    days = value * 365;
+                    if (durationCalculatedText) {
+                        durationCalculatedText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Thời hạn: ${value} năm (${days} ngày)`;
                     }
                 }
 
-                // Event listeners
-                console.log('🎧 Adding event listeners...');
-
-                // Listen to dropdown select changes
-                if (durationUnitSelect) {
-                    durationUnitSelect.addEventListener('change', function() {
-                        console.log(`📋 Duration unit changed to: ${this.value}`);
-                        calculateDuration();
-                    });
-                    console.log('✅ Added change listener to duration unit select');
-                }
-
-                // Listen to custom duration input changes
-                if (customDurationInput) {
-                    customDurationInput.addEventListener('input', function(e) {
-                        console.log('📝 Duration value INPUT event:', e.target.value);
-                        calculateDuration();
-                    });
-
-                    customDurationInput.addEventListener('keyup', function(e) {
-                        console.log('⌨️ Duration value KEYUP event:', e.target.value);
-                        calculateDuration();
-                    });
-
-                    customDurationInput.addEventListener('change', function(e) {
-                        console.log('🔄 Duration value CHANGE event:', e.target.value);
-                        calculateDuration();
-                    });
-
-                    console.log('✅ Added multiple listeners to custom duration input');
-                } else {
-                    console.log('❌ customDurationInput not found, cannot add listeners');
-                }
-
-                // Khi thay đổi ngày kích hoạt, tính lại ngày hết hạn
-                if (activatedAtInput) {
-                    activatedAtInput.addEventListener('change', function(e) {
-                        console.log('Activated date changed to:', e.target.value);
-                        updateExpiresDate();
-                    });
-                    console.log('✅ Added change listener to activated date input');
-                }
-
-                // Initial calculation only if there are values (from validation errors)
-                if (customDurationInput.value) {
-                    console.log('Running initial calculation with existing value...');
-                    calculateDuration();
-                } else {
-                    console.log('No initial value, waiting for user input...');
-                }
-
-                // Test indicator để confirm JS đang hoạt động
-                if (customDurationInput) {
-                    console.log('🎯 Duration calculator fully initialized!');
-
-                    // Thêm visual indicator
-                    const indicator = document.createElement('div');
-                    indicator.className = 'alert alert-success mt-2';
-                    indicator.innerHTML = '<i class="fas fa-check-circle"></i> Tính năng tự động tính ngày đã sẵn sàng!';
-                    indicator.style.fontSize = '12px';
-                    indicator.style.padding = '5px 10px';
-
-                    // Thêm indicator sau duration input group
-                    customDurationInput.parentElement.insertAdjacentElement('afterend', indicator);
-
-                    // Tự động ẩn sau 3 giây
-                    setTimeout(() => {
-                        if (indicator.parentElement) {
-                            indicator.remove();
-                        }
-                    }, 3000);
-                }
-            } else {
-                console.log('❌ Duration calculator NOT initialized - missing required elements');
+                durationDaysHidden.value = days;
+                updateExpiresDate();
             }
-        } // End initializeDurationCalculator
+
+            function updateExpiresDate() {
+                if (!activatedAtInput || !activatedAtInput.value || !durationDaysHidden.value) return;
+
+                const activatedDate = new Date(activatedAtInput.value + 'T00:00:00');
+                const days = parseInt(durationDaysHidden.value) || 0;
+
+                if (days > 0 && expiresAtInput) {
+                    const expiresDate = new Date(activatedDate);
+                    expiresDate.setDate(expiresDate.getDate() + days);
+
+                    const year = expiresDate.getFullYear();
+                    const month = String(expiresDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(expiresDate.getDate()).padStart(2, '0');
+
+                    expiresAtInput.value = `${year}-${month}-${day}`;
+                    expiresAtInput.dispatchEvent(new Event('change'));
+                }
+            }
+
+            durationUnitSelect.addEventListener('change', calculateDuration);
+            customDurationInput.addEventListener('input', calculateDuration);
+            customDurationInput.addEventListener('change', calculateDuration);
+
+            if (activatedAtInput) {
+                activatedAtInput.addEventListener('change', updateExpiresDate);
+            }
+
+            if (customDurationInput.value) {
+                calculateDuration();
+            }
+        })();
     });
 
 </script>

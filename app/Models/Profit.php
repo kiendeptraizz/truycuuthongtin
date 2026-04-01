@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Cache;
 
 class Profit extends Model
 {
@@ -15,8 +16,18 @@ class Profit extends Model
     ];
 
     protected $casts = [
-        'profit_amount' => 'integer',
+        'profit_amount' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        $clearCache = function () {
+            Cache::forget('revenue_general_stats');
+        };
+        static::created($clearCache);
+        static::updated($clearCache);
+        static::deleted($clearCache);
+    }
 
     public function customerService(): BelongsTo
     {

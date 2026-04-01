@@ -15,7 +15,10 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Customer::with('customerServices.servicePackage.category');
+        $query = Customer::with('customerServices.servicePackage.category')
+            ->withCount('customerServices as service_count')
+            ->withCount(['customerServices as active_services' => fn($q) => $q->where('status', 'active')])
+            ->withCount(['customerServices as expired_services' => fn($q) => $q->where('status', 'expired')]);
 
         // Filter by date range
         if ($request->filled('date_from')) {
@@ -60,7 +63,7 @@ class CustomerController extends Controller
         $customers = $query->orderBy('created_at', 'desc')->paginate(20);
 
         // Get service packages for filter
-        $servicePackages = \App\Models\ServicePackage::all();
+        $servicePackages = \App\Models\ServicePackage::select('id', 'name')->orderBy('name')->get();
 
         return view('admin.customers.index', compact('customers', 'servicePackages'));
     }
@@ -182,12 +185,13 @@ class CustomerController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => 'nullable|email|max:255',
+            'email' => 'nullable|email|max:255|unique:customers,email,' . $customer->id,
             'phone' => 'nullable|string|max:20',
             'is_collaborator' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
-        $customer->update($request->only(['name', 'email', 'phone', 'is_collaborator']));
+        $customer->update($request->only(['name', 'email', 'phone', 'is_collaborator', 'notes']));
 
         return redirect(route('admin.customers.index') . '#customer-' . $customer->id)
             ->with('success', 'Thông tin khách hàng đã được cập nhật!');

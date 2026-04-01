@@ -12,6 +12,7 @@ use App\Models\ServicePackage;
 use App\Models\Customer;
 use App\Models\ServiceCategory;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -38,84 +39,116 @@ class RevenueController extends Controller
      */
     private function getGeneralStats()
     {
+        return Cache::remember('revenue_general_stats', 300, function () {
+            return $this->computeGeneralStats();
+        });
+    }
+
+    private function computeGeneralStats()
+    {
         $today = Carbon::today();
         $yesterday = Carbon::yesterday();
-        $thisMonth = Carbon::now()->startOfMonth();
-        $lastMonth = Carbon::now()->subMonth()->startOfMonth();
-        $lastMonthEnd = Carbon::now()->subMonth()->endOfMonth();
-        $thisYear = Carbon::now()->startOfYear();
-        $lastYear = Carbon::now()->subYear()->startOfYear();
-        $lastYearEnd = Carbon::now()->subYear()->endOfYear();
-        // Đảm bảo tuần bắt đầu từ thứ 2 (Monday) để đồng bộ với frontend
         $thisWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $thisWeekEnd = Carbon::now()->endOfWeek(Carbon::SUNDAY)->endOfDay();
         $lastWeek = Carbon::now()->subWeek()->startOfWeek(Carbon::MONDAY);
-        $lastWeekEnd = Carbon::now()->subWeek()->endOfWeek(Carbon::SUNDAY);
+        $lastWeekEnd = Carbon::now()->subWeek()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+        $thisMonth = Carbon::now()->startOfMonth();
+        $thisMonthEnd = Carbon::now()->endOfMonth()->endOfDay();
+        $lastMonth = Carbon::now()->subMonth()->startOfMonth();
+        $lastMonthEnd = Carbon::now()->subMonth()->endOfMonth()->endOfDay();
+        $thisYear = Carbon::now()->startOfYear();
+        $thisYearEnd = Carbon::now()->endOfYear()->endOfDay();
+        $lastYear = Carbon::now()->subYear()->startOfYear();
+        $lastYearEnd = Carbon::now()->subYear()->endOfYear()->endOfDay();
+
+        // Query 1: Revenue + Orders cho tất cả periods (1 query thay vì 16)
+        $revenueStats = DB::table('customer_services')
+            ->selectRaw("
+                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(price, 0) ELSE 0 END) as today_revenue,
+                SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as today_orders,
+                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(price, 0) ELSE 0 END) as yesterday_revenue,
+                SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as yesterday_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as week_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_week_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as month_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_month_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as year_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_year_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders
+            ", [
+                $today, $today, $yesterday, $yesterday,
+                $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd,
+                $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd,
+                $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd,
+                $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd,
+                $thisYear, $thisYearEnd, $thisYear, $thisYearEnd,
+                $lastYear, $lastYearEnd, $lastYear, $lastYearEnd,
+            ])
+            ->first();
+
+        // Query 2: Profit cho tất cả periods (1 query thay vì 9)
+        $profitStats = DB::table('profits')
+            ->selectRaw("
+                SUM(CASE WHEN DATE(created_at) = ? THEN profit_amount ELSE 0 END) as today_profit,
+                SUM(CASE WHEN DATE(created_at) = ? THEN profit_amount ELSE 0 END) as yesterday_profit,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as week_profit,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as last_week_profit,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as month_profit,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as last_month_profit,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as year_profit,
+                SUM(profit_amount) as total_profit
+            ", [
+                $today, $yesterday,
+                $thisWeek, $thisWeekEnd,
+                $lastWeek, $lastWeekEnd,
+                $thisMonth, $thisMonthEnd,
+                $lastMonth, $lastMonthEnd,
+                $thisYear, $thisYearEnd,
+            ])
+            ->first();
+
+        // Query 3: Customer stats (1 query thay vì 3)
+        $customerStats = DB::table('customers')
+            ->selectRaw("
+                COUNT(*) as total_customers,
+                SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as new_customers_today,
+                SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as new_customers_month
+            ", [$today, $thisMonth])
+            ->first();
 
         return [
-            // Doanh thu hôm nay
-            'today_revenue' => CustomerService::whereDate('customer_services.created_at', $today)
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'today_orders' => CustomerService::whereDate('customer_services.created_at', $today)->count(),
-            'today_profit' => Profit::whereDate('profits.created_at', $today)->sum('profit_amount'),
-
-            // Doanh thu hôm qua (để so sánh)
-            'yesterday_revenue' => CustomerService::whereDate('customer_services.created_at', $yesterday)
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'yesterday_orders' => CustomerService::whereDate('customer_services.created_at', $yesterday)->count(),
-            'yesterday_profit' => Profit::whereDate('profits.created_at', $yesterday)->sum('profit_amount'),
-
-            // Doanh thu tuần này
-            'week_revenue' => CustomerService::where('customer_services.created_at', '>=', $thisWeek)
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'week_orders' => CustomerService::where('customer_services.created_at', '>=', $thisWeek)->count(),
-            'week_profit' => Profit::where('profits.created_at', '>=', $thisWeek)->sum('profit_amount'),
-
-            // Doanh thu tuần trước (để so sánh)
-            'last_week_revenue' => CustomerService::whereBetween('customer_services.created_at', [$lastWeek, $lastWeekEnd])
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'last_week_orders' => CustomerService::whereBetween('customer_services.created_at', [$lastWeek, $lastWeekEnd])->count(),
-            'last_week_profit' => Profit::whereBetween('profits.created_at', [$lastWeek, $lastWeekEnd])->sum('profit_amount'),
-
-            // Doanh thu tháng này
-            'month_revenue' => CustomerService::where('customer_services.created_at', '>=', $thisMonth)
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'month_orders' => CustomerService::where('customer_services.created_at', '>=', $thisMonth)->count(),
-            'month_profit' => Profit::where('profits.created_at', '>=', $thisMonth)->sum('profit_amount'),
-
-            // Doanh thu tháng trước (để so sánh)
-            'last_month_revenue' => CustomerService::whereBetween('customer_services.created_at', [$lastMonth, $lastMonthEnd])
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'last_month_orders' => CustomerService::whereBetween('customer_services.created_at', [$lastMonth, $lastMonthEnd])->count(),
-            'last_month_profit' => Profit::whereBetween('profits.created_at', [$lastMonth, $lastMonthEnd])->sum('profit_amount'),
-
-            // Doanh thu năm này
-            'year_revenue' => CustomerService::where('customer_services.created_at', '>=', $thisYear)
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'year_orders' => CustomerService::where('customer_services.created_at', '>=', $thisYear)->count(),
-            'year_profit' => Profit::where('profits.created_at', '>=', $thisYear)->sum('profit_amount'),
-
-            // Doanh thu năm trước (để so sánh)
-            'last_year_revenue' => CustomerService::whereBetween('customer_services.created_at', [$lastYear, $lastYearEnd])
-                ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-                ->sum('service_packages.price'),
-            'last_year_orders' => CustomerService::whereBetween('customer_services.created_at', [$lastYear, $lastYearEnd])->count(),
-
-            // Tổng lợi nhuán
-            'total_profit' => Profit::sum('profit_amount'),
-
-            // Thống kê khách hàng
-            'total_customers' => Customer::count(),
-            'new_customers_today' => Customer::whereDate('created_at', $today)->count(),
-            'new_customers_month' => Customer::where('created_at', '>=', $thisMonth)->count(),
-
-            // Thống kê chuyển đổi
+            'today_revenue' => (float) ($revenueStats->today_revenue ?? 0),
+            'today_orders' => (int) ($revenueStats->today_orders ?? 0),
+            'today_profit' => (float) ($profitStats->today_profit ?? 0),
+            'yesterday_revenue' => (float) ($revenueStats->yesterday_revenue ?? 0),
+            'yesterday_orders' => (int) ($revenueStats->yesterday_orders ?? 0),
+            'yesterday_profit' => (float) ($profitStats->yesterday_profit ?? 0),
+            'week_revenue' => (float) ($revenueStats->week_revenue ?? 0),
+            'week_orders' => (int) ($revenueStats->week_orders ?? 0),
+            'week_profit' => (float) ($profitStats->week_profit ?? 0),
+            'last_week_revenue' => (float) ($revenueStats->last_week_revenue ?? 0),
+            'last_week_orders' => (int) ($revenueStats->last_week_orders ?? 0),
+            'last_week_profit' => (float) ($profitStats->last_week_profit ?? 0),
+            'month_revenue' => (float) ($revenueStats->month_revenue ?? 0),
+            'month_orders' => (int) ($revenueStats->month_orders ?? 0),
+            'month_profit' => (float) ($profitStats->month_profit ?? 0),
+            'last_month_revenue' => (float) ($revenueStats->last_month_revenue ?? 0),
+            'last_month_orders' => (int) ($revenueStats->last_month_orders ?? 0),
+            'last_month_profit' => (float) ($profitStats->last_month_profit ?? 0),
+            'year_revenue' => (float) ($revenueStats->year_revenue ?? 0),
+            'year_orders' => (int) ($revenueStats->year_orders ?? 0),
+            'year_profit' => (float) ($profitStats->year_profit ?? 0),
+            'last_year_revenue' => (float) ($revenueStats->last_year_revenue ?? 0),
+            'last_year_orders' => (int) ($revenueStats->last_year_orders ?? 0),
+            'total_profit' => (float) ($profitStats->total_profit ?? 0),
+            'total_customers' => (int) ($customerStats->total_customers ?? 0),
+            'new_customers_today' => (int) ($customerStats->new_customers_today ?? 0),
+            'new_customers_month' => (int) ($customerStats->new_customers_month ?? 0),
             'conversion_rate_today' => $this->getConversionRate($today, $today),
             'conversion_rate_month' => $this->getConversionRate($thisMonth, $today),
         ];
@@ -167,12 +200,15 @@ class RevenueController extends Controller
                         : $order->customer->name)
                     : '[Khách hàng không tồn tại]',
                 'service_name' => $order->servicePackage ? $order->servicePackage->name : '[Gói dịch vụ không tồn tại]',
-                'revenue' => $order->servicePackage ? $order->servicePackage->price : 0,
+                'revenue' => $order->price ?? ($order->servicePackage ? $order->servicePackage->price : 0),
                 'profit' => $order->profit ? $order->profit->profit_amount : 0,
                 'profit_notes' => $order->profit ? $order->profit->notes : '',
-                'profit_margin' => $order->servicePackage && $order->profit && $order->servicePackage->price > 0
-                    ? round(($order->profit->profit_amount / $order->servicePackage->price) * 100, 2)
-                    : 0,
+                'profit_margin' => (function () use ($order) {
+                    $revenue = $order->price ?? ($order->servicePackage ? $order->servicePackage->price : 0);
+                    return $revenue > 0 && $order->profit
+                        ? round(($order->profit->profit_amount / $revenue) * 100, 2)
+                        : 0;
+                })(),
                 'created_at' => $order->created_at->format('d/m/Y H:i'),
                 'status' => $order->status,
             ];
@@ -224,7 +260,7 @@ class RevenueController extends Controller
         $data = CustomerService::select(
             DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
             DB::raw('COUNT(*) as orders_count'),
-            DB::raw('SUM(service_packages.price) as revenue'),
+            DB::raw('SUM(COALESCE(customer_services.price, service_packages.price)) as revenue'),
             DB::raw('COALESCE(SUM(profits.profit_amount), 0) as profit')
         )
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
@@ -503,7 +539,7 @@ class RevenueController extends Controller
                 'service_packages.name',
                 'service_packages.price',
                 DB::raw('COUNT(customer_services.id) as orders_count'),
-                DB::raw('COUNT(customer_services.id) * service_packages.price as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit')
             )
             ->groupBy('service_packages.id', 'service_packages.name', 'service_packages.price')
@@ -544,7 +580,7 @@ class RevenueController extends Controller
                 'customer_service_id' => $customerService->id,
                 'profit_amount' => $profitAmount,
                 'notes' => $request->profit_notes,
-                'created_by' => 1,
+                'created_by' => auth()->id(),
             ]);
             $message = 'Lợi nhuận đã được thêm thành công!';
         }

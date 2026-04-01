@@ -79,12 +79,24 @@
                         
                         <div class="col-md-6 mb-3">
                             <label for="phone" class="form-label">Số điện thoại</label>
-                            <input type="text" 
-                                   class="form-control @error('phone') is-invalid @enderror" 
-                                   id="phone" 
-                                   name="phone" 
+                            <input type="text"
+                                   class="form-control @error('phone') is-invalid @enderror"
+                                   id="phone"
+                                   name="phone"
                                    value="{{ old('phone', $customer->phone) }}">
                             @error('phone')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="col-md-12 mb-3">
+                            <label for="notes" class="form-label">Ghi chú</label>
+                            <textarea class="form-control @error('notes') is-invalid @enderror"
+                                      id="notes"
+                                      name="notes"
+                                      rows="3"
+                                      placeholder="Ghi chú về khách hàng...">{{ old('notes', $customer->notes) }}</textarea>
+                            @error('notes')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>

@@ -523,9 +523,9 @@ justify-content: center;
                         </td>
                         <td class="py-2 px-2 text-center">
                             @php
-                            $serviceCount = $customer->customerServices->count();
-                            $activeServices = $customer->customerServices->where('status', 'active')->count();
-                            $expiredServices = $customer->customerServices->where('status', 'expired')->count();
+                            $serviceCount = $customer->service_count;
+                            $activeServices = $customer->active_services;
+                            $expiredServices = $customer->expired_services;
                             $loginEmails = $customer->customerServices->whereNotNull('login_email')->pluck('login_email')->unique();
                             @endphp
                             <div class="d-flex flex-column align-items-center gap-1">
