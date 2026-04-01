@@ -17,9 +17,11 @@ WORKDIR /app
 # Copy application
 COPY . .
 
-# Install dependencies (no-dev, no post-scripts to avoid tinker discovery)
-RUN composer install --no-dev --optimize-autoloader --no-scripts \
-    && composer dump-autoload --optimize --no-scripts
+# Install dependencies without dev packages
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+
+# Generate package discovery cache (without dev packages)
+RUN php artisan package:discover --ansi || true
 
 # Cache views
 RUN php artisan view:cache 2>/dev/null || true
