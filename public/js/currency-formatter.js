@@ -56,16 +56,19 @@ function formatMoney(amount) {
  * @returns {number} Số tiền dạng number
  */
 function parseCurrency(formattedAmount) {
-    if (!formattedAmount || typeof formattedAmount !== 'string') {
+    if (formattedAmount === null || formattedAmount === undefined || formattedAmount === '') {
         return 0;
     }
-    
-    // Remove currency symbols and spaces
+
+    if (typeof formattedAmount !== 'string') {
+        return Number(formattedAmount) || 0;
+    }
+
     const cleaned = formattedAmount
-        .replace(/[^\d.,]/g, '') // Remove all non-digit, non-comma, non-dot
-        .replace(/\./g, '') // Remove dots (thousand separators)
-        .replace(/,/g, '.'); // Convert comma to dot for decimal
-    
+        .replace(/[^\d.,]/g, '')
+        .replace(/\./g, '')
+        .replace(/,/g, '.');
+
     return parseFloat(cleaned) || 0;
 }
 

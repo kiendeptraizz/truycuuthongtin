@@ -15,10 +15,15 @@ class DashboardController extends Controller
     {
         // Thống kê tổng quan - cache 5 phút
         $dashboardStats = Cache::remember('dashboard_stats', 300, function () {
+            $today = now()->format('Y-m-d');
             return [
                 'totalCustomers' => Customer::count(),
                 'totalServicePackages' => ServicePackage::count(),
-                'totalActiveServices' => CustomerService::where('status', 'active')->count(),
+                // "Hoạt động" = status='active' VÀ chưa hết hạn (đồng bộ với filter UI)
+                // Tránh phụ thuộc vào cron services:update-expired (có thể chưa chạy)
+                'totalActiveServices' => CustomerService::where('status', 'active')
+                    ->whereDate('expires_at', '>', $today)
+                    ->count(),
                 'expiringSoonServices' => CustomerService::expiringSoon()->count(),
             ];
         });

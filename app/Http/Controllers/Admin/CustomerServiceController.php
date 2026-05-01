@@ -9,6 +9,7 @@ use App\Models\CustomerService;
 use App\Models\Profit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class CustomerServiceController extends Controller
 {
@@ -358,7 +359,7 @@ class CustomerServiceController extends Controller
      */
     public function update(Request $request, CustomerService $customerService)
     {
-        $request->validate([
+        $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'service_package_id' => 'required|exists:service_packages,id',
             'family_account_id' => 'nullable|exists:family_accounts,id',
@@ -372,58 +373,69 @@ class CustomerServiceController extends Controller
             'profit_notes' => 'nullable|string|max:1000',
         ]);
 
-        $customerService->update($request->except(['profit_amount', 'profit_notes']));
+        // Chỉ lấy các field thực sự thuộc về CustomerService — tránh mass-assign từ form input
+        $serviceData = collect($validated)->except(['profit_amount', 'profit_notes'])->toArray();
 
-        // Xử lý lợi nhuận
-        if ($request->filled('profit_amount')) {
-            // Parse profit_amount để xóa dấu chấm phân cách hàng nghìn
-            $profitAmount = parseCurrency($request->profit_amount);
-
-            // Kiểm tra xem đã có lợi nhuận chưa
-            if ($customerService->profit) {
-                // Cập nhật lợi nhuận hiện có
-                $customerService->profit->update([
-                    'profit_amount' => $profitAmount,
-                    'notes' => $request->profit_notes,
-                ]);
-                $profitMessage = ' Lợi nhuận đã được cập nhật.';
-            } else {
-                // Tạo mới lợi nhuận
-                Profit::create([
-                    'customer_service_id' => $customerService->id,
-                    'profit_amount' => $profitAmount,
-                    'notes' => $request->profit_notes,
-                    'created_by' => auth()->id(),
-                ]);
-                $profitMessage = ' Lợi nhuận đã được ghi nhận.';
-            }
-        } else {
-            // Nếu không nhập profit_amount nhưng có lợi nhuận hiện tại, có thể xóa hoặc giữ nguyên
-            // Ở đây tôi sẽ giữ nguyên lợi nhuận hiện tại
-            $profitMessage = '';
-        }
-
-        // Xử lý family account cho dịch vụ "add family"
+        $profitMessage = '';
         $familyMessage = '';
-        $servicePackage = $customerService->servicePackage;
-        if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
-            \App\Models\FamilyMember::updateOrCreate(
-                [
-                    'family_account_id' => $request->family_account_id,
-                    'customer_id' => $customerService->customer_id,
-                ],
-                [
-                    'member_name' => $customerService->customer->name,
-                    'member_email' => $request->login_email,
-                    'start_date' => $request->activated_at,
-                    'end_date' => $request->expires_at,
-                    'status' => 'active',
-                    'removed_at' => null,
-                    'added_by' => 1,
-                ]
-            );
-            $familyMessage = ' Khách hàng đã được cập nhật trong Family Account.';
-        }
+
+        DB::transaction(function () use ($request, $customerService, $serviceData, $validated, &$profitMessage, &$familyMessage) {
+            $customerService->update($serviceData);
+
+            // Xử lý lợi nhuận
+            if ($request->filled('profit_amount')) {
+                $profitAmount = parseCurrency($request->profit_amount);
+
+                if ($customerService->profit) {
+                    $customerService->profit->update([
+                        'profit_amount' => $profitAmount,
+                        'notes' => $request->profit_notes,
+                    ]);
+                    $profitMessage = ' Lợi nhuận đã được cập nhật.';
+                } else {
+                    Profit::create([
+                        'customer_service_id' => $customerService->id,
+                        'profit_amount' => $profitAmount,
+                        'notes' => $request->profit_notes,
+                        'created_by' => auth()->id(),
+                    ]);
+                    $profitMessage = ' Lợi nhuận đã được ghi nhận.';
+                }
+            }
+
+            // Xử lý family account cho dịch vụ "add family"
+            $servicePackage = $customerService->servicePackage;
+            if ($servicePackage && strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
+                // Lock family để check slot tránh race condition
+                $familyAccount = \App\Models\FamilyAccount::lockForUpdate()->find($request->family_account_id);
+                if ($familyAccount) {
+                    $currentCount = $familyAccount->customerServices()
+                        ->where('status', 'active')
+                        ->where('id', '!=', $customerService->id)
+                        ->count();
+                    if ($currentCount >= $familyAccount->max_members) {
+                        throw new \RuntimeException('Family Account đã đầy slot (' . $currentCount . '/' . $familyAccount->max_members . ').');
+                    }
+                }
+
+                \App\Models\FamilyMember::updateOrCreate(
+                    [
+                        'family_account_id' => $request->family_account_id,
+                        'customer_id' => $customerService->customer_id,
+                    ],
+                    [
+                        'member_name' => $customerService->customer->name,
+                        'member_email' => $request->login_email,
+                        'start_date' => $request->activated_at,
+                        'end_date' => $request->expires_at,
+                        'status' => 'active',
+                        'removed_at' => null,
+                        'added_by' => auth()->id() ?? 1,
+                    ]
+                );
+                $familyMessage = ' Khách hàng đã được cập nhật trong Family Account.';
+            }
+        });
 
         // Kiểm tra source parameter để xác định redirect về đâu
         $source = $request->input('redirect_source', $request->query('source'));
@@ -447,11 +459,28 @@ class CustomerServiceController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(CustomerService $customerService)
+    public function destroy(Request $request, CustomerService $customerService)
     {
         $customerId = $customerService->customer_id;
         $loginEmail = $customerService->login_email;
-        $customerService->delete();
+        $serviceId = $customerService->id;
+
+        DB::transaction(function () use ($customerService) {
+            // Profit có cascade delete? Nếu chưa, xoá thủ công để tránh dữ liệu rác
+            if ($customerService->profit) {
+                $customerService->profit->delete();
+            }
+            $customerService->delete();
+        });
+
+        // Hỗ trợ AJAX — không nhảy trang, frontend tự xoá row khỏi DOM
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Dịch vụ đã được xoá!',
+                'id' => $serviceId,
+            ]);
+        }
 
         // Kiểm tra referer để xác định redirect về đâu
         $referer = request()->headers->get('referer');
@@ -469,6 +498,212 @@ class CustomerServiceController extends Controller
         // Mặc định redirect về trang danh sách dịch vụ
         return redirect()->route('admin.customer-services.index')
             ->with('success', 'Dịch vụ đã được xóa!');
+    }
+
+    /**
+     * Hiển thị thùng rác — các dịch vụ đã soft-delete
+     */
+    public function trash(Request $request)
+    {
+        $query = CustomerService::onlyTrashed()
+            ->with(['customer', 'servicePackage.category']);
+
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('login_email', 'like', "%{$search}%")
+                  ->orWhereHas('customer', function ($qc) use ($search) {
+                      $qc->where('name', 'like', "%{$search}%")
+                         ->orWhere('phone', 'like', "%{$search}%")
+                         ->orWhere('customer_code', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('servicePackage', function ($qp) use ($search) {
+                      $qp->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        $deletedServices = $query->orderBy('deleted_at', 'desc')->paginate(25);
+
+        // Thống kê nhanh
+        $stats = [
+            'total' => CustomerService::onlyTrashed()->count(),
+            'last_7_days' => CustomerService::onlyTrashed()->where('deleted_at', '>=', now()->subDays(7))->count(),
+            'last_30_days' => CustomerService::onlyTrashed()->where('deleted_at', '>=', now()->subDays(30))->count(),
+        ];
+
+        return view('admin.customer-services.trash', compact('deletedServices', 'stats'));
+    }
+
+    /**
+     * Khôi phục 1 dịch vụ khỏi thùng rác
+     */
+    public function restore(Request $request, $id)
+    {
+        $service = CustomerService::onlyTrashed()->findOrFail($id);
+
+        $service->restore();
+        Log::info('CustomerService restored from trash', [
+            'service_id' => $service->id,
+            'customer_id' => $service->customer_id,
+            'restored_by' => auth()->id(),
+        ]);
+
+        $message = "Đã khôi phục dịch vụ #{$service->id}.";
+        $stats = $this->trashStats();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'id' => (int) $id,
+                'stats' => $stats,
+            ]);
+        }
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Xoá vĩnh viễn 1 dịch vụ (cùng profit liên quan)
+     */
+    public function forceDelete(Request $request, $id)
+    {
+        $service = CustomerService::onlyTrashed()->findOrFail($id);
+
+        DB::transaction(function () use ($service) {
+            // Profit là HasOne — xoá kèm
+            if ($service->profit) {
+                $service->profit->delete();
+            }
+            $service->forceDelete();
+        });
+
+        Log::warning('CustomerService PERMANENTLY deleted', [
+            'service_id' => $service->id,
+            'customer_id' => $service->customer_id,
+            'deleted_by' => auth()->id(),
+        ]);
+
+        $message = "Đã xoá vĩnh viễn dịch vụ #{$id}.";
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'id' => (int) $id,
+                'stats' => $this->trashStats(),
+            ]);
+        }
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Khôi phục nhiều dịch vụ cùng lúc
+     */
+    public function bulkRestore(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids) || !is_array($ids)) {
+            $msg = 'Vui lòng chọn ít nhất 1 dịch vụ.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['error' => $msg]);
+        }
+
+        $count = CustomerService::onlyTrashed()->whereIn('id', $ids)->restore();
+        Log::info('Bulk restore from trash', ['count' => $count, 'ids' => $ids, 'by' => auth()->id()]);
+
+        $message = "Đã khôi phục {$count} dịch vụ.";
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'ids' => array_map('intval', $ids),
+                'stats' => $this->trashStats(),
+            ]);
+        }
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Xoá vĩnh viễn nhiều dịch vụ cùng lúc
+     */
+    public function bulkForceDelete(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids) || !is_array($ids)) {
+            $msg = 'Vui lòng chọn ít nhất 1 dịch vụ.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['error' => $msg]);
+        }
+
+        $count = 0;
+        DB::transaction(function () use ($ids, &$count) {
+            $services = CustomerService::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($services as $s) {
+                if ($s->profit) {
+                    $s->profit->delete();
+                }
+                $s->forceDelete();
+                $count++;
+            }
+        });
+
+        Log::warning('Bulk PERMANENT delete from trash', ['count' => $count, 'by' => auth()->id()]);
+
+        $message = "Đã xoá vĩnh viễn {$count} dịch vụ.";
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'ids' => array_map('intval', $ids),
+                'stats' => $this->trashStats(),
+            ]);
+        }
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Helper — số liệu thùng rác để JS cập nhật UI ngay
+     */
+    private function trashStats(): array
+    {
+        return [
+            'total' => CustomerService::onlyTrashed()->count(),
+            'last_7_days' => CustomerService::onlyTrashed()->where('deleted_at', '>=', now()->subDays(7))->count(),
+            'last_30_days' => CustomerService::onlyTrashed()->where('deleted_at', '>=', now()->subDays(30))->count(),
+        ];
+    }
+
+    /**
+     * Làm rỗng thùng rác — xoá vĩnh viễn TẤT CẢ
+     */
+    public function emptyTrash(Request $request)
+    {
+        // Yêu cầu xác nhận bằng text "XÓA VĨNH VIỄN"
+        if ($request->input('confirm_text') !== 'XÓA VĨNH VIỄN') {
+            return back()->withErrors(['error' => 'Vui lòng nhập đúng "XÓA VĨNH VIỄN" để xác nhận.']);
+        }
+
+        $count = 0;
+        DB::transaction(function () use (&$count) {
+            $services = CustomerService::onlyTrashed()->get();
+            foreach ($services as $s) {
+                if ($s->profit) {
+                    $s->profit->delete();
+                }
+                $s->forceDelete();
+                $count++;
+            }
+        });
+
+        Log::warning('Trash EMPTIED — all soft-deleted services permanently removed', [
+            'count' => $count,
+            'by' => auth()->id(),
+        ]);
+
+        return redirect()->route('admin.customer-services.trash')
+            ->with('success', "Đã làm rỗng thùng rác. Xoá vĩnh viễn {$count} dịch vụ.");
     }
 
     /**
@@ -582,92 +817,94 @@ class CustomerServiceController extends Controller
         $costPrice = $request->filled('cost_price') ? parseCurrency($request->cost_price) : 0;
         $price = $request->filled('price') ? parseCurrency($request->price) : 0;
 
-        // Check if service package is "add family" type
+        // Check if service package is "add family" type — pre-validate (không lock, để báo lỗi nhanh)
         $servicePackage = ServicePackage::findOrFail($request->service_package_id);
         if (strpos($servicePackage->account_type, 'add family') !== false) {
-            // Require family account selection for add family services
             if (!$request->filled('family_account_id')) {
                 return back()->withErrors([
                     'family_account_id' => 'Vui lòng chọn Family Account để thêm khách hàng vào.'
                 ])->withInput();
             }
-
-            // Check if family account has available slots (mỗi CustomerService = 1 slot)
-            $familyAccount = \App\Models\FamilyAccount::findOrFail($request->family_account_id);
-            $currentServicesCount = $familyAccount->customerServices()->where('status', 'active')->count();
-
-            if ($currentServicesCount >= $familyAccount->max_members) {
-                $availableSlots = $familyAccount->max_members - $currentServicesCount;
-                return back()->withErrors([
-                    'family_account_id' => "Family Account này đã đầy ({$currentServicesCount}/{$familyAccount->max_members} slots). Vui lòng chọn Family Account khác."
-                ])->withInput();
-            }
         }
 
-        // Check if service package is "shared account" type
-        $sharedCredentialId = null;
-        if ($servicePackage->account_type === 'Tài khoản dùng chung' && $request->filled('shared_credential_id')) {
-            $sharedCredential = \App\Models\SharedAccountCredential::findOrFail($request->shared_credential_id);
-            $currentUsersCount = $sharedCredential->customerServices()->where('status', 'active')->count();
+        $sharedCredentialId = $request->filled('shared_credential_id') ? $request->shared_credential_id : null;
 
-            if ($currentUsersCount >= $sharedCredential->max_users) {
-                return back()->withErrors([
-                    'shared_credential_id' => "Tài khoản này đã đầy ({$currentUsersCount}/{$sharedCredential->max_users} slots). Vui lòng chọn tài khoản khác."
-                ])->withInput();
-            }
-            $sharedCredentialId = $request->shared_credential_id;
-        }
+        try {
+            $customerService = DB::transaction(function () use ($request, $customer, $servicePackage, $costPrice, $price, $sharedCredentialId) {
+                // Lock + check slot family ở trong transaction (pessimistic lock chống race)
+                if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
+                    $familyAccount = \App\Models\FamilyAccount::lockForUpdate()->find($request->family_account_id);
+                    if (!$familyAccount) {
+                        throw new \RuntimeException('Family Account không tồn tại.');
+                    }
+                    $currentServicesCount = $familyAccount->customerServices()->where('status', 'active')->count();
+                    if ($currentServicesCount >= $familyAccount->max_members) {
+                        throw new \RuntimeException("Family Account này đã đầy ({$currentServicesCount}/{$familyAccount->max_members} slots). Vui lòng chọn Family Account khác.");
+                    }
+                }
 
-        // Tạo dịch vụ khách hàng
-        $customerService = CustomerService::create([
-            'customer_id' => $customer->id,
-            'service_package_id' => $request->service_package_id,
-            'assigned_by' => auth()->id(),
-            'login_email' => $request->login_email,
-            'login_password' => $request->login_password,
-            'activated_at' => $request->activated_at,
-            'expires_at' => $request->expires_at,
-            'status' => 'active',
-            'duration_days' => $request->duration_days,
-            'cost_price' => $costPrice,
-            'price' => $price,
-            'internal_notes' => $request->internal_notes,
-            'family_account_id' => $request->family_account_id ?? null,
-            'shared_credential_id' => $sharedCredentialId,
-        ]);
+                // Lock + check slot shared credential
+                if ($servicePackage->account_type === 'Tài khoản dùng chung' && $sharedCredentialId) {
+                    $sharedCredential = \App\Models\SharedAccountCredential::lockForUpdate()->find($sharedCredentialId);
+                    if (!$sharedCredential) {
+                        throw new \RuntimeException('Tài khoản dùng chung không tồn tại.');
+                    }
+                    $currentUsersCount = $sharedCredential->customerServices()->where('status', 'active')->count();
+                    if ($currentUsersCount >= $sharedCredential->max_users) {
+                        throw new \RuntimeException("Tài khoản này đã đầy ({$currentUsersCount}/{$sharedCredential->max_users} slots). Vui lòng chọn tài khoản khác.");
+                    }
+                }
 
-        // Nếu có nhập lợi nhuận, tạo record profit
-        if ($request->filled('profit_amount')) {
-            // Profit amount đã được parse ở trên trước validation
-            Log::info('Creating profit record', [
-                'profit_amount' => $request->profit_amount
-            ]);
-
-            \App\Models\Profit::create([
-                'customer_service_id' => $customerService->id,
-                'profit_amount' => $request->profit_amount,
-                'notes' => $request->profit_notes,
-                'created_by' => auth()->id(),
-            ]);
-        }
-
-        // Nếu là dịch vụ "add family", thêm khách hàng vào family account
-        if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
-            \App\Models\FamilyMember::updateOrCreate(
-                [
-                    'family_account_id' => $request->family_account_id,
+                // Tạo dịch vụ khách hàng
+                $customerService = CustomerService::create([
                     'customer_id' => $customer->id,
-                ],
-                [
-                    'member_name' => $customer->name,
-                    'member_email' => $request->login_email,
-                    'start_date' => $request->activated_at, // Thêm ngày bắt đầu
-                    'end_date' => $request->expires_at,     // Thêm ngày kết thúc
-                    'status' => 'active', // Kích hoạt lại nếu thành viên đã bị xóa
-                    'removed_at' => null, // Xóa dấu vết bị xóa
-                    'added_by' => 1,
-                ]
-            );
+                    'service_package_id' => $request->service_package_id,
+                    'assigned_by' => auth()->id(),
+                    'login_email' => $request->login_email,
+                    'login_password' => $request->login_password,
+                    'activated_at' => $request->activated_at,
+                    'expires_at' => $request->expires_at,
+                    'status' => 'active',
+                    'duration_days' => $request->duration_days,
+                    'cost_price' => $costPrice,
+                    'price' => $price,
+                    'internal_notes' => $request->internal_notes,
+                    'family_account_id' => $request->family_account_id ?? null,
+                    'shared_credential_id' => $sharedCredentialId,
+                ]);
+
+                if ($request->filled('profit_amount')) {
+                    Log::info('Creating profit record', ['profit_amount' => $request->profit_amount]);
+                    \App\Models\Profit::create([
+                        'customer_service_id' => $customerService->id,
+                        'profit_amount' => $request->profit_amount,
+                        'notes' => $request->profit_notes,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
+                    \App\Models\FamilyMember::updateOrCreate(
+                        [
+                            'family_account_id' => $request->family_account_id,
+                            'customer_id' => $customer->id,
+                        ],
+                        [
+                            'member_name' => $customer->name,
+                            'member_email' => $request->login_email,
+                            'start_date' => $request->activated_at,
+                            'end_date' => $request->expires_at,
+                            'status' => 'active',
+                            'removed_at' => null,
+                            'added_by' => auth()->id() ?? 1,
+                        ]
+                    );
+                }
+
+                return $customerService;
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['error' => $e->getMessage()])->withInput();
         }
 
         return redirect()->route('admin.customers.show', $customer)

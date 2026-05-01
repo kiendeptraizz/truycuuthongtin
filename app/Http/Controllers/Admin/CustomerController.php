@@ -81,17 +81,17 @@ class CustomerController extends Controller
      */
     public function store(Request $request)
     {
-        // Debug logging
+        // Debug log: chỉ ghi metadata, không ghi PII (email/phone) hay nội dung khách
         Log::info('Customer Store Request', [
-            'request_data' => $request->all(),
-            'user_id' => 1
+            'fields' => array_keys($request->except(['_token'])),
+            'user_id' => auth()->id(),
         ]);
 
         // Validation rules
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => 'nullable|email|max:255|unique:customers,email',
-            'phone' => 'nullable|string|max:20',
+            'phone' => ['nullable', 'string', 'max:20', 'regex:/^[\d\s\-\+\(\)\.]{9,20}$/'],
             'notes' => 'nullable|string|max:1000',
             'customer_code' => 'nullable|string|max:20|unique:customers,customer_code',
             'is_collaborator' => 'nullable|boolean',
@@ -104,6 +104,7 @@ class CustomerController extends Controller
             'email.email' => 'Email không đúng định dạng.',
             'email.unique' => 'Email này đã được sử dụng bởi khách hàng khác.',
             'phone.max' => 'Số điện thoại không được vượt quá 20 ký tự.',
+            'phone.regex' => 'Số điện thoại không hợp lệ (chỉ chấp nhận chữ số, khoảng trắng, dấu +, -, ()).',
             'notes.max' => 'Ghi chú không được vượt quá 1000 ký tự.',
             'customer_code.unique' => 'Mã khách hàng này đã tồn tại.',
             'customer_code.max' => 'Mã khách hàng không được vượt quá 20 ký tự.',
@@ -165,7 +166,15 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer)
     {
-        $customer->load(['customerServices.servicePackage.category', 'customerServices.familyAccount']);
+        // Sort: dịch vụ còn hạn lên trên, hết hạn/cancelled xuống dưới.
+        // Trong cùng nhóm, sắp xếp theo created_at ASC (thêm sớm hơn lên trước).
+        $customer->load([
+            'customerServices' => function ($q) {
+                $q->orderByRaw("CASE WHEN status = 'active' AND DATE(expires_at) > CURDATE() THEN 0 ELSE 1 END ASC")
+                  ->orderBy('created_at', 'asc')
+                  ->with(['servicePackage.category', 'familyAccount']);
+            },
+        ]);
 
         return view('admin.customers.show', compact('customer'));
     }

@@ -105,11 +105,18 @@ class Customer extends Model
     private static function generateCustomerCode(bool $isCollaborator = false): string
     {
         $prefix = $isCollaborator ? 'CTV' : 'KUN';
+        $maxAttempts = 50;
 
-        do {
-            $code = $prefix . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
-        } while (self::where('customer_code', $code)->exists());
+        // Race-safe: dù check rồi insert vẫn có race window, nhưng UNIQUE constraint ở DB
+        // sẽ throw exception nếu trùng → retry với code mới. Giới hạn số lần để tránh loop vô tận.
+        for ($i = 0; $i < $maxAttempts; $i++) {
+            $code = $prefix . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
+            if (!self::where('customer_code', $code)->exists()) {
+                return $code;
+            }
+        }
 
-        return $code;
+        // Fallback: dùng timestamp + random để đảm bảo unique gần như tuyệt đối
+        return $prefix . substr((string) (microtime(true) * 1000), -5) . random_int(0, 9);
     }
 }

@@ -108,6 +108,14 @@
                     href="{{ route('admin.customer-services.index') }}">
                     <i class="fas fa-link me-3"></i>Dịch vụ khách hàng
                 </a>
+                <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.pending-orders.*') ? 'active bg-white bg-opacity-10' : '' }}"
+                    href="{{ route('admin.pending-orders.index') }}">
+                    <i class="fas fa-receipt me-3"></i>Đơn chờ fill
+                    @php $pendingOrdersCount = \App\Models\PendingOrder::where('status', 'pending')->count(); @endphp
+                    @if($pendingOrdersCount > 0)
+                        <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
+                    @endif
+                </a>
                 <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.customer-services.statistics') ? 'active bg-white bg-opacity-10' : '' }}"
                     href="{{ route('admin.customer-services.statistics') }}">
                     <i class="fas fa-chart-bar me-3"></i>Thống kê dịch vụ
@@ -403,23 +411,26 @@
     </div>
 
     <!-- jQuery + Bootstrap JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- Enhanced Tables JS -->
-    <script src="{{ asset('js/enhanced-tables.js') }}" defer></script>
+    <script src="{{ asset('js/enhanced-tables.js') }}"></script>
 
     <!-- Enhanced Forms JS -->
-    <script src="{{ asset('js/enhanced-forms.js') }}" defer></script>
+    <script src="{{ asset('js/enhanced-forms.js') }}"></script>
 
     <!-- Page Navigation Fix -->
-    <script src="{{ asset('js/page-navigation-fix.js') }}" defer></script>
+    <script src="{{ asset('js/page-navigation-fix.js') }}"></script>
 
     <!-- Currency Formatter -->
-    <script src="{{ asset('js/currency-formatter.js') }}" defer></script>
+    <script src="{{ asset('js/currency-formatter.js') }}"></script>
 
     <!-- Admin Layout JS (utilities, alerts, animations) -->
-    <script src="{{ asset('js/admin-layout.js') }}" defer></script>
+    <script src="{{ asset('js/admin-layout.js') }}"></script>
+
+    <!-- AJAX Actions Helper (xoá/khôi phục không reload trang) -->
+    <script src="{{ asset('js/admin-ajax-actions.js') }}?v={{ filemtime(public_path('js/admin-ajax-actions.js')) }}"></script>
 
     <!-- Page-specific scripts -->
     @yield('scripts')

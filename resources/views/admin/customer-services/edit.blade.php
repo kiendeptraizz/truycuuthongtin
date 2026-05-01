@@ -373,7 +373,7 @@
                                                        id="profit_amount" 
                                                        name="profit_amount" 
                                                        placeholder="Nhập số tiền lãi (VD: 100000 hoặc 100,000)"
-                                                       value="{{ old('profit_amount', $customerService->profit->profit_amount ?? '') }}">
+                                                       value="{{ old('profit_amount', $customerService->profit ? (int) $customerService->profit->profit_amount : '') }}">
                                                 <span class="input-group-text">VNĐ</span>
                                             </div>
                                             @error('profit_amount')
@@ -636,11 +636,8 @@
         if (profitAmountInput) {
             // Format existing value on page load
             if (profitAmountInput.value) {
-                // Remove all non-numeric characters first, then format
-                let cleanValue = profitAmountInput.value.replace(/[^0-9]/g, '');
-                if (cleanValue) {
-                    profitAmountInput.value = formatNumberInput(cleanValue);
-                }
+                const num = Math.round(parseFloat(profitAmountInput.value)) || 0;
+                profitAmountInput.value = num > 0 ? formatNumberInput(String(num)) : '';
             }
 
             // Format as user types

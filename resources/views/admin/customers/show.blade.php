@@ -119,7 +119,7 @@
                 @if($customer->customerServices->count() > 0)
                 <div class="row g-3">
                     @foreach($customer->customerServices as $service)
-                    <div class="col-12">
+                    <div class="col-12" data-service-row="{{ $service->id }}">
                         <div class="card border {{ $service->status === 'active' ? 'border-success' : ($service->status === 'expired' ? 'border-danger' : 'border-secondary') }}">
                             <div class="card-body p-3">
                                 <div class="row align-items-center">
@@ -135,10 +135,12 @@
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             <form method="POST" action="{{ route('admin.customer-services.destroy', $service) }}"
-                                                class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa dịch vụ này?')">
+                                                  class="d-inline"
+                                                  data-ajax-action data-row-target="closest:[data-service-row]">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa"
+                                                        data-confirm="Xoá dịch vụ này?">
                                                     <i class="fas fa-trash-alt"></i>
                                                 </button>
                                             </form>

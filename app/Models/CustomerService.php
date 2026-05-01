@@ -155,16 +155,15 @@ class CustomerService extends Model
     }
 
     // Kiểm tra xem dịch vụ đã hết hạn chưa
-    // Chỉ tính là hết hạn khi đã QUA HẾT ngày hết hạn (sau 23:59:59)
+    // Đồng bộ với filter UI: dịch vụ hết hạn vào ngày X được coi là "đã hết hạn" từ 00:00 ngày X
     public function isExpired(): bool
     {
         if (!$this->expires_at) {
             return false;
         }
 
-        // So sánh theo ngày lịch: Chỉ hết hạn khi qua hết ngày đó
-        $expiryDate = $this->expires_at->copy()->endOfDay();
-        return $expiryDate->isPast();
+        // expires_at (chỉ ngày, bỏ qua giờ) ≤ hôm nay → đã hết hạn
+        return $this->expires_at->copy()->startOfDay()->lessThanOrEqualTo(now()->startOfDay());
     }
 
     // Scope để lấy các dịch vụ đang hoạt động
@@ -195,12 +194,10 @@ class CustomerService extends Model
     }
 
     // Scope để lấy các dịch vụ đã hết hạn theo thời gian (bất kể status)
-    // Chỉ tính là hết hạn khi đã qua hết ngày hết hạn (sau 23:59:59 của ngày hôm qua)
+    // Đồng bộ với filter UI và isExpired(): hết hạn từ 00:00 ngày `expires_at`
     public function scopeExpiredByDate($query)
     {
-        // Dùng whereDate để tránh vấn đề timezone
-        $yesterday = now()->subDay()->format('Y-m-d');
-        return $query->whereDate('expires_at', '<=', $yesterday);
+        return $query->whereDate('expires_at', '<=', now()->format('Y-m-d'));
     }
 
     // Scope để lấy các dịch vụ sắp hết hạn chưa được nhắc nhở

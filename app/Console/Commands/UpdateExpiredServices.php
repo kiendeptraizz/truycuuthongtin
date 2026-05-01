@@ -29,13 +29,11 @@ class UpdateExpiredServices extends Command
     {
         $includeToday = $this->option('include-today');
 
-        if ($includeToday) {
-            $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn (BAO GỒM HÔM NAY)...');
-            $cutoffDate = Carbon::now()->endOfDay();
-        } else {
-            $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn...');
-            $cutoffDate = Carbon::now()->subDay()->endOfDay();
-        }
+        // Đồng bộ với filter UI và isExpired(): dịch vụ hết hạn 30/4 = đã hết hạn từ 00:00 ngày 30/4
+        // → cron chạy 00:05 ngày 30/4 sẽ set status=expired luôn cho các dịch vụ hết hạn 30/4.
+        // Flag --include-today giữ lại để tương thích ngược nhưng hành vi giống nhau.
+        $this->info('Đang kiểm tra và cập nhật các dịch vụ hết hạn' . ($includeToday ? ' (bao gồm hôm nay)' : '') . '...');
+        $cutoffDate = Carbon::now()->endOfDay();
 
         // Đếm số dịch vụ cần cập nhật
         $count = CustomerService::where('status', 'active')

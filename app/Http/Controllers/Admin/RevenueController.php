@@ -304,12 +304,69 @@ class RevenueController extends Controller
     }
 
     /**
-     * Xuất báo cáo doanh thu
+     * Xuất báo cáo lợi nhuận dạng CSV (mở trực tiếp bằng Excel).
+     * Cố tình dùng CSV để không cần thêm package Maatwebsite/Excel.
      */
     public function exportReport(Request $request)
     {
-        // TODO: Implement export functionality
-        return response()->json(['message' => 'Export functionality coming soon']);
+        $startDate = $request->get('start_date', Carbon::today()->toDateString());
+        $endDate = $request->get('end_date', Carbon::today()->toDateString());
+
+        try {
+            $start = Carbon::parse($startDate)->startOfDay();
+            $end = Carbon::parse($endDate)->endOfDay();
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid date format'], 400);
+        }
+
+        $orders = CustomerService::with(['customer', 'servicePackage', 'profit'])
+            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->orderBy('customer_services.created_at', 'desc')
+            ->get();
+
+        $filename = sprintf('bao-cao-loi-nhuan_%s_%s.csv', $start->format('Ymd'), $end->format('Ymd'));
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        return response()->stream(function () use ($orders) {
+            $out = fopen('php://output', 'w');
+            // BOM để Excel hiểu UTF-8
+            fwrite($out, "\xEF\xBB\xBF");
+
+            fputcsv($out, [
+                'ID', 'Mã KH', 'Tên KH', 'SĐT', 'Email',
+                'Gói dịch vụ', 'Email đăng nhập', 'Doanh thu', 'Lợi nhuận', 'Margin %',
+                'Ghi chú lợi nhuận', 'Trạng thái', 'Ngày tạo', 'Hết hạn',
+            ]);
+
+            foreach ($orders as $o) {
+                $revenue = $o->price ?? ($o->servicePackage->price ?? 0);
+                $profit = $o->profit?->profit_amount ?? 0;
+                $margin = $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0;
+
+                fputcsv($out, [
+                    $o->id,
+                    $o->customer?->customer_code ?? '',
+                    $o->customer?->name ?? '[Khách hàng không tồn tại]',
+                    $o->customer?->phone ?? '',
+                    $o->customer?->email ?? '',
+                    $o->servicePackage?->name ?? '[Gói không tồn tại]',
+                    $o->login_email ?? '',
+                    (int) $revenue,
+                    (int) $profit,
+                    $margin,
+                    $o->profit?->notes ?? '',
+                    $o->status,
+                    $o->created_at?->format('d/m/Y H:i'),
+                    $o->expires_at?->format('d/m/Y'),
+                ]);
+            }
+
+            fclose($out);
+        }, 200, $headers);
     }
 
     /**
@@ -342,7 +399,7 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
-        // Top khách hàng theo doanh thu
+        // Top khách hàng theo doanh thu — dùng COALESCE để tôn trọng giá đặt riêng ở customer_services
         $topCustomers = DB::table('customer_services')
             ->join('customers', 'customer_services.customer_id', '=', 'customers.id')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
@@ -355,12 +412,12 @@ class RevenueController extends Controller
                 'customers.phone',
                 'customers.email',
                 DB::raw('COUNT(customer_services.id) as total_orders'),
-                DB::raw('SUM(service_packages.price) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(service_packages.price) as avg_order_value')
+                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value')
             )
             ->groupBy('customers.id', 'customers.name', 'customers.customer_code', 'customers.phone', 'customers.email')
-            ->orderBy('total_revenue', 'desc')
+            ->orderBy('total_profit', 'desc')
             ->limit($limit)
             ->get();
 
@@ -392,13 +449,13 @@ class RevenueController extends Controller
                 'service_categories.name',
                 'service_categories.description',
                 DB::raw('COUNT(customer_services.id) as total_orders'),
-                DB::raw('SUM(service_packages.price) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(service_packages.price) as avg_order_value'),
+                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value'),
                 DB::raw('COUNT(DISTINCT service_packages.id) as services_count')
             )
             ->groupBy('service_categories.id', 'service_categories.name', 'service_categories.description')
-            ->orderBy('total_revenue', 'desc')
+            ->orderBy('total_profit', 'desc')
             ->get();
 
         return response()->json($categoryStats);
@@ -436,11 +493,11 @@ class RevenueController extends Controller
                 DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
                 DB::raw('COUNT(DISTINCT customer_services.customer_id) as unique_customers'),
-                DB::raw('SUM(service_packages.price) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(service_packages.price) as avg_order_value'),
-                DB::raw('MAX(service_packages.price) as max_order_value'),
-                DB::raw('MIN(service_packages.price) as min_order_value')
+                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value'),
+                DB::raw('MAX(COALESCE(customer_services.price, service_packages.price, 0)) as max_order_value'),
+                DB::raw('MIN(COALESCE(customer_services.price, service_packages.price, 0)) as min_order_value')
             )
             ->groupBy('period')
             ->orderBy('period')
@@ -478,7 +535,7 @@ class RevenueController extends Controller
             ->select(
                 DB::raw('HOUR(customer_services.created_at) as hour'),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
-                DB::raw('SUM(service_packages.price) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit')
             )
             ->groupBy('hour')
@@ -693,7 +750,7 @@ class RevenueController extends Controller
     {
         $revenue = CustomerService::join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->whereBetween('customer_services.created_at', [$start, $end])
-            ->sum('service_packages.price');
+            ->sum(DB::raw('COALESCE(customer_services.price, service_packages.price, 0)'));
 
         $orders = CustomerService::whereBetween('created_at', [$start, $end])->count();
 
@@ -743,7 +800,7 @@ class RevenueController extends Controller
             ->select(
                 DB::raw('DATE(customer_services.created_at) as date'),
                 DB::raw('COUNT(customer_services.id) as orders'),
-                DB::raw('SUM(service_packages.price) as revenue')
+                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as revenue')
             )
             ->groupBy('date')
             ->orderBy('date')

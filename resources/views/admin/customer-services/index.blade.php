@@ -342,6 +342,14 @@
                             <i class="fas fa-bell"></i>
                             <span class="d-none d-lg-inline ms-1">Báo cáo nhắc nhở</span>
                         </a>
+                        <a href="{{ route('admin.customer-services.trash') }}" class="btn btn-outline-danger btn-sm" title="Thùng rác — dịch vụ đã xoá">
+                            <i class="fas fa-trash-alt"></i>
+                            <span class="d-none d-lg-inline ms-1">Thùng rác</span>
+                            @php $trashCount = \App\Models\CustomerService::onlyTrashed()->count(); @endphp
+                            @if($trashCount > 0)
+                                <span class="badge bg-danger ms-1">{{ $trashCount }}</span>
+                            @endif
+                        </a>
                         <a href="{{ route('admin.customer-services.create') }}" class="btn btn-primary btn-sm" title="Gán dịch vụ mới">
                             <i class="fas fa-plus"></i>
                             <span class="d-none d-md-inline ms-1">Gán dịch vụ mới</span>
@@ -597,7 +605,7 @@
                                         }
                                         }
                                         @endphp
-                                        <tr id="service-{{ $service->id }}" class="{{ $rowClass }}">
+                                        <tr id="service-{{ $service->id }}" data-service-id="{{ $service->id }}" class="{{ $rowClass }}">
                                         <!-- Cột Checkbox -->
                                         <td style="text-align: center; vertical-align: middle;">
                                             <input type="checkbox" class="form-check-input service-checkbox" value="{{ $service->id }}" data-name="{{ $service->customer->name }} - {{ $service->servicePackage->name }}">
@@ -659,7 +667,7 @@
                                                     @endif
 
                                                     <button class="btn btn-sm btn-outline-danger"
-                                                        onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}')"
+                                                        onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}', {{ $service->id }})"
                                                         title="Xóa">
                                                         <i class="fas fa-trash-alt"></i>
                                                     </button>
@@ -856,42 +864,60 @@
 @section('scripts')
 <script>
     let currentDeleteUrl = '';
-    
-    function confirmDelete(serviceName, deleteUrl) {
+    let currentDeleteId = null;
+
+    function confirmDelete(serviceName, deleteUrl, serviceId) {
         document.getElementById('serviceToDelete').textContent = serviceName;
         currentDeleteUrl = deleteUrl;
+        currentDeleteId = serviceId || null;
         new bootstrap.Modal(document.getElementById('deleteModal')).show();
     }
-    
-    function executeDelete() {
+
+    async function executeDelete() {
         if (!currentDeleteUrl) return;
-        
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         const btn = document.getElementById('confirmDeleteBtn');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xóa...';
-        
-        fetch(currentDeleteUrl, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
+
+        try {
+            const resp = await fetch(currentDeleteUrl, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json().catch(() => ({}));
+
+            // Đóng modal + remove row khỏi DOM (KHÔNG reload trang)
+            bootstrap.Modal.getInstance(document.getElementById('deleteModal'))?.hide();
+
+            const id = (data.id ?? currentDeleteId);
+            if (id) {
+                const row = document.querySelector(`tr[data-service-id="${id}"]`);
+                if (row) {
+                    row.style.transition = 'opacity 0.3s';
+                    row.style.opacity = '0';
+                    setTimeout(() => row.remove(), 300);
+                }
             }
-        })
-        .then(response => {
-            if (response.ok || response.redirected) {
-                // Reload trang hiện tại (giữ nguyên page và filter)
-                location.reload();
-            } else {
-                throw new Error('Có lỗi xảy ra khi xóa');
+
+            // Toast nhẹ
+            if (typeof showToast === 'function') {
+                showToast(data.message || 'Đã xoá', 'success');
             }
-        })
-        .catch(error => {
-            alert(error.message);
+        } catch (e) {
+            alert('Có lỗi xảy ra khi xoá: ' + e.message);
+        } finally {
             btn.disabled = false;
             btn.innerHTML = 'Xóa';
-        });
+            currentDeleteUrl = '';
+            currentDeleteId = null;
+        }
     }
 
     // ============ BULK DELETE FUNCTIONS ============
