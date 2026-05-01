@@ -12,20 +12,23 @@ use Illuminate\Support\Facades\Log;
 class Pay2sWebhookController extends Controller
 {
     /**
-     * Pay2S webhook handler — nhận giao dịch tiền vào, match với pending order theo
-     * order_code trong nội dung CK, mark paid và gửi noti Telegram.
+     * Pay2S webhook handler.
      *
-     * Pay2S thường gửi 1 trong các format:
-     *   { "transaction_id":"...", "amount": 100000, "content": "...", "transfer_type": "in", ... }
-     *   { "id":"...", "amount": ..., "description":"...", ... }
-     * Endpoint accept linh hoạt, trích thông tin theo nhiều tên field.
+     * Format payload thực tế từ Pay2S:
+     *   {
+     *     "transactions": [
+     *       { "id":..., "gateway":"ACB", "accountNumber":"24621481",
+     *         "content":"DH260502001 GD ...", "transferType":"IN",
+     *         "transferAmount":5000, "checksum":"...", ... }
+     *     ]
+     *   }
+     *
+     * Nội dung CK qua bank thường bị strip dấu gạch ngang/khoảng trắng,
+     * nên match cả "DH-260502-001" và "DH260502001".
      */
     public function __invoke(Request $request, TelegramBotService $bot): JsonResponse
     {
-        $payload = $request->all();
-        $rawJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
-
-        // 1) Verify token (Pay2S gắn token vào header Authorization hoặc body)
+        // 1) Verify token (Pay2S gắn vào header Authorization "Apikey xxx" hoặc body)
         $expected = (string) env('PAY2S_WEBHOOK_TOKEN', '');
         if ($expected !== '') {
             $auth = $request->header('Authorization', '');
@@ -36,54 +39,69 @@ class Pay2sWebhookController extends Controller
             }
         }
 
+        $payload = $request->all();
         Log::info('Pay2S webhook received', ['payload' => $payload]);
 
-        // 2) Trích các field linh hoạt
-        $amount = (int) ($payload['amount'] ?? $payload['transferAmount'] ?? $payload['transfer_amount'] ?? 0);
-        $content = (string) ($payload['content'] ?? $payload['description'] ?? $payload['transferContent'] ?? $payload['transfer_content'] ?? '');
-        $bankTxId = (string) ($payload['transaction_id'] ?? $payload['transactionId'] ?? $payload['id'] ?? $payload['referenceNumber'] ?? $payload['reference_number'] ?? '');
-        $direction = strtolower((string) ($payload['transfer_type'] ?? $payload['transferType'] ?? $payload['type'] ?? 'in'));
+        // 2) Pay2S wrap trong transactions[] — xử lý từng GD
+        $transactions = $payload['transactions'] ?? [$payload];
+        if (!is_array($transactions)) {
+            $transactions = [$payload];
+        }
+
+        $results = [];
+        foreach ($transactions as $tx) {
+            $results[] = $this->processTransaction($tx, $bot);
+        }
+
+        return response()->json(['ok' => true, 'processed' => $results]);
+    }
+
+    private function processTransaction(array $tx, TelegramBotService $bot): array
+    {
+        // Trích field theo nhiều tên (Pay2S vs format khác)
+        $amount = (int) ($tx['transferAmount'] ?? $tx['amount'] ?? $tx['transfer_amount'] ?? 0);
+        $content = (string) ($tx['content'] ?? $tx['description'] ?? $tx['transferContent'] ?? $tx['transfer_content'] ?? '');
+        $bankTxId = (string) ($tx['id'] ?? $tx['transaction_id'] ?? $tx['transactionId'] ?? $tx['referenceNumber'] ?? '');
+        $direction = strtoupper((string) ($tx['transferType'] ?? $tx['transfer_type'] ?? $tx['type'] ?? 'IN'));
 
         if ($amount <= 0 || $content === '') {
-            return response()->json(['ok' => false, 'error' => 'missing_fields', 'received' => array_keys($payload)], 422);
+            return ['ok' => false, 'error' => 'missing_fields'];
         }
 
-        // Chỉ xử lý tiền vào
-        if (!in_array($direction, ['in', 'credit', 'tien_vao', 'tienvao'], true)) {
-            return response()->json(['ok' => true, 'skipped' => 'not_credit']);
+        if (!in_array($direction, ['IN', 'CREDIT', 'TIEN_VAO', 'TIENVAO'], true)) {
+            return ['ok' => true, 'skipped' => 'not_credit'];
         }
 
-        // 3) Idempotent — đã xử lý GD này rồi thì bỏ qua
+        // Idempotent — đã xử lý GD này rồi thì bỏ qua
         if ($bankTxId !== '' && PendingOrder::where('bank_transaction_id', $bankTxId)->exists()) {
-            return response()->json(['ok' => true, 'skipped' => 'duplicate']);
+            return ['ok' => true, 'skipped' => 'duplicate', 'tx' => $bankTxId];
         }
 
-        // 4) Tìm pending order theo order_code trong nội dung CK (regex DH-XXXXXX-XXX)
-        if (!preg_match('/DH-\d{6}-\d{3}/', $content, $m)) {
-            Log::info('Pay2S webhook: no order_code matched in content', ['content' => $content]);
-            return response()->json(['ok' => true, 'matched' => false]);
+        // Match order_code linh hoạt: "DH-260502-001", "DH260502001", "DH 260502 001"
+        if (!preg_match('/DH[-\s]?(\d{6})[-\s]?(\d{3})/i', $content, $m)) {
+            Log::info('Pay2S webhook: no order_code in content', ['content' => $content]);
+            return ['ok' => true, 'matched' => false, 'content' => $content];
         }
-        $orderCode = $m[0];
+        $orderCode = sprintf('DH-%s-%s', $m[1], $m[2]);
 
         $order = PendingOrder::where('order_code', $orderCode)->first();
         if (!$order) {
             Log::warning('Pay2S webhook: order_code not found', ['order_code' => $orderCode]);
-            return response()->json(['ok' => true, 'matched' => false, 'order_code' => $orderCode]);
+            return ['ok' => true, 'matched' => false, 'order_code' => $orderCode];
         }
 
-        if ($order->status !== 'pending' && $order->paid_at !== null) {
-            return response()->json(['ok' => true, 'skipped' => 'already_paid']);
+        if ($order->paid_at !== null) {
+            return ['ok' => true, 'skipped' => 'already_paid', 'order_code' => $orderCode];
         }
 
-        // 5) Mark paid
         $order->update([
             'paid_at' => now(),
             'paid_amount' => $amount,
             'bank_transaction_id' => $bankTxId ?: null,
-            'bank_raw_payload' => $rawJson,
+            'bank_raw_payload' => json_encode($tx, JSON_UNESCAPED_UNICODE),
         ]);
 
-        // 6) Telegram noti — gửi cho admin
+        // Telegram noti
         try {
             $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
             $delta = $amount - (int) $order->amount;
@@ -113,11 +131,11 @@ class Pay2sWebhookController extends Controller
             Log::error('Pay2S webhook: Telegram noti failed', ['error' => $e->getMessage()]);
         }
 
-        return response()->json([
+        return [
             'ok' => true,
             'matched' => true,
             'order_code' => $orderCode,
             'paid_amount' => $amount,
-        ]);
+        ];
     }
 }
