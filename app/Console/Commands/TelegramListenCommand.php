@@ -164,16 +164,12 @@ class TelegramListenCommand extends Command
         }
 
         $caption = sprintf(
-            "✅ <b>%s</b>\n💰 <b>%s</b> (%sđ)\n🕐 %s%s\n\n🏦 <b>%s</b>\n💳 <code>%s</code>\n👤 <b>%s</b>\n📝 ND CK: <code>%s</code>",
+            "✅ <b>%s</b>\n💰 <b>%s</b> (%sđ)\n🕐 %s%s",
             $order->order_code,
             formatShortAmount($order->amount),
             number_format($order->amount, 0, ',', '.'),
             $order->created_at->format('H:i d/m/Y'),
-            $note ? "\n📒 {$note}" : '',
-            $this->qr->bankShortName(),
-            $this->qr->accountNumber(),
-            $this->qr->accountName(),
-            $order->order_code
+            $note ? "\n📒 {$note}" : ''
         );
 
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
