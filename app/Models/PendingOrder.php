@@ -17,6 +17,9 @@ class PendingOrder extends Model
         'created_via',
         'is_paid',
         'paid_at',
+        'paid_amount',
+        'bank_transaction_id',
+        'bank_raw_payload',
         'customer_service_id',
         'created_by',
         'telegram_chat_id',
@@ -26,7 +29,13 @@ class PendingOrder extends Model
         'amount' => 'decimal:2',
         'is_paid' => 'boolean',
         'paid_at' => 'datetime',
+        'paid_amount' => 'integer',
     ];
+
+    public function isPaid(): bool
+    {
+        return $this->paid_at !== null;
+    }
 
     public function customerService(): BelongsTo
     {

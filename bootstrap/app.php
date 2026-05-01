@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\SecurityHeaders::class,
         ]);
+
+        // Webhook endpoints không cần CSRF (verify bằng token riêng)
+        $middleware->validateCsrfTokens(except: [
+            'api/webhook/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -23,6 +23,12 @@ use App\Http\Controllers\Auth\AuthController;
 
 
 // ============================================================================
+// 🪝 WEBHOOK ROUTES (no auth, no csrf)
+// ============================================================================
+Route::post('/api/webhook/pay2s', \App\Http\Controllers\Api\Pay2sWebhookController::class)
+    ->name('webhook.pay2s');
+
+// ============================================================================
 // 🔐 AUTHENTICATION ROUTES
 // ============================================================================
 

@@ -120,6 +120,7 @@
                                 <th>Nguồn</th>
                                 <th>Tạo lúc</th>
                                 <th>Trạng thái</th>
+                                <th>Thanh toán</th>
                                 <th class="text-center">QR</th>
                                 <th class="text-end">Thao tác</th>
                             </tr>
@@ -161,6 +162,23 @@
                                         @endif
                                     @else
                                         <span class="badge bg-secondary">Huỷ</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($order->paid_at)
+                                        <span class="badge bg-success" title="{{ $order->paid_at->format('d/m/Y H:i:s') }}">
+                                            <i class="fas fa-check-circle me-1"></i>Đã trả
+                                        </span>
+                                        @if($order->paid_amount && $order->paid_amount != $order->amount)
+                                            <br><small class="text-danger">
+                                                {{ formatShortAmount($order->paid_amount) }}
+                                                ({{ $order->paid_amount > $order->amount ? '+' : '' }}{{ formatShortAmount($order->paid_amount - $order->amount) }})
+                                            </small>
+                                        @endif
+                                    @else
+                                        <span class="badge bg-light text-dark">
+                                            <i class="far fa-clock me-1"></i>Chưa trả
+                                        </span>
                                     @endif
                                 </td>
                                 <td class="text-center">
