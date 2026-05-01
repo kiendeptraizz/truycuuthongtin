@@ -155,35 +155,95 @@ if (!function_exists('parseCurrency')) {
      */
     function parseCurrency($formattedAmount)
     {
-        if (!$formattedAmount || !is_string($formattedAmount)) {
+        if ($formattedAmount === null || $formattedAmount === '') {
             return 0;
         }
 
-        // Convert to string if not already
-        $formattedAmount = (string) $formattedAmount;
-
-        // Remove currency symbols, spaces, and letters, keep only digits, dots, and commas
-        $cleaned = preg_replace('/[^\d.,]/', '', $formattedAmount);
-
-        // Check if this looks like a decimal number (has comma/dot at the end for cents)
-        // VD: 1,000.50 hoặc 1.000,50
-        if (preg_match('/[.,]\d{1,2}$/', $cleaned)) {
-            // This has decimal places
-            // If it ends with comma (European style): 1.000,50 -> 1000.50
-            if (preg_match('/,\d{1,2}$/', $cleaned)) {
-                $cleaned = str_replace('.', '', $cleaned); // Remove thousand separators (dots)
-                $cleaned = str_replace(',', '.', $cleaned); // Convert comma to dot for decimal
-            }
-            // If it ends with dot (US style): 1,000.50 -> 1000.50
-            else {
-                $cleaned = preg_replace('/,(?=\d{3})/', '', $cleaned); // Remove thousand separators (commas)
-            }
-        } else {
-            // This is just a whole number with thousand separators
-            // Remove all dots and commas as they are just separators
-            $cleaned = str_replace(['.', ','], '', $cleaned);
+        if (!is_string($formattedAmount)) {
+            return (float) $formattedAmount;
         }
 
+        $cleaned = preg_replace('/[^\d.,]/', '', $formattedAmount);
+        $cleaned = str_replace('.', '', $cleaned);
+        $cleaned = str_replace(',', '.', $cleaned);
+
         return (float) $cleaned;
+    }
+}
+
+if (!function_exists('parseShortAmount')) {
+    /**
+     * Parse số tiền dạng ngắn: "100k", "1.5tr", "200000", "200.000".
+     *
+     * @param mixed $input
+     * @return int
+     */
+    function parseShortAmount($input): int
+    {
+        if ($input === null || $input === '') return 0;
+
+        // Chỉ trust is_numeric cho int/float thực sự, KHÔNG dùng cho string
+        // (PHP coi '100.000' là numeric = 100, sẽ sai cho format VN)
+        if (is_int($input) || is_float($input)) {
+            return (int) round((float) $input);
+        }
+
+        $s = strtolower(trim((string) $input));
+        if (preg_match('/^([\d.,]+)\s*(k|nghìn|nghin|tr|triệu|trieu|m)?\s*$/u', $s, $m)) {
+            $unit = $m[2] ?? '';
+
+            if ($unit === '') {
+                // Không có đơn vị → bỏ tất cả dấu chấm/phẩy (đều là thousand separator vì VND không có decimal)
+                // Hỗ trợ "100.000", "100,000", "1.000.000"
+                return (int) round((float) str_replace(['.', ','], '', $m[1]));
+            }
+
+            // Có đơn vị → parse số thập phân (vd. "1.5tr", "1,5tr")
+            $num = (float) str_replace(',', '.', $m[1]);
+            return match ($unit) {
+                'k', 'nghìn', 'nghin' => (int) round($num * 1_000),
+                'tr', 'triệu', 'trieu', 'm' => (int) round($num * 1_000_000),
+            };
+        }
+        return (int) round((float) parseCurrency($s));
+    }
+}
+
+if (!function_exists('formatShortAmount')) {
+    /**
+     * Format số tiền sang dạng ngắn nếu tròn:
+     *   100000   -> "100k"
+     *   1500000  -> "1.5tr"
+     *   1000000  -> "1tr"
+     *   1234     -> "1,234đ"  (không tròn → fallback)
+     *
+     * @param int|float|string|null $amount
+     * @return string
+     */
+    function formatShortAmount($amount): string
+    {
+        $a = (int) round((float) $amount);
+        if ($a === 0) return '0đ';
+
+        $abs = abs($a);
+        $sign = $a < 0 ? '-' : '';
+
+        // ≥ 1 triệu
+        if ($abs >= 1_000_000) {
+            $value = $abs / 1_000_000;
+            // Chỉ dùng "tr" nếu chia hết cho 100k (vd 1.5tr = 1,500,000) hoặc tròn triệu
+            if ($abs % 100_000 === 0) {
+                $str = rtrim(rtrim(number_format($value, 1, '.', ''), '0'), '.');
+                return $sign . $str . 'tr';
+            }
+        }
+
+        // ≥ 1k, chia hết cho 1000
+        if ($abs >= 1_000 && $abs % 1_000 === 0) {
+            return $sign . ($abs / 1000) . 'k';
+        }
+
+        // Fallback: format đầy đủ
+        return $sign . number_format($abs, 0, ',', '.') . 'đ';
     }
 }

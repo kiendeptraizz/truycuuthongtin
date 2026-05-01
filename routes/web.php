@@ -63,7 +63,7 @@ Route::post('/tra-cuu/search', [LookupController::class, 'search'])
 // ============================================================================
 // 🔒 ADMIN ROUTES (Yêu cầu đăng nhập)
 // ============================================================================
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching'])->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \App\Http\Middleware\EnsureDailyBackup::class])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Quản lý khách hàng
@@ -98,10 +98,35 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching'])-
     Route::patch('service-packages/{servicePackage}/toggle-status', [ServicePackageController::class, 'toggleStatus'])
         ->name('service-packages.toggle-status');
 
+    // Quản lý đơn pending (mã đơn nhanh từ Telegram bot)
+    Route::prefix('pending-orders')->name('pending-orders.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\PendingOrderController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Admin\PendingOrderController::class, 'store'])->name('store');
+        Route::get('/{pendingOrder}/fill', [\App\Http\Controllers\Admin\PendingOrderController::class, 'fillForm'])->name('fill-form');
+        Route::post('/{pendingOrder}/fill', [\App\Http\Controllers\Admin\PendingOrderController::class, 'fill'])->name('fill');
+        Route::delete('/{pendingOrder}', [\App\Http\Controllers\Admin\PendingOrderController::class, 'destroy'])->name('destroy');
+        Route::get('/{pendingOrder}/qr', [\App\Http\Controllers\Admin\PendingOrderController::class, 'qr'])->name('qr');
+    });
+
     // Quản lý dịch vụ khách hàng
-    // Route bulk-delete phải đặt TRƯỚC resource route để tránh xung đột
+    // Các route literal PHẢI đặt TRƯỚC resource route để tránh xung đột với {customerService}
     Route::delete('customer-services/bulk-delete', [CustomerServiceController::class, 'bulkDelete'])
         ->name('customer-services.bulk-delete');
+
+    // ===== THÙNG RÁC =====
+    Route::get('customer-services/trash', [CustomerServiceController::class, 'trash'])
+        ->name('customer-services.trash');
+    Route::post('customer-services/trash/{id}/restore', [CustomerServiceController::class, 'restore'])
+        ->name('customer-services.trash.restore');
+    Route::delete('customer-services/trash/{id}/force-delete', [CustomerServiceController::class, 'forceDelete'])
+        ->name('customer-services.trash.force-delete');
+    Route::post('customer-services/trash/bulk-restore', [CustomerServiceController::class, 'bulkRestore'])
+        ->name('customer-services.trash.bulk-restore');
+    Route::delete('customer-services/trash/bulk-force-delete', [CustomerServiceController::class, 'bulkForceDelete'])
+        ->name('customer-services.trash.bulk-force-delete');
+    Route::delete('customer-services/trash/empty', [CustomerServiceController::class, 'emptyTrash'])
+        ->name('customer-services.trash.empty');
+
     Route::resource('customer-services', CustomerServiceController::class);
 
     // Route nhắc nhở khách hàng
