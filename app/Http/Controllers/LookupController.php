@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use App\Models\Customer;
 use App\Models\CustomerService;
+use App\Models\HomeSettings;
 use App\Models\ServiceCategory;
 use App\Models\ServicePackage;
 
@@ -18,12 +19,19 @@ class LookupController extends Controller
         $singleService = null; // Khi tra cứu theo mã đơn → chỉ 1 dịch vụ
         $code = $request->get('code');
 
-        // Stats + categories cho trang chủ — cache 1 giờ vì ít đổi
+        // Stats + categories cho trang chủ — cache 1 giờ vì ít đổi.
+        // Admin có thể override 3 số ở /admin/home-settings để boost FOMO/uy tín.
         $stats = Cache::remember('home_stats', 3600, function () {
-            return [
+            $settings = HomeSettings::singleton();
+            $real = [
                 'customers' => Customer::count(),
                 'services' => CustomerService::where('status', 'active')->count(),
                 'packages' => ServicePackage::where('is_active', true)->count(),
+            ];
+            return [
+                'customers' => $settings->customers_override ?? $real['customers'],
+                'services' => $settings->services_override ?? $real['services'],
+                'packages' => $settings->packages_override ?? $real['packages'],
             ];
         });
 

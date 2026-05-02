@@ -68,6 +68,10 @@ Route::post('/tra-cuu/search', [LookupController::class, 'search'])
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \App\Http\Middleware\EnsureDailyBackup::class])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Cấu hình trang chủ (override stats hiển thị trên trang tra cứu công khai)
+    Route::get('/home-settings', [\App\Http\Controllers\Admin\HomeSettingsController::class, 'edit'])->name('home-settings.edit');
+    Route::put('/home-settings', [\App\Http\Controllers\Admin\HomeSettingsController::class, 'update'])->name('home-settings.update');
+
     // Quản lý khách hàng
     Route::resource('customers', CustomerController::class);
     Route::get('customers/check-code/{code}', [CustomerController::class, 'checkCustomerCode'])

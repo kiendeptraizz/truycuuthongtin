@@ -170,6 +170,10 @@
                     <i class="fas fa-search me-3"></i>Tra cứu công khai
                     <i class="fas fa-external-link-alt ms-2 small"></i>
                 </a>
+                <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.home-settings.*') ? 'active bg-white bg-opacity-10' : '' }}"
+                    href="{{ route('admin.home-settings.edit') }}">
+                    <i class="fas fa-sliders-h me-3"></i>Cấu hình trang chủ
+                </a>
             </nav>
         </div>
     </div>
@@ -334,6 +338,11 @@
                         <i class="fas fa-search me-3"></i>
                         Tra cứu công khai
                         <i class="fas fa-external-link-alt ms-auto"></i>
+                    </a>
+                    <a class="nav-link {{ request()->routeIs('admin.home-settings.*') ? 'active' : '' }}"
+                        href="{{ route('admin.home-settings.edit') }}">
+                        <i class="fas fa-sliders-h me-3"></i>
+                        Cấu hình trang chủ
                     </a>
                 </nav>
             </div>
