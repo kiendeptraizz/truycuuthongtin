@@ -235,6 +235,9 @@ class CustomerServiceController extends Controller
                 'expires_at' => 'required|date|after:activated_at',
                 'status' => 'required|in:active,expired,cancelled',
                 'duration_days' => 'required|integer|min:1',
+                'warranty_days' => 'nullable|integer|min:0',
+                'order_amount' => 'nullable|string',
+                'family_code' => 'nullable|string|max:100',
                 'cost_price' => 'required|string',
                 'price' => 'required|string',
                 'internal_notes' => 'nullable|string',
@@ -252,6 +255,7 @@ class CustomerServiceController extends Controller
         // Parse currency inputs
         $costPrice = parseCurrency($request->cost_price);
         $price = parseCurrency($request->price);
+        $orderAmount = $request->filled('order_amount') ? parseCurrency($request->order_amount) : null;
 
         // Tạo dịch vụ khách hàng
         $customerService = CustomerService::create([
@@ -264,6 +268,9 @@ class CustomerServiceController extends Controller
             'expires_at' => $request->expires_at,
             'status' => $request->status,
             'duration_days' => $request->duration_days,
+            'warranty_days' => $request->filled('warranty_days') ? (int) $request->warranty_days : null,
+            'order_amount' => $orderAmount,
+            'family_code' => $request->family_code ?: null,
             'cost_price' => $costPrice,
             'price' => $price,
             'internal_notes' => $request->internal_notes,
@@ -372,10 +379,18 @@ class CustomerServiceController extends Controller
             'activated_at' => 'required|date',
             'expires_at' => 'required|date|after:activated_at',
             'status' => 'required|in:active,expired,cancelled',
+            'warranty_days' => 'nullable|integer|min:0',
+            'order_amount' => 'nullable|string',
+            'family_code' => 'nullable|string|max:100',
             'internal_notes' => 'nullable|string',
             'profit_amount' => 'nullable|numeric|min:0',
             'profit_notes' => 'nullable|string|max:1000',
         ]);
+
+        // Parse + normalize 3 fields mới đồng bộ bot
+        $validated['warranty_days'] = $request->filled('warranty_days') ? (int) $request->warranty_days : null;
+        $validated['order_amount'] = $request->filled('order_amount') ? parseCurrency($request->order_amount) : null;
+        $validated['family_code'] = $request->filled('family_code') ? $request->family_code : null;
 
         // Chỉ lấy các field thực sự thuộc về CustomerService — tránh mass-assign từ form input
         $serviceData = collect($validated)->except(['profit_amount', 'profit_notes'])->toArray();
