@@ -58,3 +58,14 @@ Schedule::command('services:cleanup-expired --days=30')
 
 // Schedule content reminders check every 15 minutes
 Schedule::command('content:check-reminders')->everyFifteenMinutes();
+
+// ============================================================================
+// 🔔 TELEGRAM BOT — NHẮC ĐƠN HẾT HẠN 9H SÁNG
+// ============================================================================
+
+// Mỗi 9h sáng gửi list đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn 3 ngày
+// tới cho admin (lấy chat_id từ TELEGRAM_ADMIN_IDS).
+Schedule::command('bot:notify-expirations')
+    ->dailyAt('09:00')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();

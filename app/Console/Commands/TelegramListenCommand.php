@@ -32,6 +32,14 @@ class TelegramListenCommand extends Command
     private TelegramBotService $bot;
     private VietQrService $qr;
 
+    // Label các nút trên persistent reply keyboard. Khi user bấm, Telegram gửi
+    // lại đúng text này — bot match để route đến handler tương ứng.
+    private const BTN_NEW_ORDER = '📝 Tạo đơn';
+    private const BTN_PENDING = '📋 Đơn pending';
+    private const BTN_STATS = '📊 Thống kê';
+    private const BTN_EXPIRING = '⏰ Hết hạn';
+    private const BTN_HELP = '❓ Hướng dẫn';
+
     public function handle(): int
     {
         $this->bot = app(TelegramBotService::class);
@@ -130,6 +138,11 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // User bấm nút menu chính (text trùng label) — route handler tương ứng
+        if ($this->handleMenuButton($chatId, $userId, $text)) {
+            return;
+        }
+
         // Lệnh / (không có conversation)
         if (str_starts_with($text, '/')) {
             $this->handleCommand($chatId, $userId, $text);
@@ -140,6 +153,31 @@ class TelegramListenCommand extends Command
         $this->startConversation($chatId, $userId, $text);
     }
 
+    /**
+     * Route text từ persistent menu button → handler. Return true nếu match.
+     */
+    private function handleMenuButton(int|string $chatId, string $userId, string $text): bool
+    {
+        switch ($text) {
+            case self::BTN_NEW_ORDER:
+                $this->promptAmount($chatId);
+                return true;
+            case self::BTN_PENDING:
+                $this->sendListPending($chatId);
+                return true;
+            case self::BTN_STATS:
+                $this->sendStatsToday($chatId);
+                return true;
+            case self::BTN_EXPIRING:
+                $this->sendExpirations($chatId);
+                return true;
+            case self::BTN_HELP:
+                $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
+                return true;
+        }
+        return false;
+    }
+
     private function handleCommand(int|string $chatId, string $userId, string $text): void
     {
         $parts = preg_split('/\s+/', $text, 2);
@@ -148,8 +186,25 @@ class TelegramListenCommand extends Command
 
         switch ($cmd) {
             case '/start':
+                $this->bot->sendMessage(
+                    $chatId,
+                    "👋 <b>Chào admin!</b>\n\n"
+                        . "Bot đã sẵn sàng. Bấm nút bên dưới để chọn chức năng:\n\n"
+                        . "📝 <b>Tạo đơn</b> — bot sẽ hỏi 7 bước (tên KH, gói, ...)\n"
+                        . "📋 <b>Đơn pending</b> — list đơn chưa thanh toán hôm nay\n"
+                        . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
+                        . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
+                        . "❓ <b>Hướng dẫn</b> — chi tiết các tính năng",
+                    $this->mainMenuMarkup()
+                );
+                break;
+
             case '/help':
-                $this->bot->sendMessage($chatId, $this->helpMessage());
+                $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
+                break;
+
+            case '/menu':
+                $this->bot->sendMessage($chatId, "📱 Menu chính:", $this->mainMenuMarkup());
                 break;
 
             case '/list':
@@ -203,6 +258,22 @@ class TelegramListenCommand extends Command
         $data = $state['data'] ?? [];
 
         switch ($step) {
+            case 'awaiting_amount':
+                $amount = parseShortAmount($text);
+                if ($amount <= 0) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Số tiền không hợp lệ.\n"
+                            . "Gõ vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>",
+                        $this->navMarkup(false)
+                    );
+                    return;
+                }
+                $data = ['amount' => $amount];
+                $this->setState($chatId, ['step' => 'customer_name', 'data' => $data]);
+                $this->promptCustomerName($chatId, $data);
+                return;
+
             case 'customer_name':
                 $input = trim($text);
                 if (mb_strlen($input) < 2) {
@@ -804,6 +875,148 @@ class TelegramListenCommand extends Command
         return ['reply_markup' => json_encode(['inline_keyboard' => [$row]])];
     }
 
+    /**
+     * Persistent reply keyboard hiện cố định ở chân màn hình. Dùng để show menu
+     * chính sau /start, /help, hoặc khi finalize đơn xong.
+     */
+    private function mainMenuMarkup(): array
+    {
+        $keyboard = [
+            [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_PENDING]],
+            [['text' => self::BTN_STATS], ['text' => self::BTN_EXPIRING]],
+            [['text' => self::BTN_HELP]],
+        ];
+        return ['reply_markup' => json_encode([
+            'keyboard' => $keyboard,
+            'resize_keyboard' => true,
+            'is_persistent' => true,
+        ])];
+    }
+
+    /**
+     * Bước đầu khi user bấm "📝 Tạo đơn" — hỏi số tiền, lưu state awaiting_amount
+     * để `handleConversationStep` parse số tiền rồi chuyển sang step customer_name.
+     */
+    private function promptAmount(int|string $chatId): void
+    {
+        $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => []]);
+        $this->bot->sendMessage(
+            $chatId,
+            "💰 <b>Bước 0/7:</b> Số tiền đơn hàng?\n"
+                . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>",
+            $this->navMarkup(false) // không có back vì là bước đầu
+        );
+    }
+
+    /**
+     * "📊 Thống kê" — profit hôm nay + tháng này, đơn paid + pending hôm nay.
+     */
+    private function sendStatsToday(int|string $chatId): void
+    {
+        $today = today();
+        $startOfMonth = $today->copy()->startOfMonth();
+
+        $profitToday = (float) \App\Models\Profit::whereDate('created_at', $today)->sum('profit_amount');
+        $profitMonth = (float) \App\Models\Profit::whereBetween('created_at', [$startOfMonth, $today->copy()->endOfDay()])->sum('profit_amount');
+
+        $paidToday = PendingOrder::where('status', 'completed')->whereDate('paid_at', $today)->count();
+        $pendingToday = PendingOrder::where('status', 'pending')->whereDate('created_at', $today)->count();
+        $cancelledToday = PendingOrder::where('status', 'cancelled')->whereDate('created_at', $today)->count();
+
+        $newCustomersToday = \App\Models\Customer::whereDate('created_at', $today)->count();
+
+        // Doanh thu (sum amount của đơn đã paid hôm nay) — khác profit
+        $revenueToday = (float) PendingOrder::where('status', 'completed')->whereDate('paid_at', $today)->sum('amount');
+
+        $msg = "📊 <b>Thống kê " . $today->format('d/m/Y') . "</b>\n\n"
+            . "💵 <b>Lợi nhuận hôm nay:</b> " . formatShortAmount((int) $profitToday) . " (" . number_format($profitToday, 0, ',', '.') . "đ)\n"
+            . "📈 <b>Lợi nhuận tháng " . $today->format('m/Y') . ":</b> " . formatShortAmount((int) $profitMonth) . " (" . number_format($profitMonth, 0, ',', '.') . "đ)\n\n"
+            . "🛒 <b>Doanh thu hôm nay:</b> " . formatShortAmount((int) $revenueToday) . "\n"
+            . "✅ Đơn đã thanh toán: <b>{$paidToday}</b>\n"
+            . "⏳ Đơn pending: <b>{$pendingToday}</b>\n"
+            . "❌ Đơn đã huỷ: <b>{$cancelledToday}</b>\n\n"
+            . "👤 KH mới hôm nay: <b>{$newCustomersToday}</b>";
+
+        $this->bot->sendMessage($chatId, $msg, $this->mainMenuMarkup());
+    }
+
+    /**
+     * "⏰ Hết hạn" — 3 sections: hết hạn hôm nay / đã quá hạn (active chưa update) /
+     * sắp hết hạn 3 ngày tới. Cùng dùng cho lệnh thủ công và auto noti 9h.
+     */
+    private function sendExpirations(int|string $chatId): void
+    {
+        $msg = $this->buildExpirationsMessage();
+        $this->bot->sendMessage($chatId, $msg, $this->mainMenuMarkup());
+    }
+
+    /**
+     * Build message "đơn hết hạn" — tách ra cho cả lệnh thủ công và scheduled job.
+     * Dùng eager load servicePackage + customer để tránh N+1.
+     */
+    public function buildExpirationsMessage(): string
+    {
+        $today = today();
+
+        $todayExpire = \App\Models\CustomerService::with(['customer', 'servicePackage'])
+            ->whereDate('expires_at', $today)
+            ->whereIn('status', ['active', 'expired'])
+            ->orderBy('expires_at')
+            ->get();
+
+        $overdue = \App\Models\CustomerService::with(['customer', 'servicePackage'])
+            ->whereDate('expires_at', '<', $today)
+            ->where('status', 'active')
+            ->orderBy('expires_at')
+            ->limit(15)
+            ->get();
+
+        $upcoming = \App\Models\CustomerService::with(['customer', 'servicePackage'])
+            ->whereBetween('expires_at', [$today->copy()->addDay()->startOfDay(), $today->copy()->addDays(3)->endOfDay()])
+            ->where('status', 'active')
+            ->orderBy('expires_at')
+            ->get();
+
+        $lines = ["⏰ <b>Đơn hết hạn — " . $today->format('d/m/Y') . "</b>\n"];
+
+        $lines[] = "🔴 <b>Hết hạn HÔM NAY (" . $todayExpire->count() . "):</b>";
+        if ($todayExpire->isEmpty()) {
+            $lines[] = "<i>— Không có đơn nào</i>";
+        } else {
+            foreach ($todayExpire as $cs) {
+                $lines[] = $this->formatExpirationLine($cs);
+            }
+        }
+
+        if ($overdue->isNotEmpty()) {
+            $lines[] = "\n⚠️ <b>Đã quá hạn nhưng chưa xử lý (" . $overdue->count() . "):</b>";
+            foreach ($overdue as $cs) {
+                $days = $cs->expires_at ? (int) $cs->expires_at->diffInDays($today) : 0;
+                $lines[] = $this->formatExpirationLine($cs) . " <i>(quá {$days}d)</i>";
+            }
+        }
+
+        $lines[] = "\n🟡 <b>Sắp hết hạn 3 ngày tới (" . $upcoming->count() . "):</b>";
+        if ($upcoming->isEmpty()) {
+            $lines[] = "<i>— Không có đơn nào</i>";
+        } else {
+            foreach ($upcoming as $cs) {
+                $lines[] = $this->formatExpirationLine($cs);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function formatExpirationLine(\App\Models\CustomerService $cs): string
+    {
+        $code = $cs->order_code ?? "CS#{$cs->id}";
+        $kh = $cs->customer ? $cs->customer->name . ' (' . $cs->customer->customer_code . ')' : '?';
+        $pkg = $cs->servicePackage->name ?? '?';
+        $exp = $cs->expires_at ? $cs->expires_at->format('d/m') : '?';
+        return "• <code>{$code}</code> · <b>{$kh}</b> · {$pkg} · hạn {$exp}";
+    }
+
     private function promptCustomerName(int|string $chatId, array $data): void
     {
         $amount = (int) ($data['amount'] ?? 0);
@@ -1049,23 +1262,27 @@ class TelegramListenCommand extends Command
 
     private function helpMessage(): string
     {
-        return "🤖 <b>Bot tạo đơn pending</b>\n\n"
-            . "<b>Cách tạo đơn:</b> Gõ số tiền để bắt đầu, bot sẽ hỏi 7 bước:\n"
-            . "1️⃣ Tên/mã khách hàng (mới: tự tạo + sinh KUN; cũ: gõ tên hoặc mã KUN/CTV)\n"
-            . "2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"
-            . "3️⃣ Email tài khoản\n"
-            . "4️⃣ Gói dịch vụ (chọn từ danh mục hoặc gõ keyword search)\n"
-            . "5️⃣ Mã nhóm-gia đình (email/số/text bất kỳ, hoặc <code>skip</code>)\n"
-            . "6️⃣ Bảo hành — <code>30d</code>/<code>1m</code>/<code>1y</code>, <code>full</code>=full thời hạn, <code>skip</code>=không\n"
-            . "7️⃣ Lợi nhuận — <code>50k</code>/<code>200k</code>/<code>1.5tr</code> hoặc <code>skip</code>\n\n"
-            . "<b>Số tiền hợp lệ:</b>\n"
-            . "<code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
-            . "<b>Lệnh:</b>\n"
+        return "🤖 <b>Bot quản lý đơn — Hướng dẫn</b>\n\n"
+            . "Bấm các nút bên dưới (cuối màn hình) để chọn nhanh:\n\n"
+            . "📝 <b>Tạo đơn</b> — bot hỏi 7 bước:\n"
+            . "  0️⃣ Số tiền — <code>100k</code>/<code>200k</code>/<code>1.5tr</code>\n"
+            . "  1️⃣ Tên/mã KH — tên mới sẽ tự tạo KUN; gõ <code>KUN98473</code> để chọn KH cũ\n"
+            . "  2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"
+            . "  3️⃣ Email tài khoản\n"
+            . "  4️⃣ Gói dịch vụ — chọn từ danh mục hoặc gõ keyword\n"
+            . "  5️⃣ Mã nhóm/gia đình — bất kỳ (hoặc <code>skip</code>)\n"
+            . "  6️⃣ Bảo hành — <code>30d</code>/<code>1m</code>/<code>1y</code>/<code>full</code>/<code>skip</code>\n"
+            . "  7️⃣ Lợi nhuận — <code>50k</code>/<code>200k</code>/<code>skip</code>\n\n"
+            . "📋 <b>Đơn pending</b> — list 10 đơn chưa thanh toán hôm nay + tổng tiền.\n\n"
+            . "📊 <b>Thống kê</b> — profit hôm nay + tháng, doanh thu, đơn paid/pending/cancelled, KH mới.\n\n"
+            . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
+            . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
+            . "<b>Lệnh thủ công:</b>\n"
+            . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
-            . "/lai — quay về bước trước\n"
-            . "/help — hướng dẫn này\n\n"
-            . "Sau khi xong, bot trả về QR + chi tiết đơn. Khi khách CK, hệ thống tự tạo dịch vụ trên web.";
+            . "/lai — quay về bước trước\n\n"
+            . "<i>Có thể gõ trực tiếp số tiền (vd <code>100k</code>) để bắt đầu đơn — không cần bấm nút.</i>";
     }
 }
