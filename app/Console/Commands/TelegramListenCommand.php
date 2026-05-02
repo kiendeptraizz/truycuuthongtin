@@ -112,6 +112,17 @@ class TelegramListenCommand extends Command
             // Không có conversation → cho /cancel rơi xuống lệnh cũ (cancel order code)
         }
 
+        // Quay lại bước trước
+        if (in_array($lc, ['/lai', '/lại', '/back', 'lai', 'lại', 'back', 'quay lại', 'quaylai'], true)) {
+            $state = $this->getState($chatId);
+            if ($state) {
+                $this->goBackStep($chatId, $state);
+            } else {
+                $this->bot->sendMessage($chatId, "ℹ️ Không có phiên nào đang chạy. Gõ số tiền để bắt đầu.");
+            }
+            return;
+        }
+
         // Đang trong conversation? → tiếp tục
         $state = $this->getState($chatId);
         if ($state) {
@@ -320,6 +331,11 @@ class TelegramListenCommand extends Command
                     // Telegram giới hạn callback_data ≤ 64 byte → dùng pkg_<id>
                     $buttons[] = [['text' => $label, 'callback_data' => "pkg_{$pkg->id}"]];
                 }
+                // Nút điều hướng
+                $buttons[] = [
+                    ['text' => '📂 Xem theo danh mục', 'callback_data' => 'cats'],
+                    ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                ];
 
                 $this->bot->sendMessage(
                     $chatId,
@@ -410,6 +426,16 @@ class TelegramListenCommand extends Command
         $state = $this->getState($chatId);
         $atServicePackageStep = $state && ($state['step'] ?? '') === 'service_package';
 
+        // Click "↩ Bước trước" — quay lại step trước
+        if ($cbData === 'back') {
+            if (!$state) {
+                $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết. Gõ số tiền để bắt đầu.");
+                return;
+            }
+            $this->goBackStep($chatId, $state);
+            return;
+        }
+
         // Click "↩ Quay lại danh mục"
         if ($cbData === 'cats') {
             if (!$atServicePackageStep) {
@@ -479,6 +505,8 @@ class TelegramListenCommand extends Command
                 'callback_data' => "cat_{$cat->id}_p1",
             ]];
         }
+        // Nút quay lại bước email
+        $buttons[] = [['text' => '↩ Bước trước (email)', 'callback_data' => 'back']];
 
         $this->bot->sendMessage(
             $chatId,
@@ -541,8 +569,11 @@ class TelegramListenCommand extends Command
             $buttons[] = $navRow;
         }
 
-        // Quay lại danh mục
-        $buttons[] = [['text' => '↩ Quay lại danh mục', 'callback_data' => 'cats']];
+        // Quay lại danh mục + về bước trước
+        $buttons[] = [
+            ['text' => '↩ Danh mục', 'callback_data' => 'cats'],
+            ['text' => '⏮ Bước trước', 'callback_data' => 'back'],
+        ];
 
         $this->bot->sendMessage(
             $chatId,
@@ -584,6 +615,115 @@ class TelegramListenCommand extends Command
             'Tài khoản cấp (dùng riêng)' => '🎁 cấp riêng',
         ];
         return $map[$type] ?? $type;
+    }
+
+    /**
+     * Thứ tự các bước conversation (dùng cho /lai để quay lại).
+     */
+    private const STEP_ORDER = ['customer_name', 'duration', 'email', 'service_package', 'family_email', 'warranty'];
+
+    /**
+     * Quay lại bước trước. Clear field của step hiện tại + step trước trong $data,
+     * gửi lại prompt cho step trước.
+     */
+    private function goBackStep(int|string $chatId, array $state): void
+    {
+        $current = $state['step'] ?? null;
+        $data = $state['data'] ?? [];
+
+        $idx = array_search($current, self::STEP_ORDER, true);
+        if ($idx === false || $idx === 0) {
+            // Bước đầu hoặc state lạ — clear hết
+            $this->clearState($chatId);
+            $this->bot->sendMessage($chatId, "↩ Đã huỷ phiên. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
+            return;
+        }
+
+        // Clear field tích luỹ ở step hiện tại + step trước (để prompt hiện sạch sẽ)
+        $clearMap = [
+            'customer_name' => ['customer_id', 'customer_code', 'customer_name'],
+            'duration' => ['duration_days', 'duration_label', 'duration_unit', 'duration_value'],
+            'email' => ['email'],
+            'service_package' => ['service_package_id', 'service_name', 'account_type', 'category_name'],
+            'family_email' => ['family_email'],
+            'warranty' => ['has_full'],
+        ];
+        foreach (($clearMap[$current] ?? []) as $f) unset($data[$f]);
+
+        $prevStep = self::STEP_ORDER[$idx - 1];
+        foreach (($clearMap[$prevStep] ?? []) as $f) unset($data[$f]);
+
+        $this->setState($chatId, ['step' => $prevStep, 'data' => $data]);
+        $this->renderStepPrompt($chatId, $prevStep, $data);
+    }
+
+    /**
+     * Gửi prompt cho 1 step (dùng khi back hoặc start). Inline với prompt khi advance trong handleConversationStep.
+     */
+    private function renderStepPrompt(int|string $chatId, string $step, array $data): void
+    {
+        match ($step) {
+            'customer_name' => $this->promptCustomerName($chatId, $data),
+            'duration' => $this->promptDuration($chatId),
+            'email' => $this->promptEmail($chatId),
+            'service_package' => $this->sendCategoryPicker($chatId),
+            'family_email' => $this->promptFamilyEmail($chatId),
+            'warranty' => $this->promptWarranty($chatId),
+            default => null,
+        };
+    }
+
+    private function promptCustomerName(int|string $chatId, array $data): void
+    {
+        $amount = (int) ($data['amount'] ?? 0);
+        $this->bot->sendMessage(
+            $chatId,
+            "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
+                . "👤 <b>Bước 1/6:</b> Tên hoặc mã khách hàng?\n"
+                . "<i>• Gõ <b>tên</b> (vd: <code>Nguyễn Văn A</code>)</i>\n"
+                . "<i>• Hoặc <b>mã KH</b> (vd: <code>KUN98473</code>)</i>\n"
+                . "<i>• /huy để huỷ</i>"
+        );
+    }
+
+    private function promptDuration(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "⏰ <b>Bước 2/6:</b> Thời hạn tài khoản?\n"
+                . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>\n"
+                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+        );
+    }
+
+    private function promptEmail(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "📧 <b>Bước 3/6:</b> Email tài khoản?\n"
+                . "<i>Vd: <code>huatungthang@gmail.com</code></i>\n"
+                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+        );
+    }
+
+    private function promptFamilyEmail(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n"
+                . "<i>Gõ <code>skip</code> nếu không có</i>\n"
+                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+        );
+    }
+
+    private function promptWarranty(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "🛡 <b>Bước 6/6:</b> Bảo hành full thời hạn?\n"
+                . "<i>Gõ <code>full</code> nếu có, <code>skip</code> để trống</i>\n"
+                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+        );
     }
 
     /**
