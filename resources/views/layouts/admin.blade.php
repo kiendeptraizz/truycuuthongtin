@@ -111,8 +111,7 @@
                 <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.pending-orders.*') ? 'active bg-white bg-opacity-10' : '' }}"
                     href="{{ route('admin.pending-orders.index') }}">
                     <i class="fas fa-receipt me-3"></i>Đơn chờ fill
-                    @php $pendingOrdersCount = \App\Models\PendingOrder::where('status', 'pending')->count(); @endphp
-                    @if($pendingOrdersCount > 0)
+                    @if(($pendingOrdersCount ?? 0) > 0)
                         <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
                     @endif
                 </a>
@@ -218,10 +217,7 @@
                         href="{{ route('admin.pending-orders.index') }}">
                         <i class="fas fa-receipt me-3"></i>
                         Đơn chờ fill
-                        @php
-                            $pendingOrdersCount = \App\Models\PendingOrder::where('status', 'pending')->count();
-                        @endphp
-                        @if($pendingOrdersCount > 0)
+                        @if(($pendingOrdersCount ?? 0) > 0)
                             <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
                         @endif
                     </a>
