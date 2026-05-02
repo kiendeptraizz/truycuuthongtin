@@ -439,8 +439,18 @@
         }
 
         @media (max-width: 576px) {
-            .stat-number { font-size: 1.5rem; }
-            .stat-label { font-size: 0.7rem; }
+            .stats-bar {
+                gap: 0.5rem;
+                margin-top: 1.25rem;
+            }
+            .stat-item { padding: 0.85rem 0.5rem; }
+            .stat-number { font-size: 1.4rem; }
+            .stat-label { font-size: 0.65rem; letter-spacing: 0.02em; }
+        }
+
+        @media (max-width: 380px) {
+            .stat-label i { display: none; }
+            .stat-label { font-size: 0.6rem; }
         }
 
         /* Categories Preview */
@@ -908,6 +918,10 @@
                 padding: 1.5rem;
             }
 
+            .subtitle {
+                font-size: 1rem;
+            }
+
             .search-card {
                 padding: 1.5rem;
             }
@@ -918,11 +932,20 @@
 
             .search-input {
                 padding: 1rem 1rem 1rem 3rem;
+                font-size: 1rem;
             }
 
             .search-btn {
                 padding: 1rem 1.5rem;
                 width: 100%;
+            }
+
+            .features-section .row > div {
+                margin-bottom: 0.75rem;
+            }
+
+            .feature-card {
+                padding: 1.25rem;
             }
 
             .customer-card {
@@ -945,6 +968,101 @@
             .customer-meta {
                 flex-direction: column;
                 gap: 0.75rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .container-fluid {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+
+            .header {
+                padding: 0.5rem 0;
+            }
+
+            .logo-container {
+                padding: 1rem 1.25rem;
+                gap: 0.75rem;
+                border-radius: 18px;
+            }
+
+            .logo-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+                border-radius: 12px;
+            }
+
+            .logo-text h1 {
+                font-size: 1.4rem;
+            }
+
+            .logo-text p {
+                font-size: 0.8rem;
+            }
+
+            .subtitle {
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+                padding: 0 0.5rem;
+            }
+
+            .search-card {
+                padding: 1.25rem;
+                border-radius: 22px;
+            }
+
+            .search-input {
+                padding: 0.85rem 1rem 0.85rem 2.75rem;
+                font-size: 0.95rem;
+                border-radius: 16px;
+            }
+
+            .search-icon-left {
+                left: 1rem;
+                font-size: 1rem;
+            }
+
+            .search-btn {
+                padding: 0.85rem 1.25rem;
+                font-size: 1rem;
+                border-radius: 16px;
+            }
+
+            .search-hints small {
+                font-size: 0.78rem;
+                line-height: 1.5;
+                display: inline-block;
+            }
+
+            .feature-card {
+                padding: 1rem;
+                border-radius: 16px;
+            }
+
+            .feature-icon {
+                width: 48px;
+                height: 48px;
+                font-size: 1.2rem;
+                margin-bottom: 0.6rem;
+            }
+
+            .feature-card h5 {
+                font-size: 0.95rem;
+            }
+
+            .feature-card p {
+                font-size: 0.82rem;
+            }
+
+            .categories-title {
+                font-size: 1rem;
+            }
+
+            .category-chip {
+                padding: 0.45rem 0.85rem;
+                font-size: 0.82rem;
             }
         }
 
