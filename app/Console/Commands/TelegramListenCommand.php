@@ -38,6 +38,7 @@ class TelegramListenCommand extends Command
     private const BTN_PENDING = '📋 Đơn pending';
     private const BTN_STATS = '📊 Thống kê';
     private const BTN_EXPIRING = '⏰ Hết hạn';
+    private const BTN_QUICK_QR = '⚡ QR nhanh';
     private const BTN_HELP = '❓ Hướng dẫn';
 
     public function handle(): int
@@ -198,6 +199,9 @@ class TelegramListenCommand extends Command
             case self::BTN_EXPIRING:
                 $this->sendExpirations($chatId);
                 return true;
+            case self::BTN_QUICK_QR:
+                $this->promptQuickQr($chatId);
+                return true;
             case self::BTN_HELP:
                 $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
                 return true;
@@ -221,6 +225,7 @@ class TelegramListenCommand extends Command
                         . "📋 <b>Đơn pending</b> — list đơn chưa thanh toán hôm nay\n"
                         . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
                         . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
+                        . "⚡ <b>QR nhanh</b> — gửi QR cho 1 số tiền (KHÔNG lưu, KHÔNG tạo đơn)\n"
                         . "❓ <b>Hướng dẫn</b> — chi tiết các tính năng",
                     $this->mainMenuMarkup()
                 );
@@ -442,6 +447,21 @@ class TelegramListenCommand extends Command
                 $data = ['amount' => $amount];
                 $this->setState($chatId, ['step' => 'customer_name', 'data' => $data]);
                 $this->promptCustomerName($chatId, $data);
+                return;
+
+            case 'awaiting_quick_qr':
+                $amount = parseShortAmount($text);
+                if ($amount <= 0) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Số tiền không hợp lệ.\n"
+                            . "Gõ vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>",
+                        $this->navMarkup(false)
+                    );
+                    return;
+                }
+                $this->clearState($chatId);
+                $this->sendQuickQr($chatId, $amount);
                 return;
 
             case 'customer_name':
@@ -1194,7 +1214,7 @@ class TelegramListenCommand extends Command
         $keyboard = [
             [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_PENDING]],
             [['text' => self::BTN_STATS], ['text' => self::BTN_EXPIRING]],
-            [['text' => self::BTN_HELP]],
+            [['text' => self::BTN_QUICK_QR], ['text' => self::BTN_HELP]],
         ];
         return ['reply_markup' => json_encode([
             'keyboard' => $keyboard,
@@ -1215,6 +1235,53 @@ class TelegramListenCommand extends Command
             "💰 <b>Bước 0/7:</b> Số tiền đơn hàng?\n"
                 . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>",
             $this->navMarkup(false) // không có back vì là bước đầu
+        );
+    }
+
+    /**
+     * "⚡ QR nhanh" — chỉ hỏi số tiền rồi gửi QR. KHÔNG tạo PendingOrder, không
+     * lưu DB, không cần fill thông tin gì. Dùng cho trường hợp khách CK lẻ tẻ
+     * mà admin không cần track (vd tip, phí phụ, thanh toán nhanh).
+     */
+    private function promptQuickQr(int|string $chatId): void
+    {
+        $this->setState($chatId, ['step' => 'awaiting_quick_qr', 'data' => []]);
+        $this->bot->sendMessage(
+            $chatId,
+            "⚡ <b>QR nhanh</b> — Nhập số tiền\n\n"
+                . "<i>Bot sẽ gửi QR ngay. KHÔNG lưu vào hệ thống, KHÔNG tạo đơn.</i>\n\n"
+                . "Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
+                . "Gõ /huy để huỷ.",
+            $this->navMarkup(false)
+        );
+    }
+
+    /**
+     * Gửi QR cho 1 số tiền (không lưu trữ). Caption theo template user yêu cầu —
+     * không show order_code vì không có đơn nào.
+     */
+    private function sendQuickQr(int|string $chatId, int $amount): void
+    {
+        // KHÔNG truyền addInfo → nội dung CK trong app banking sẽ trống,
+        // khách tự điền nếu cần. Phù hợp với yêu cầu "không cần thông tin gì".
+        $qrUrl = $this->qr->buildQrUrl($amount);
+
+        $bankShort = $this->qr->bankShortName();
+        $accNumber = $this->qr->accountNumber();
+        $accName = $this->qr->accountName();
+
+        $caption = "💵 <b>Số tiền:</b> " . formatShortAmount($amount)
+            . " (<code>" . number_format($amount, 0, ',', '.') . "đ</code>)\n"
+            . "🏦 <b>Ngân hàng:</b> {$bankShort}\n"
+            . "💳 <b>Số TK:</b> <code>{$accNumber}</code>\n"
+            . "👤 <b>Chủ TK:</b> {$accName}\n\n"
+            . "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
+
+        $this->bot->sendPhoto($chatId, $qrUrl, $caption);
+        $this->bot->sendMessage(
+            $chatId,
+            "✅ Đã gửi QR. Bấm <b>⚡ QR nhanh</b> để tạo tiếp.",
+            $this->mainMenuMarkup()
         );
     }
 
@@ -1612,6 +1679,7 @@ class TelegramListenCommand extends Command
             . "📊 <b>Thống kê</b> — profit hôm nay + tháng, doanh thu, đơn paid/pending/cancelled, KH mới.\n\n"
             . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
+            . "⚡ <b>QR nhanh</b> — Nhập 1 số tiền → bot gửi QR ngay. KHÔNG tạo PendingOrder, KHÔNG lưu DB. Dùng cho thanh toán lẻ tẻ không cần track (tip, phí phụ, refund...).\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
@@ -1658,6 +1726,7 @@ class TelegramListenCommand extends Command
     {
         return match ($step) {
             'awaiting_amount' => 'số tiền',
+            'awaiting_quick_qr' => 'số tiền (QR nhanh)',
             'customer_name' => 'tên hoặc mã khách hàng',
             'duration' => 'thời hạn',
             'email' => 'email tài khoản',
