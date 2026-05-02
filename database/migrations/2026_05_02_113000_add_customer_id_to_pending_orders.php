@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::table('pending_orders', function (Blueprint $t) {
+            if (!Schema::hasColumn('pending_orders', 'customer_id')) {
+                $t->foreignId('customer_id')
+                    ->nullable()
+                    ->after('telegram_chat_id')
+                    ->constrained()
+                    ->nullOnDelete();
+            }
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('pending_orders', function (Blueprint $t) {
+            if (Schema::hasColumn('pending_orders', 'customer_id')) {
+                $t->dropForeign(['customer_id']);
+                $t->dropColumn('customer_id');
+            }
+        });
+    }
+};

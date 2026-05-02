@@ -92,18 +92,35 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        if ($text === '' ) return;
-
+        if ($text === '') return;
         $this->line("[$userId] $text");
 
-        // Lệnh
+        // Huỷ conversation đang dở (gõ /huy / huỷ / /cancel không có arg)
+        $lc = strtolower($text);
+        if (in_array($lc, ['/huy', '/huỷ', 'huy', 'huỷ'], true) || $lc === '/cancel') {
+            if ($this->getState($chatId)) {
+                $this->clearState($chatId);
+                $this->bot->sendMessage($chatId, "❌ Đã huỷ. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
+                return;
+            }
+            // Không có conversation → cho /cancel rơi xuống lệnh cũ (cancel order code)
+        }
+
+        // Đang trong conversation? → tiếp tục
+        $state = $this->getState($chatId);
+        if ($state) {
+            $this->handleConversationStep($chatId, $userId, $text, $state);
+            return;
+        }
+
+        // Lệnh / (không có conversation)
         if (str_starts_with($text, '/')) {
             $this->handleCommand($chatId, $userId, $text);
             return;
         }
 
-        // Mặc định: parse số tiền
-        $this->handleCreateOrder($chatId, $userId, $text);
+        // Bắt đầu conversation từ số tiền
+        $this->startConversation($chatId, $userId, $text);
     }
 
     private function handleCommand(int|string $chatId, string $userId, string $text): void
@@ -135,131 +152,224 @@ class TelegramListenCommand extends Command
         }
     }
 
-    private function handleCreateOrder(int|string $chatId, string $userId, string $text): void
+    /**
+     * Bắt đầu conversation mới — user gõ số tiền → bot hỏi tên KH.
+     */
+    private function startConversation(int|string $chatId, string $userId, string $text): void
     {
-        // Thử parse format đầy đủ: "100k 1t email@x.com tên_dv [full]\ngd_email@y.com"
-        $parsed = $this->parseFullCommand($text);
-
-        if ($parsed) {
-            $amount = $parsed['amount'];
-            // Lưu vào note để admin có thể tham chiếu khi fill cuối ngày
-            $noteParts = ["DV:{$parsed['service_name']}", "TK:{$parsed['email']}"];
-            if ($parsed['family_email']) $noteParts[] = "GD:{$parsed['family_email']}";
-            $noteParts[] = "Hạn:{$parsed['duration_label']}";
-            if ($parsed['has_full']) $noteParts[] = "BH:full";
-            $note = implode(' | ', $noteParts);
-        } else {
-            // Fallback format cũ: "100k" hoặc "100k chatgpt cho A"
-            $amount = 0;
-            $note = null;
-            if (preg_match('/^([\d.,]+\s*(?:k|nghìn|nghin|tr|triệu|trieu|m)?)\s*(.*)$/iu', $text, $m)) {
-                $amount = parseShortAmount($m[1]);
-                $note = trim($m[2] ?? '') ?: null;
-            }
-        }
-
+        $amount = parseShortAmount($text);
         if ($amount <= 0) {
-            $this->bot->sendMessage($chatId, "❌ Không nhận diện được số tiền.\n\n<b>Format đầy đủ:</b>\n<code>100k 1m email@gmail.com claude</code>\n<code>gd_familyemail@gmail.com</code> <i>(dòng 2, tuỳ chọn)</i>\n\n<b>Đơn vị thời hạn:</b>\n• <code>Xd</code> = X ngày (vd <code>25d</code>)\n• <code>Xm</code> = X tháng (vd <code>1m</code>)\n• <code>Xy</code> = X năm (vd <code>1y</code>)\n\nThêm chữ <code>full</code> bất kỳ đâu để đánh dấu bảo hành full.\n\n<b>Format ngắn:</b>\n• <code>100k</code>\n• <code>100k chatgpt cho Thu Hà</code>");
+            $this->bot->sendMessage(
+                $chatId,
+                "❌ Vui lòng gõ số tiền để bắt đầu đơn mới.\n\n"
+                    . "Ví dụ: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>\n\n"
+                    . "Gõ /help để xem hướng dẫn."
+            );
             return;
         }
 
+        $this->setState($chatId, [
+            'step' => 'customer_name',
+            'data' => ['amount' => $amount],
+        ]);
+
+        $this->bot->sendMessage(
+            $chatId,
+            "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
+                . "👤 <b>Bước 1/6:</b> Tên khách hàng?\n"
+                . "<i>(KH cũ sẽ tự tìm theo tên, KH mới sẽ tự tạo + sinh mã. Gõ /huy để huỷ)</i>"
+        );
+    }
+
+    /**
+     * Xử lý từng bước trong conversation.
+     */
+    private function handleConversationStep(int|string $chatId, string $userId, string $text, array $state): void
+    {
+        $step = $state['step'] ?? null;
+        $data = $state['data'] ?? [];
+
+        switch ($step) {
+            case 'customer_name':
+                $name = trim($text);
+                if (mb_strlen($name) < 2) {
+                    $this->bot->sendMessage($chatId, "❌ Tên quá ngắn. Gõ lại tên khách hàng:");
+                    return;
+                }
+                try {
+                    $customer = $this->findOrCreateCustomer($name);
+                } catch (\Throwable $e) {
+                    Log::error('Telegram: findOrCreateCustomer failed', ['name' => $name, 'error' => $e->getMessage()]);
+                    $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                    return;
+                }
+                $isNew = $customer->wasRecentlyCreated;
+                $data['customer_id'] = $customer->id;
+                $data['customer_code'] = $customer->customer_code;
+                $data['customer_name'] = $customer->name;
+
+                $headLine = $isNew
+                    ? "✅ Đã tạo KH mới: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>"
+                    : "✅ Tìm thấy KH cũ: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+
+                $this->setState($chatId, ['step' => 'duration', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    $headLine . "\n\n⏰ <b>Bước 2/6:</b> Thời hạn tài khoản?\n"
+                        . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>"
+                );
+                return;
+
+            case 'duration':
+                $dur = $this->parseDuration(trim($text));
+                if (!$dur) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Sai format thời hạn.\n"
+                            . "Gõ vd: <code>1m</code> (tháng), <code>25d</code> (ngày), <code>1y</code> (năm)."
+                    );
+                    return;
+                }
+                $data['duration_days'] = $dur['days'];
+                $data['duration_label'] = $dur['label'];
+                $data['duration_unit'] = $dur['unit'];
+                $data['duration_value'] = $dur['value'];
+
+                $this->setState($chatId, ['step' => 'email', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "📧 <b>Bước 3/6:</b> Email tài khoản?\n<i>Vd: <code>huatungthang@gmail.com</code></i>"
+                );
+                return;
+
+            case 'email':
+                $email = trim($text);
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $this->bot->sendMessage($chatId, "❌ Email không hợp lệ. Gõ lại:");
+                    return;
+                }
+                $data['email'] = $email;
+                $this->setState($chatId, ['step' => 'service_name', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "📦 <b>Bước 4/6:</b> Tên dịch vụ?\n<i>Vd: <code>claude</code>, <code>chatgpt plus</code>, <code>gemini pro</code></i>"
+                );
+                return;
+
+            case 'service_name':
+                $sname = trim($text);
+                if (mb_strlen($sname) < 1) {
+                    $this->bot->sendMessage($chatId, "❌ Gõ lại tên dịch vụ:");
+                    return;
+                }
+                $data['service_name'] = $sname;
+                $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n<i>Gõ <code>skip</code> nếu không có</i>"
+                );
+                return;
+
+            case 'family_email':
+                $input = trim($text);
+                $lcInput = strtolower($input);
+                if (in_array($lcInput, ['skip', 'không', 'khong', 'no', '-', 'k', 'bo', 'bỏ'], true)) {
+                    $data['family_email'] = null;
+                } elseif (filter_var($input, FILTER_VALIDATE_EMAIL)) {
+                    $data['family_email'] = $input;
+                } else {
+                    $this->bot->sendMessage($chatId, "❌ Email không hợp lệ. Gõ lại hoặc <code>skip</code>:");
+                    return;
+                }
+                $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "🛡 <b>Bước 6/6:</b> Bảo hành full thời hạn?\n<i>Gõ <code>full</code> nếu có, hoặc <code>skip</code> để trống</i>"
+                );
+                return;
+
+            case 'warranty':
+                $lcInput = strtolower(trim($text));
+                $data['has_full'] = in_array($lcInput, ['full', 'có', 'co', 'yes', 'y', 'ok'], true);
+                $this->finalizeOrder($chatId, $userId, $data);
+                $this->clearState($chatId);
+                return;
+
+            default:
+                // State lạ — clear và yêu cầu start lại
+                $this->clearState($chatId);
+                $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết. Gõ số tiền để bắt đầu đơn mới.");
+        }
+    }
+
+    /**
+     * Tạo PendingOrder + gửi caption + QR ảnh sau khi user trả lời đủ 6 bước.
+     */
+    private function finalizeOrder(int|string $chatId, string $userId, array $data): void
+    {
         try {
             $order = PendingOrderController::createOrder([
-                'amount' => $amount,
-                'note' => $note,
+                'amount' => $data['amount'],
+                'note' => $this->buildNote($data),
+                'customer_id' => $data['customer_id'] ?? null,
                 'created_via' => 'telegram',
                 'telegram_chat_id' => (string) $chatId,
             ]);
         } catch (\Throwable $e) {
+            Log::error('Telegram: finalizeOrder failed', ['error' => $e->getMessage(), 'data' => $data]);
             $this->bot->sendMessage($chatId, "❌ Lỗi tạo đơn: " . $e->getMessage());
             return;
         }
 
-        $caption = $this->buildCaption($order, $parsed, $parsed ? null : $note);
-
+        $caption = $this->buildCaption($order, $data);
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
     }
 
     /**
-     * Parse format đầy đủ:
-     *   Dòng 1: <amount> <duration> <email_tk> <tên_dịch_vụ...> [full]
-     *   Dòng 2 (tuỳ chọn): gd_<email_family>
-     *
-     * Trả về null nếu không đủ thông tin → caller fallback format cũ.
+     * Tìm KH theo tên (exact match sau khi normalize tiếng Việt) hoặc tạo mới.
+     * Customer model auto-format name + auto-gen customer_code (KUN/CTV) khi creating.
      */
-    private function parseFullCommand(string $text): ?array
+    private function findOrCreateCustomer(string $name): \App\Models\Customer
     {
-        $lines = preg_split('/\R+/', trim($text)) ?: [];
-        $line1 = $lines[0] ?? '';
-        $line2 = $lines[1] ?? '';
+        $name = trim($name);
+        // Normalize giống mutator của Customer model: lowercase → title case từng từ
+        $normalized = $this->normalizeVietnameseName($name);
 
-        $tokens = preg_split('/\s+/', trim($line1)) ?: [];
-        if (count($tokens) < 4) return null; // chưa đủ info — fallback
+        $customer = \App\Models\Customer::where('name', $normalized)
+            ->orderBy('id') // ưu tiên KH cũ nhất nếu trùng tên
+            ->first();
 
-        // Token 1: amount
-        $amount = parseShortAmount($tokens[0]);
-        if ($amount <= 0) return null;
-
-        // Token 2: duration
-        $duration = $this->parseDuration($tokens[1]);
-        if ($duration === null) return null;
-
-        // Token 3: email tài khoản
-        if (!filter_var($tokens[2], FILTER_VALIDATE_EMAIL)) return null;
-        $accountEmail = $tokens[2];
-
-        // Token 4+: tên dịch vụ + có thể chứa "full"
-        $hasFull = false;
-        $serviceTokens = [];
-        foreach (array_slice($tokens, 3) as $t) {
-            if (strcasecmp($t, 'full') === 0) {
-                $hasFull = true;
-            } else {
-                $serviceTokens[] = $t;
-            }
+        if ($customer) {
+            return $customer;
         }
-        if (empty($serviceTokens)) return null; // phải có tên dịch vụ
-        $serviceName = implode(' ', $serviceTokens);
+        return \App\Models\Customer::create(['name' => $name]);
+    }
 
-        // Dòng 2: family email (gd_xxx@yyy.zz)
-        $familyEmail = null;
-        if (preg_match('/^gd_(.+)$/i', trim($line2), $m)) {
-            $candidate = trim($m[1]);
-            if (filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
-                $familyEmail = $candidate;
-            }
-        }
-
-        return [
-            'amount' => $amount,
-            'duration_days' => $duration['days'],
-            'duration_label' => $duration['label'],
-            'duration_unit' => $duration['unit'], // 'day' | 'month' | 'year'
-            'duration_value' => $duration['value'],
-            'email' => $accountEmail,
-            'service_name' => $serviceName,
-            'has_full' => $hasFull,
-            'family_email' => $familyEmail,
-        ];
+    private function normalizeVietnameseName(string $name): string
+    {
+        $name = mb_strtolower($name, 'UTF-8');
+        $words = explode(' ', $name);
+        $formatted = array_map(
+            fn($w) => mb_convert_case($w, MB_CASE_TITLE, 'UTF-8'),
+            $words
+        );
+        return implode(' ', $formatted);
     }
 
     /**
      * Parse "1m" / "25d" / "1y" → ['days' => N, 'label' => '...', ...]
-     *   m = month (tháng), d = day (ngày), y = year (năm)
+     *   d = day (ngày), m = month (tháng), y = year (năm)
      */
     private function parseDuration(string $token): ?array
     {
-        // Năm: Xy
         if (preg_match('/^(\d+)y$/i', $token, $m)) {
             $v = (int) $m[1];
             return ['days' => $v * 365, 'label' => "{$v} năm", 'unit' => 'year', 'value' => $v];
         }
-        // Tháng: Xm
         if (preg_match('/^(\d+)m$/i', $token, $m)) {
             $v = (int) $m[1];
             return ['days' => $v * 30, 'label' => "{$v} tháng", 'unit' => 'month', 'value' => $v];
         }
-        // Ngày: Xd
         if (preg_match('/^(\d+)d$/i', $token, $m)) {
             $v = (int) $m[1];
             return ['days' => $v, 'label' => "{$v} ngày", 'unit' => 'day', 'value' => $v];
@@ -268,51 +378,78 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * Build caption — gọn nếu format cũ, đầy đủ nếu format mới.
+     * Note compact lưu vào pending_orders.note để admin tham chiếu khi fill cuối ngày.
      */
-    private function buildCaption(\App\Models\PendingOrder $order, ?array $parsed, ?string $note): string
+    private function buildNote(array $data): string
+    {
+        $parts = [];
+        if (!empty($data['customer_code']) && !empty($data['customer_name'])) {
+            $parts[] = "KH:{$data['customer_code']} {$data['customer_name']}";
+        }
+        if (!empty($data['service_name'])) $parts[] = "DV:{$data['service_name']}";
+        if (!empty($data['email'])) $parts[] = "TK:{$data['email']}";
+        if (!empty($data['family_email'])) $parts[] = "GD:{$data['family_email']}";
+        if (!empty($data['duration_label'])) $parts[] = "Hạn:{$data['duration_label']}";
+        if (!empty($data['has_full'])) $parts[] = "BH:full";
+        return implode(' | ', $parts);
+    }
+
+    /**
+     * Build caption Telegram với chi tiết đơn hàng.
+     */
+    private function buildCaption(\App\Models\PendingOrder $order, array $data): string
     {
         $tail = "\n\n<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
-        if (!$parsed) {
-            // Format cũ — chỉ mã đơn + ghi chú nếu có (bỏ 💰 và 🕐 vì QR đã hiển thị tiền)
-            return "✅ <b>{$order->order_code}</b>"
-                . ($note ? "\n📒 {$note}" : '')
-                . $tail;
-        }
-
-        // Format mới — chi tiết đơn hàng
-        // Tính ngày hết hạn theo lịch (chuẩn hơn cộng days)
         $today = now();
-        $expiresAt = match ($parsed['duration_unit']) {
-            'year'  => $today->copy()->addYears($parsed['duration_value']),
-            'month' => $today->copy()->addMonths($parsed['duration_value']),
-            default => $today->copy()->addDays($parsed['duration_value']),
+        $expiresAt = match ($data['duration_unit'] ?? 'day') {
+            'year'  => $today->copy()->addYears((int) ($data['duration_value'] ?? 0)),
+            'month' => $today->copy()->addMonths((int) ($data['duration_value'] ?? 0)),
+            default => $today->copy()->addDays((int) ($data['duration_value'] ?? 0)),
         };
 
         $lines = [
             "✅ <b>{$order->order_code}</b>",
             '',
-            "📌 Tên dịch vụ: <b>{$parsed['service_name']}</b>",
-            "📌 Giá dịch vụ: <b>" . formatShortAmount($parsed['amount']) . "</b>",
-            "📌 Email tài khoản: <code>{$parsed['email']}</code>",
+            "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>{$data['customer_name']}</b>",
+            "📌 Tên dịch vụ: <b>{$data['service_name']}</b>",
+            "📌 Giá dịch vụ: <b>" . formatShortAmount($data['amount']) . "</b>",
+            "📌 Email tài khoản: <code>{$data['email']}</code>",
         ];
 
-        if ($parsed['family_email']) {
-            $lines[] = "📌 Mã nhóm - gia đình: <code>{$parsed['family_email']}</code>";
+        if (!empty($data['family_email'])) {
+            $lines[] = "📌 Mã nhóm - gia đình: <code>{$data['family_email']}</code>";
         }
 
         $lines[] = sprintf(
             "📌 Thời hạn tài khoản: từ %s đến %s (%s)",
             $today->format('d/m/Y'),
             $expiresAt->format('d/m/Y'),
-            $parsed['duration_label']
+            $data['duration_label'] ?? ''
         );
 
-        // Bảo hành: full nếu user gõ "full", không thì để trống cho user tự điền
-        $lines[] = "📌 Bảo hành: " . ($parsed['has_full'] ? '<b>full thời hạn</b>' : '');
+        $lines[] = "📌 Bảo hành: " . (!empty($data['has_full']) ? '<b>full thời hạn</b>' : '');
 
         return implode("\n", $lines) . $tail;
+    }
+
+    // ========================================================================
+    // STATE STORAGE — dùng Cache (Laravel) để lưu state per chat
+    // ========================================================================
+
+    private function getState(int|string $chatId): ?array
+    {
+        return Cache::get("tg_state_{$chatId}");
+    }
+
+    private function setState(int|string $chatId, array $state): void
+    {
+        Cache::put("tg_state_{$chatId}", $state, now()->addMinutes(30));
+    }
+
+    private function clearState(int|string $chatId): void
+    {
+        Cache::forget("tg_state_{$chatId}");
     }
 
     private function sendListPending(int|string $chatId): void
@@ -361,16 +498,21 @@ class TelegramListenCommand extends Command
 
     private function helpMessage(): string
     {
-        return "🤖 <b>Bot tạo pending order</b>\n\n"
-            . "<b>Tạo đơn nhanh</b> — gõ số tiền:\n"
-            . "• <code>100k</code> — 100,000đ\n"
-            . "• <code>200k</code> — 200,000đ\n"
-            . "• <code>1.5tr</code> — 1,500,000đ\n"
-            . "• <code>100k chatgpt cho Thu Hà</code> — kèm ghi chú\n\n"
+        return "🤖 <b>Bot tạo đơn pending</b>\n\n"
+            . "<b>Cách tạo đơn:</b> Gõ số tiền để bắt đầu, bot sẽ hỏi 6 bước:\n"
+            . "1️⃣ Tên khách hàng (mới sẽ tự tạo + sinh mã KUN, cũ sẽ tự tìm)\n"
+            . "2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"
+            . "3️⃣ Email tài khoản\n"
+            . "4️⃣ Tên dịch vụ\n"
+            . "5️⃣ Mã nhóm-gia đình (gõ <code>skip</code> nếu không có)\n"
+            . "6️⃣ Bảo hành (gõ <code>full</code> hoặc <code>skip</code>)\n\n"
+            . "<b>Ví dụ số tiền hợp lệ:</b>\n"
+            . "<code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
             . "<b>Lệnh:</b>\n"
-            . "/list — 10 đơn pending hôm nay\n"
-            . "/cancel DH-XXX-XXX — huỷ đơn\n"
+            . "/list — đơn pending hôm nay\n"
+            . "/cancel DH-XXX-XXX — huỷ 1 đơn cụ thể\n"
+            . "/huy (hoặc <code>huy</code>) — huỷ conversation đang gõ\n"
             . "/help — hướng dẫn này\n\n"
-            . "Sau khi tạo, bạn forward QR cho khách qua Zalo. Cuối ngày vào web để fill thông tin chi tiết.";
+            . "Sau khi xong, bot trả về QR + chi tiết đơn để forward cho khách.";
     }
 }
