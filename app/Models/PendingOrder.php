@@ -21,6 +21,7 @@ class PendingOrder extends Model
         'bank_transaction_id',
         'bank_raw_payload',
         'customer_id',
+        'service_package_id',
         'customer_service_id',
         'created_by',
         'telegram_chat_id',
@@ -46,6 +47,11 @@ class PendingOrder extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function servicePackage(): BelongsTo
+    {
+        return $this->belongsTo(ServicePackage::class);
     }
 
     public function creator(): BelongsTo

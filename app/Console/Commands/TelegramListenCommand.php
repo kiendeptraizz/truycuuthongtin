@@ -75,6 +75,12 @@ class TelegramListenCommand extends Command
 
     private function processUpdate(array $update): void
     {
+        // Inline button click → callback_query
+        if (isset($update['callback_query'])) {
+            $this->handleCallbackQuery($update['callback_query']);
+            return;
+        }
+
         $message = $update['message'] ?? null;
         if (!$message) return;
 
@@ -273,25 +279,58 @@ class TelegramListenCommand extends Command
                     return;
                 }
                 $data['email'] = $email;
-                $this->setState($chatId, ['step' => 'service_name', 'data' => $data]);
+                $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
                 $this->bot->sendMessage(
                     $chatId,
-                    "📦 <b>Bước 4/6:</b> Tên dịch vụ?\n<i>Vd: <code>claude</code>, <code>chatgpt plus</code>, <code>gemini pro</code></i>"
+                    "📦 <b>Bước 4/6:</b> Gõ <b>tên gói dịch vụ</b> để tìm.\n"
+                        . "<i>Vd: <code>claude</code>, <code>chatgpt</code>, <code>gemini</code>, <code>spotify</code>...</i>"
                 );
                 return;
 
-            case 'service_name':
-                $sname = trim($text);
-                if (mb_strlen($sname) < 1) {
-                    $this->bot->sendMessage($chatId, "❌ Gõ lại tên dịch vụ:");
+            case 'service_package':
+                $kw = trim($text);
+                if (mb_strlen($kw) < 1) {
+                    $this->bot->sendMessage($chatId, "❌ Gõ keyword tìm gói dịch vụ:");
                     return;
                 }
-                $data['service_name'] = $sname;
-                $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
+
+                $packages = \App\Models\ServicePackage::active()
+                    ->where('name', 'LIKE', '%' . $kw . '%')
+                    ->with('category')
+                    ->orderBy('name')
+                    ->limit(20)
+                    ->get();
+
+                if ($packages->isEmpty()) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Không tìm thấy gói nào khớp <b>'{$kw}'</b>.\n"
+                            . "<i>Gõ keyword khác (ngắn hơn, vd <code>claude</code> thay vì <code>claude pro</code>)</i>"
+                    );
+                    return;
+                }
+
+                if ($packages->count() === 1) {
+                    $this->selectServicePackage($chatId, $packages->first(), $data);
+                    return;
+                }
+
+                // Nhiều kết quả → inline keyboard, mỗi button 1 gói
+                $buttons = [];
+                foreach ($packages as $pkg) {
+                    $cat = $pkg->category?->name ?? '?';
+                    $type = $this->shortAccountType((string) $pkg->account_type);
+                    $label = "{$pkg->name} · {$type} · {$cat}";
+                    // Telegram giới hạn callback_data ≤ 64 byte → dùng pkg_<id>
+                    $buttons[] = [['text' => $label, 'callback_data' => "pkg_{$pkg->id}"]];
+                }
+
                 $this->bot->sendMessage(
                     $chatId,
-                    "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n<i>Gõ <code>skip</code> nếu không có</i>"
+                    "🔍 Tìm thấy <b>" . $packages->count() . "</b> gói khớp <code>{$kw}</code>. Click để chọn:",
+                    ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
                 );
+                // Giữ state ở 'service_package' để user gõ keyword lại nếu muốn
                 return;
 
             case 'family_email':
@@ -336,6 +375,7 @@ class TelegramListenCommand extends Command
                 'amount' => $data['amount'],
                 'note' => $this->buildNote($data),
                 'customer_id' => $data['customer_id'] ?? null,
+                'service_package_id' => $data['service_package_id'] ?? null,
                 'created_via' => 'telegram',
                 'telegram_chat_id' => (string) $chatId,
             ]);
@@ -347,6 +387,81 @@ class TelegramListenCommand extends Command
 
         $caption = $this->buildCaption($order, $data);
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
+    }
+
+    /**
+     * Xử lý click button inline (chọn ServicePackage).
+     */
+    private function handleCallbackQuery(array $cb): void
+    {
+        $callbackId = (string) ($cb['id'] ?? '');
+        $cbData = (string) ($cb['data'] ?? '');
+        $chatId = $cb['message']['chat']['id'] ?? null;
+        $userId = (string) ($cb['from']['id'] ?? '');
+
+        // Trả ack ngay để Telegram bỏ trạng thái loading nút bấm
+        if ($callbackId !== '') {
+            try {
+                $this->bot->call('answerCallbackQuery', ['callback_query_id' => $callbackId]);
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        if (!$chatId || !$this->bot->isAdmin($userId)) return;
+
+        // Chọn gói dịch vụ
+        if (preg_match('/^pkg_(\d+)$/', $cbData, $m)) {
+            $state = $this->getState($chatId);
+            if (!$state || ($state['step'] ?? '') !== 'service_package') {
+                $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết hoặc không còn ở bước chọn gói.");
+                return;
+            }
+            $pkg = \App\Models\ServicePackage::with('category')->find((int) $m[1]);
+            if (!$pkg) {
+                $this->bot->sendMessage($chatId, "❌ Gói này không còn tồn tại. Gõ keyword khác:");
+                return;
+            }
+            $this->selectServicePackage($chatId, $pkg, $state['data'] ?? []);
+            return;
+        }
+
+        // Callback khác (chưa hỗ trợ)
+        Log::info('Telegram callback_query unknown', ['data' => $cbData]);
+    }
+
+    /**
+     * Lưu ServicePackage đã chọn vào state, sang bước 5 (mã gia đình).
+     */
+    private function selectServicePackage(int|string $chatId, \App\Models\ServicePackage $pkg, array $data): void
+    {
+        $data['service_package_id'] = $pkg->id;
+        $data['service_name'] = $pkg->name;
+        $data['account_type'] = $pkg->account_type;
+        $data['category_name'] = $pkg->category?->name;
+
+        $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
+
+        $this->bot->sendMessage(
+            $chatId,
+            "✅ Đã chọn: <b>{$pkg->name}</b>\n"
+                . "<i>Loại: {$pkg->account_type} · Danh mục: " . ($pkg->category?->name ?? '—') . "</i>\n\n"
+                . "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n<i>Gõ <code>skip</code> nếu không có</i>"
+        );
+    }
+
+    /**
+     * Rút gọn account_type cho hiển thị inline button (Telegram giới hạn label ngắn).
+     */
+    private function shortAccountType(string $type): string
+    {
+        $map = [
+            'Tài khoản chính chủ' => '👤 chính chủ',
+            'Tài khoản dùng chung' => '🔑 dùng chung',
+            'Tài khoản add family' => '👨‍👩‍👧 add family',
+            'Tài khoản cấp (dùng riêng)' => '🎁 cấp riêng',
+        ];
+        return $map[$type] ?? $type;
     }
 
     /**
