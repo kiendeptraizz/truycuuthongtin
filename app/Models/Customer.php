@@ -107,8 +107,9 @@ class Customer extends Model
         $prefix = $isCollaborator ? 'CTV' : 'KUN';
         $maxAttempts = 50;
 
-        // Race-safe: dù check rồi insert vẫn có race window, nhưng UNIQUE constraint ở DB
-        // sẽ throw exception nếu trùng → retry với code mới. Giới hạn số lần để tránh loop vô tận.
+        // Pre-check để giảm xác suất collision lần đầu insert; race window vẫn còn
+        // (2 request có thể cùng pick chung 1 code chưa exists). UNIQUE ở DB chặn
+        // double-insert; caller nên dùng Customer::createSafe() để retry tự động.
         for ($i = 0; $i < $maxAttempts; $i++) {
             $code = $prefix . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
             if (!self::where('customer_code', $code)->exists()) {
@@ -116,7 +117,39 @@ class Customer extends Model
             }
         }
 
-        // Fallback: dùng timestamp + random để đảm bảo unique gần như tuyệt đối
         return $prefix . substr((string) (microtime(true) * 1000), -5) . random_int(0, 9);
+    }
+
+    /**
+     * Tạo Customer + retry tự động khi customer_code collision (race condition).
+     *
+     * Pattern check-then-insert trong boot::creating có race window: 2 caller cùng
+     * gen 1 code chưa tồn tại → insert thứ 2 fail UNIQUE. createSafe bắt lỗi đó
+     * và retry, đảm bảo caller luôn nhận về 1 Customer hợp lệ.
+     */
+    public static function createSafe(array $attrs): self
+    {
+        $maxRetries = 5;
+        $lastException = null;
+
+        for ($i = 0; $i < $maxRetries; $i++) {
+            try {
+                return static::create($attrs);
+            } catch (\Illuminate\Database\QueryException $e) {
+                $errorCode = $e->errorInfo[1] ?? null;
+                $isUniqueViolation = $errorCode === 1062
+                    || str_contains(strtolower($e->getMessage()), 'duplicate entry');
+                $isCustomerCodeCollision = str_contains($e->getMessage(), 'customer_code');
+
+                if ($isUniqueViolation && $isCustomerCodeCollision) {
+                    $lastException = $e;
+                    unset($attrs['customer_code']); // ép boot::creating regen
+                    continue;
+                }
+                throw $e;
+            }
+        }
+
+        throw $lastException ?? new \RuntimeException('Customer::createSafe: vượt số lần retry');
     }
 }

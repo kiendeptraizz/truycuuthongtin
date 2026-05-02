@@ -7,6 +7,7 @@ use App\Models\PendingOrder;
 use App\Services\TelegramBotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class Pay2sWebhookController extends Controller
@@ -72,9 +73,17 @@ class Pay2sWebhookController extends Controller
             return ['ok' => true, 'skipped' => 'not_credit'];
         }
 
-        // Idempotent — đã xử lý GD này rồi thì bỏ qua
+        // Idempotent layer 1 — bankTxId duplicate
         if ($bankTxId !== '' && PendingOrder::where('bank_transaction_id', $bankTxId)->exists()) {
             return ['ok' => true, 'skipped' => 'duplicate', 'tx' => $bankTxId];
+        }
+        if ($bankTxId === '') {
+            // Pay2S thường có id; thiếu là edge case (test/sandbox). Vẫn tiếp tục
+            // vì idempotent layer 2 (paid_at !== null trong lock) sẽ chặn double-activate.
+            Log::warning('Pay2S webhook: empty bankTxId, fallback to paid_at lock check', [
+                'content' => $content,
+                'amount' => $amount,
+            ]);
         }
 
         // Match order_code linh hoạt: "DH-260502-001", "DH260502001", "DH 260502 001"
@@ -84,29 +93,59 @@ class Pay2sWebhookController extends Controller
         }
         $orderCode = sprintf('DH-%s-%s', $m[1], $m[2]);
 
-        $order = PendingOrder::where('order_code', $orderCode)->first();
-        if (!$order) {
-            Log::warning('Pay2S webhook: order_code not found', ['order_code' => $orderCode]);
-            return ['ok' => true, 'matched' => false, 'order_code' => $orderCode];
-        }
-
-        if ($order->paid_at !== null) {
-            return ['ok' => true, 'skipped' => 'already_paid', 'order_code' => $orderCode];
-        }
-
-        $order->update([
-            'paid_at' => now(),
-            'paid_amount' => $amount,
-            'bank_transaction_id' => $bankTxId ?: null,
-            'bank_raw_payload' => json_encode($tx, JSON_UNESCAPED_UNICODE),
-        ]);
-
-        // Tự tạo CustomerService nếu đơn đã đủ data structured (qua bot Telegram 7 bước)
-        $order->refresh();
-        $createdCsId = $this->tryAutoCreateCustomerService($order);
-
-        // Telegram noti — format trang trọng để admin có thể forward cho khách
+        // ATOMIC: lock order + update paid + create/activate CS + create Profit + mark completed
+        // Nếu bất kỳ bước nào throw → rollback toàn bộ (tránh state nửa-active).
         try {
+            $result = DB::transaction(function () use ($orderCode, $amount, $bankTxId, $tx) {
+                $order = PendingOrder::where('order_code', $orderCode)->lockForUpdate()->first();
+                if (!$order) {
+                    Log::warning('Pay2S webhook: order_code not found', ['order_code' => $orderCode]);
+                    return ['ok' => true, 'matched' => false, 'order_code' => $orderCode];
+                }
+                if ($order->paid_at !== null) {
+                    return ['ok' => true, 'skipped' => 'already_paid', 'order_code' => $orderCode];
+                }
+
+                $order->update([
+                    'paid_at' => now(),
+                    'paid_amount' => $amount,
+                    'bank_transaction_id' => $bankTxId ?: null,
+                    'bank_raw_payload' => json_encode($tx, JSON_UNESCAPED_UNICODE),
+                ]);
+
+                $order->refresh();
+                $createdCsId = $this->tryAutoCreateCustomerService($order);
+
+                return [
+                    'ok' => true,
+                    'matched' => true,
+                    'order_id' => $order->id,
+                    'order_code' => $orderCode,
+                    'paid_amount' => $amount,
+                    'customer_service_id' => $createdCsId,
+                ];
+            });
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: transaction failed — rolled back', [
+                'order_code' => $orderCode,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ['ok' => false, 'error' => 'transaction_failed', 'order_code' => $orderCode];
+        }
+
+        // Skipped/not matched → return ngay, không gửi noti
+        if (!($result['matched'] ?? false)) {
+            return $result;
+        }
+
+        // Telegram noti — đặt NGOÀI transaction (HTTP call không block DB lock)
+        try {
+            $order = PendingOrder::with('customer')->find($result['order_id']);
+            if (!$order) {
+                return $result;
+            }
+
             $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
             $delta = $amount - (int) $order->amount;
             $deltaNote = $delta === 0
@@ -115,7 +154,6 @@ class Pay2sWebhookController extends Controller
                     ? "\n\n⚠️ <i>Khách trả dư " . formatShortAmount($delta) . "</i>"
                     : "\n\n⚠️ <i>Khách trả thiếu " . formatShortAmount(abs($delta)) . "</i>");
 
-            $order->load('customer');
             $customerLine = $order->customer
                 ? "<code>{$order->customer->customer_code}</code> — <b>" . e($order->customer->name) . "</b>"
                 : "<i>(chưa gắn KH)</i>";
@@ -137,13 +175,8 @@ class Pay2sWebhookController extends Controller
             Log::error('Pay2S webhook: Telegram noti failed', ['error' => $e->getMessage()]);
         }
 
-        return [
-            'ok' => true,
-            'matched' => true,
-            'order_code' => $orderCode,
-            'paid_amount' => $amount,
-            'customer_service_id' => $createdCsId,
-        ];
+        unset($result['order_id']);
+        return $result;
     }
 
     /**
@@ -185,119 +218,105 @@ class Pay2sWebhookController extends Controller
     /**
      * Activate CS pending → đổi status='active', set activated_at + expires_at.
      * Tạo Profit nếu bot có nhập profit_amount.
+     *
+     * Chạy trong outer DB::transaction (processTransaction). Không try-catch ở đây
+     * để exception bubble lên rollback toàn bộ — tránh state nửa-active.
      */
     private function activatePendingCustomerService(PendingOrder $order): ?int
     {
-        try {
-            $cs = \App\Models\CustomerService::find($order->customer_service_id);
-            if (!$cs) {
-                Log::warning('Pay2S webhook: CS link tới đơn không tồn tại — fallback create mới', [
-                    'order_id' => $order->id,
-                    'cs_id_orphan' => $order->customer_service_id,
-                ]);
-                $order->update(['customer_service_id' => null]);
-                return $this->createActiveCustomerService($order);
-            }
-
-            // Idempotent — webhook bắn lại lần 2 sẽ không double-activate
-            if ($cs->status === 'active' && $cs->activated_at) {
-                return $cs->id;
-            }
-
-            $now = now();
-            $expiresAt = $now->copy()->addDays((int) ($order->duration_days ?? $cs->duration_days ?? 0));
-
-            $cs->update([
-                'status' => 'active',
-                'activated_at' => $now,
-                'expires_at' => $expiresAt,
-                'internal_notes' => trim(($cs->internal_notes ?? '') . "\n\n💰 Thanh toán xác nhận qua Pay2S ({$now->format('d/m/Y H:i')})"),
-            ]);
-
-            // Tạo Profit nếu chưa có
-            if (!empty($order->profit_amount) && $order->profit_amount > 0 && !$cs->profit) {
-                \App\Models\Profit::create([
-                    'customer_service_id' => $cs->id,
-                    'profit_amount' => $order->profit_amount,
-                    'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
-                ]);
-            }
-
-            $order->update(['status' => 'completed']);
-
-            Log::info('Pay2S webhook: activated pending CustomerService', [
+        $cs = \App\Models\CustomerService::find($order->customer_service_id);
+        if (!$cs) {
+            Log::warning('Pay2S webhook: CS link tới đơn không tồn tại — fallback create mới', [
                 'order_id' => $order->id,
-                'order_code' => $order->order_code,
-                'customer_service_id' => $cs->id,
+                'cs_id_orphan' => $order->customer_service_id,
             ]);
-
-            return $cs->id;
-        } catch (\Throwable $e) {
-            Log::error('Pay2S webhook: activate CustomerService failed', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return null;
+            $order->update(['customer_service_id' => null]);
+            return $this->createActiveCustomerService($order);
         }
+
+        // Idempotent — webhook bắn lại lần 2 sẽ không double-activate
+        if ($cs->status === 'active' && $cs->activated_at) {
+            return $cs->id;
+        }
+
+        $now = now();
+        $expiresAt = $now->copy()->addDays((int) ($order->duration_days ?? $cs->duration_days ?? 0));
+
+        $cs->update([
+            'status' => 'active',
+            'activated_at' => $now,
+            'expires_at' => $expiresAt,
+            'internal_notes' => trim(($cs->internal_notes ?? '') . "\n\n💰 Thanh toán xác nhận qua Pay2S ({$now->format('d/m/Y H:i')})"),
+        ]);
+
+        // Tạo Profit nếu chưa có
+        if (!empty($order->profit_amount) && $order->profit_amount > 0 && !$cs->profit) {
+            \App\Models\Profit::create([
+                'customer_service_id' => $cs->id,
+                'profit_amount' => $order->profit_amount,
+                'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
+            ]);
+        }
+
+        $order->update(['status' => 'completed']);
+
+        Log::info('Pay2S webhook: activated pending CustomerService', [
+            'order_id' => $order->id,
+            'order_code' => $order->order_code,
+            'customer_service_id' => $cs->id,
+        ]);
+
+        return $cs->id;
     }
 
     /**
      * Tạo CS active mới (cho đơn web nhanh hoặc đơn cũ không có CS pending).
+     * Chạy trong outer DB::transaction — không try-catch ở đây.
      */
     private function createActiveCustomerService(PendingOrder $order): ?int
     {
-        try {
-            $now = now();
-            $expiresAt = $now->copy()->addDays((int) $order->duration_days);
+        $now = now();
+        $expiresAt = $now->copy()->addDays((int) $order->duration_days);
 
-            $internalNotes = "📋 Tự tạo từ đơn {$order->order_code} qua Pay2S webhook ({$now->format('d/m/Y H:i')})";
-            if (!empty($order->family_code)) {
-                $internalNotes .= "\nMã nhóm-gia đình: {$order->family_code}";
-            }
-
-            $cs = \App\Models\CustomerService::create([
-                'pending_order_id' => $order->id,
-                'customer_id' => $order->customer_id,
-                'service_package_id' => $order->service_package_id,
-                'login_email' => $order->account_email,
-                'activated_at' => $now,
-                'expires_at' => $expiresAt,
-                'status' => 'active',
-                'duration_days' => $order->duration_days,
-                'warranty_days' => $order->warranty_days,
-                'order_amount' => $order->amount,
-                'family_code' => $order->family_code,
-                'internal_notes' => $internalNotes,
-            ]);
-
-            if (!empty($order->profit_amount) && $order->profit_amount > 0) {
-                \App\Models\Profit::create([
-                    'customer_service_id' => $cs->id,
-                    'profit_amount' => $order->profit_amount,
-                    'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
-                ]);
-            }
-
-            $order->update([
-                'customer_service_id' => $cs->id,
-                'status' => 'completed',
-            ]);
-
-            Log::info('Pay2S webhook: created active CustomerService', [
-                'order_id' => $order->id,
-                'order_code' => $order->order_code,
-                'customer_service_id' => $cs->id,
-            ]);
-
-            return $cs->id;
-        } catch (\Throwable $e) {
-            Log::error('Pay2S webhook: create CustomerService failed', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return null;
+        $internalNotes = "📋 Tự tạo từ đơn {$order->order_code} qua Pay2S webhook ({$now->format('d/m/Y H:i')})";
+        if (!empty($order->family_code)) {
+            $internalNotes .= "\nMã nhóm-gia đình: {$order->family_code}";
         }
+
+        $cs = \App\Models\CustomerService::create([
+            'pending_order_id' => $order->id,
+            'customer_id' => $order->customer_id,
+            'service_package_id' => $order->service_package_id,
+            'login_email' => $order->account_email,
+            'activated_at' => $now,
+            'expires_at' => $expiresAt,
+            'status' => 'active',
+            'duration_days' => $order->duration_days,
+            'warranty_days' => $order->warranty_days,
+            'order_amount' => $order->amount,
+            'family_code' => $order->family_code,
+            'internal_notes' => $internalNotes,
+        ]);
+
+        if (!empty($order->profit_amount) && $order->profit_amount > 0) {
+            \App\Models\Profit::create([
+                'customer_service_id' => $cs->id,
+                'profit_amount' => $order->profit_amount,
+                'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
+            ]);
+        }
+
+        $order->update([
+            'customer_service_id' => $cs->id,
+            'status' => 'completed',
+        ]);
+
+        Log::info('Pay2S webhook: created active CustomerService', [
+            'order_id' => $order->id,
+            'order_code' => $order->order_code,
+            'customer_service_id' => $cs->id,
+        ]);
+
+        return $cs->id;
     }
 }

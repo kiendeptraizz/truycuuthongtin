@@ -95,6 +95,10 @@ class TelegramListenCommand extends Command
         $chatId = $message['chat']['id'];
         $userId = $message['from']['id'] ?? '';
         $text = trim((string) ($message['text'] ?? ''));
+        // Caption đi kèm photo/video/document — coi như tin nhắn text bình thường
+        if ($text === '') {
+            $text = trim((string) ($message['caption'] ?? ''));
+        }
 
         // Whitelist
         if (!$this->bot->isAdmin($userId)) {
@@ -106,7 +110,30 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        if ($text === '') return;
+        // Non-text update không có caption (sticker/voice/photo trống/...) — feedback friendly
+        if ($text === '') {
+            $attachmentType = $this->detectAttachmentType($message);
+            if ($attachmentType !== null) {
+                $state = $this->getState($chatId);
+                if ($state) {
+                    $stepLabel = $this->stepLabel($state['step'] ?? '');
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "📎 Bot nhận được <b>{$attachmentType}</b> nhưng chỉ xử lý tin nhắn text.\n\n"
+                            . "Bạn đang ở bước: <b>{$stepLabel}</b>. Vui lòng gõ text "
+                            . "(hoặc gõ <code>/huy</code> để huỷ phiên)."
+                    );
+                } else {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "📎 Bot nhận được <b>{$attachmentType}</b> nhưng chỉ hiểu tin nhắn text.\n"
+                            . "Bấm 📝 <b>Tạo đơn</b> hoặc gõ số tiền (vd <code>100k</code>) để bắt đầu."
+                    );
+                }
+                $this->line("[$userId] (non-text: {$attachmentType})");
+            }
+            return;
+        }
         $this->line("[$userId] $text");
 
         // Huỷ conversation đang dở (gõ /huy / huỷ / /cancel không có arg)
@@ -1112,7 +1139,7 @@ class TelegramListenCommand extends Command
         if ($customer) {
             return $customer;
         }
-        return \App\Models\Customer::create(['name' => $name]);
+        return \App\Models\Customer::createSafe(['name' => $name]);
     }
 
     private function normalizeVietnameseName(string $name): string
@@ -1295,5 +1322,52 @@ class TelegramListenCommand extends Command
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
             . "<i>Có thể gõ trực tiếp số tiền (vd <code>100k</code>) để bắt đầu đơn — không cần bấm nút.</i>";
+    }
+
+    /**
+     * Phát hiện loại attachment trong message Telegram (photo/sticker/voice/...).
+     * Return tên tiếng Việt để hiển thị, hoặc null nếu không phải attachment đã biết.
+     */
+    private function detectAttachmentType(array $message): ?string
+    {
+        $map = [
+            'photo' => 'ảnh',
+            'sticker' => 'sticker',
+            'voice' => 'tin nhắn thoại',
+            'audio' => 'audio',
+            'video' => 'video',
+            'video_note' => 'video tròn',
+            'animation' => 'GIF/animation',
+            'document' => 'tệp đính kèm',
+            'contact' => 'danh thiếp',
+            'location' => 'vị trí',
+            'venue' => 'địa điểm',
+            'poll' => 'poll',
+            'dice' => 'dice/emoji động',
+        ];
+        foreach ($map as $key => $label) {
+            if (isset($message[$key])) {
+                return $label;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Map step machine → label tiếng Việt cho user.
+     */
+    private function stepLabel(string $step): string
+    {
+        return match ($step) {
+            'awaiting_amount' => 'số tiền',
+            'customer_name' => 'tên hoặc mã khách hàng',
+            'duration' => 'thời hạn',
+            'email' => 'email tài khoản',
+            'service_package' => 'chọn gói dịch vụ',
+            'family_email' => 'mã nhóm/gia đình',
+            'warranty' => 'bảo hành',
+            'profit' => 'lợi nhuận',
+            default => $step ?: 'không xác định',
+        };
     }
 }

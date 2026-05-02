@@ -472,7 +472,7 @@ class FamilyAccountController extends Controller
                 // Create new customer
                 $customerCode = $this->generateCustomerCode();
 
-                $customer = Customer::create([
+                $customer = Customer::createSafe([
                     'name' => $request->customer_name,
                     'email' => $request->member_email,
                     'phone' => $request->customer_phone,
