@@ -176,8 +176,10 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
-                . "👤 <b>Bước 1/6:</b> Tên khách hàng?\n"
-                . "<i>(KH cũ sẽ tự tìm theo tên, KH mới sẽ tự tạo + sinh mã. Gõ /huy để huỷ)</i>"
+                . "👤 <b>Bước 1/6:</b> Tên hoặc mã khách hàng?\n"
+                . "<i>• Gõ <b>tên</b> (vd: <code>Nguyễn Văn A</code>) — KH cũ sẽ tự tìm, KH mới sẽ tự tạo</i>\n"
+                . "<i>• Hoặc gõ <b>mã KH</b> (vd: <code>KUN98473</code>, <code>CTV12345</code>) để chọn KH đã có</i>\n"
+                . "<i>• Gõ /huy để huỷ</i>"
         );
     }
 
@@ -191,26 +193,48 @@ class TelegramListenCommand extends Command
 
         switch ($step) {
             case 'customer_name':
-                $name = trim($text);
-                if (mb_strlen($name) < 2) {
-                    $this->bot->sendMessage($chatId, "❌ Tên quá ngắn. Gõ lại tên khách hàng:");
+                $input = trim($text);
+                if (mb_strlen($input) < 2) {
+                    $this->bot->sendMessage($chatId, "❌ Quá ngắn. Gõ lại tên hoặc mã khách hàng:");
                     return;
                 }
-                try {
-                    $customer = $this->findOrCreateCustomer($name);
-                } catch (\Throwable $e) {
-                    Log::error('Telegram: findOrCreateCustomer failed', ['name' => $name, 'error' => $e->getMessage()]);
-                    $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
-                    return;
+
+                // Detect mã KH (KUN/CTV + digits) — tìm chính xác theo customer_code
+                $matchedByCode = false;
+                if (preg_match('/^(KUN|CTV)\d+$/i', $input)) {
+                    $code = strtoupper($input);
+                    $customer = \App\Models\Customer::where('customer_code', $code)->first();
+                    if (!$customer) {
+                        $this->bot->sendMessage(
+                            $chatId,
+                            "❌ Không tìm thấy KH với mã <code>{$code}</code>.\n\n"
+                                . "Gõ <b>tên đầy đủ</b> để tạo KH mới hoặc tìm theo tên, hoặc /huy để huỷ."
+                        );
+                        return;
+                    }
+                    $matchedByCode = true;
+                } else {
+                    // Treat as tên KH — find by normalized name hoặc create
+                    try {
+                        $customer = $this->findOrCreateCustomer($input);
+                    } catch (\Throwable $e) {
+                        Log::error('Telegram: findOrCreateCustomer failed', ['name' => $input, 'error' => $e->getMessage()]);
+                        $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                        return;
+                    }
                 }
-                $isNew = $customer->wasRecentlyCreated;
+
                 $data['customer_id'] = $customer->id;
                 $data['customer_code'] = $customer->customer_code;
                 $data['customer_name'] = $customer->name;
 
-                $headLine = $isNew
-                    ? "✅ Đã tạo KH mới: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>"
-                    : "✅ Tìm thấy KH cũ: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                if ($matchedByCode) {
+                    $headLine = "✅ Tìm thấy KH theo mã: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                } elseif ($customer->wasRecentlyCreated) {
+                    $headLine = "✅ Đã tạo KH mới: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                } else {
+                    $headLine = "✅ Tìm thấy KH cũ: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                }
 
                 $this->setState($chatId, ['step' => 'duration', 'data' => $data]);
                 $this->bot->sendMessage(
