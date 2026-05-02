@@ -114,7 +114,7 @@ class Pay2sWebhookController extends Controller
                 : ($delta > 0 ? "\n⚠️ Khách trả dư " . formatShortAmount($delta) : "\n⚠️ Khách trả thiếu " . formatShortAmount(abs($delta)));
 
             $csNote = $createdCsId
-                ? "✅ <b>Đã tự tạo dịch vụ #{$createdCsId} cho khách trên web</b>"
+                ? "✅ <b>Dịch vụ #{$createdCsId} đã active cho khách</b>"
                 : "👉 Vào web để fill thông tin đơn này.";
 
             $msg = sprintf(
@@ -149,16 +149,22 @@ class Pay2sWebhookController extends Controller
     }
 
     /**
-     * Tự tạo CustomerService + Profit từ PendingOrder đã paid (nếu đủ data structured).
-     * Trả về customer_service_id nếu tạo thành công, null nếu thiếu data hoặc đã tạo.
+     * Hybrid flow:
+     *   - Đơn từ bot Telegram đã có CustomerService với status='pending' → ACTIVATE
+     *     (đổi sang 'active' + set activated_at = now, expires_at = now + duration_days).
+     *   - Đơn web/đơn cũ chưa có CustomerService → CREATE mới luôn với status='active'
+     *     (nếu đủ data structured).
+     *
+     * Trả về customer_service_id của CS đã activate/tạo, null nếu thiếu data.
      */
     private function tryAutoCreateCustomerService(PendingOrder $order): ?int
     {
+        // CASE 1: Đã có CustomerService (do bot tạo pending) → activate
         if ($order->customer_service_id) {
-            return $order->customer_service_id;
+            return $this->activatePendingCustomerService($order);
         }
 
-        // Đủ điều kiện structured: cần customer + service_package + email + thời hạn
+        // CASE 2: Chưa có CS — tạo mới với status='active' nếu đủ data
         $missing = array_filter([
             'customer_id' => !$order->customer_id,
             'service_package_id' => !$order->service_package_id,
@@ -175,6 +181,74 @@ class Pay2sWebhookController extends Controller
             return null;
         }
 
+        return $this->createActiveCustomerService($order);
+    }
+
+    /**
+     * Activate CS pending → đổi status='active', set activated_at + expires_at.
+     * Tạo Profit nếu bot có nhập profit_amount.
+     */
+    private function activatePendingCustomerService(PendingOrder $order): ?int
+    {
+        try {
+            $cs = \App\Models\CustomerService::find($order->customer_service_id);
+            if (!$cs) {
+                Log::warning('Pay2S webhook: CS link tới đơn không tồn tại — fallback create mới', [
+                    'order_id' => $order->id,
+                    'cs_id_orphan' => $order->customer_service_id,
+                ]);
+                $order->update(['customer_service_id' => null]);
+                return $this->createActiveCustomerService($order);
+            }
+
+            // Idempotent — webhook bắn lại lần 2 sẽ không double-activate
+            if ($cs->status === 'active' && $cs->activated_at) {
+                return $cs->id;
+            }
+
+            $now = now();
+            $expiresAt = $now->copy()->addDays((int) ($order->duration_days ?? $cs->duration_days ?? 0));
+
+            $cs->update([
+                'status' => 'active',
+                'activated_at' => $now,
+                'expires_at' => $expiresAt,
+                'internal_notes' => trim(($cs->internal_notes ?? '') . "\n\n💰 Thanh toán xác nhận qua Pay2S ({$now->format('d/m/Y H:i')})"),
+            ]);
+
+            // Tạo Profit nếu chưa có
+            if (!empty($order->profit_amount) && $order->profit_amount > 0 && !$cs->profit) {
+                \App\Models\Profit::create([
+                    'customer_service_id' => $cs->id,
+                    'profit_amount' => $order->profit_amount,
+                    'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
+                ]);
+            }
+
+            $order->update(['status' => 'completed']);
+
+            Log::info('Pay2S webhook: activated pending CustomerService', [
+                'order_id' => $order->id,
+                'order_code' => $order->order_code,
+                'customer_service_id' => $cs->id,
+            ]);
+
+            return $cs->id;
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: activate CustomerService failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Tạo CS active mới (cho đơn web nhanh hoặc đơn cũ không có CS pending).
+     */
+    private function createActiveCustomerService(PendingOrder $order): ?int
+    {
         try {
             $now = now();
             $expiresAt = $now->copy()->addDays((int) $order->duration_days);
@@ -197,7 +271,6 @@ class Pay2sWebhookController extends Controller
                 'internal_notes' => $internalNotes,
             ]);
 
-            // Profit record nếu bot có nhập
             if (!empty($order->profit_amount) && $order->profit_amount > 0) {
                 \App\Models\Profit::create([
                     'customer_service_id' => $cs->id,
@@ -211,7 +284,7 @@ class Pay2sWebhookController extends Controller
                 'status' => 'completed',
             ]);
 
-            Log::info('Pay2S webhook: auto-created CustomerService', [
+            Log::info('Pay2S webhook: created active CustomerService', [
                 'order_id' => $order->id,
                 'order_code' => $order->order_code,
                 'customer_service_id' => $cs->id,
@@ -219,7 +292,7 @@ class Pay2sWebhookController extends Controller
 
             return $cs->id;
         } catch (\Throwable $e) {
-            Log::error('Pay2S webhook: auto-create CustomerService failed', [
+            Log::error('Pay2S webhook: create CustomerService failed', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

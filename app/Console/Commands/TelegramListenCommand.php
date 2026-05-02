@@ -416,7 +416,12 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * Tạo PendingOrder + gửi caption + QR ảnh sau khi user trả lời đủ 6 bước.
+     * Tạo PendingOrder + CustomerService (status='pending') + gửi caption + QR ảnh
+     * sau khi user trả lời đủ 7 bước.
+     *
+     * Hybrid flow: tạo CS pending NGAY khi finalize → admin/khách thấy đơn trên web
+     * (không bị coi là đã giao dịch vụ vì status='pending'). Khi Pay2S báo paid,
+     * webhook sẽ đổi status='active' + set activated_at/expires_at.
      */
     private function finalizeOrder(int|string $chatId, string $userId, array $data): void
     {
@@ -440,8 +445,60 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Hybrid: tạo CustomerService pending NGAY (chưa active)
+        $this->tryCreatePendingCustomerService($order, $data);
+
         $caption = $this->buildCaption($order, $data);
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
+    }
+
+    /**
+     * Tạo CustomerService với status='pending' nếu đủ data structured.
+     * Pay2S webhook sau này sẽ activate (đổi sang 'active' + set activated_at/expires_at).
+     */
+    private function tryCreatePendingCustomerService(\App\Models\PendingOrder $order, array $data): void
+    {
+        // Cần đủ: customer + service_package + email + duration_days
+        if (
+            empty($data['customer_id']) ||
+            empty($data['service_package_id']) ||
+            empty($data['email']) ||
+            empty($data['duration_days'])
+        ) {
+            return;
+        }
+
+        try {
+            $cs = \App\Models\CustomerService::create([
+                'pending_order_id' => $order->id,
+                'customer_id' => $data['customer_id'],
+                'service_package_id' => $data['service_package_id'],
+                'login_email' => $data['email'],
+                'activated_at' => null, // chưa activate, chờ Pay2S paid
+                'expires_at' => null,
+                'status' => 'pending',
+                'duration_days' => $data['duration_days'],
+                'warranty_days' => $data['warranty_days'] ?? null,
+                'price' => 0,
+                'cost_price' => 0,
+                'internal_notes' => "📋 Tạo từ bot Telegram đơn {$order->order_code} ("
+                    . now()->format('d/m/Y H:i') . ") — đang chờ Pay2S báo thanh toán.",
+            ]);
+
+            $order->update(['customer_service_id' => $cs->id]);
+
+            Log::info('Telegram bot: created pending CustomerService', [
+                'order_code' => $order->order_code,
+                'customer_service_id' => $cs->id,
+                'customer_id' => $data['customer_id'],
+            ]);
+        } catch (\Throwable $e) {
+            // Không throw — bot vẫn gửi QR cho user, admin có thể fill thủ công sau
+            Log::error('Telegram bot: tryCreatePendingCustomerService failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
