@@ -137,17 +137,29 @@ class TelegramListenCommand extends Command
 
     private function handleCreateOrder(int|string $chatId, string $userId, string $text): void
     {
-        // Tách số tiền + ghi chú: "100k" hoặc "100k chatgpt cho A"
-        $amount = 0;
-        $note = null;
+        // Thử parse format đầy đủ: "100k 1t email@x.com tên_dv [full]\ngd_email@y.com"
+        $parsed = $this->parseFullCommand($text);
 
-        if (preg_match('/^([\d.,]+\s*(?:k|nghìn|nghin|tr|triệu|trieu|m)?)\s*(.*)$/iu', $text, $m)) {
-            $amount = parseShortAmount($m[1]);
-            $note = trim($m[2] ?? '') ?: null;
+        if ($parsed) {
+            $amount = $parsed['amount'];
+            // Lưu vào note để admin có thể tham chiếu khi fill cuối ngày
+            $noteParts = ["DV:{$parsed['service_name']}", "TK:{$parsed['email']}"];
+            if ($parsed['family_email']) $noteParts[] = "GD:{$parsed['family_email']}";
+            $noteParts[] = "Hạn:{$parsed['duration_label']}";
+            if ($parsed['has_full']) $noteParts[] = "BH:full";
+            $note = implode(' | ', $noteParts);
+        } else {
+            // Fallback format cũ: "100k" hoặc "100k chatgpt cho A"
+            $amount = 0;
+            $note = null;
+            if (preg_match('/^([\d.,]+\s*(?:k|nghìn|nghin|tr|triệu|trieu|m)?)\s*(.*)$/iu', $text, $m)) {
+                $amount = parseShortAmount($m[1]);
+                $note = trim($m[2] ?? '') ?: null;
+            }
         }
 
         if ($amount <= 0) {
-            $this->bot->sendMessage($chatId, "❌ Không nhận diện được số tiền.\n\nVí dụ:\n• <code>100k</code>\n• <code>200k</code>\n• <code>1.5tr</code>\n• <code>100k chatgpt cho Thu Hà</code>");
+            $this->bot->sendMessage($chatId, "❌ Không nhận diện được số tiền.\n\n<b>Format đầy đủ:</b>\n<code>100k 1m email@gmail.com claude</code>\n<code>gd_familyemail@gmail.com</code> <i>(dòng 2, tuỳ chọn)</i>\n\n<b>Đơn vị thời hạn:</b>\n• <code>Xd</code> = X ngày (vd <code>25d</code>)\n• <code>Xm</code> = X tháng (vd <code>1m</code>)\n• <code>Xy</code> = X năm (vd <code>1y</code>)\n\nThêm chữ <code>full</code> bất kỳ đâu để đánh dấu bảo hành full.\n\n<b>Format ngắn:</b>\n• <code>100k</code>\n• <code>100k chatgpt cho Thu Hà</code>");
             return;
         }
 
@@ -163,16 +175,144 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        $caption = sprintf(
-            "✅ <b>%s</b>\n💰 <b>%s</b> (%sđ)\n🕐 %s%s\n\n<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>",
-            $order->order_code,
-            formatShortAmount($order->amount),
-            number_format($order->amount, 0, ',', '.'),
-            $order->created_at->format('H:i d/m/Y'),
-            $note ? "\n📒 {$note}" : ''
-        );
+        $caption = $this->buildCaption($order, $parsed, $parsed ? null : $note);
 
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
+    }
+
+    /**
+     * Parse format đầy đủ:
+     *   Dòng 1: <amount> <duration> <email_tk> <tên_dịch_vụ...> [full]
+     *   Dòng 2 (tuỳ chọn): gd_<email_family>
+     *
+     * Trả về null nếu không đủ thông tin → caller fallback format cũ.
+     */
+    private function parseFullCommand(string $text): ?array
+    {
+        $lines = preg_split('/\R+/', trim($text)) ?: [];
+        $line1 = $lines[0] ?? '';
+        $line2 = $lines[1] ?? '';
+
+        $tokens = preg_split('/\s+/', trim($line1)) ?: [];
+        if (count($tokens) < 4) return null; // chưa đủ info — fallback
+
+        // Token 1: amount
+        $amount = parseShortAmount($tokens[0]);
+        if ($amount <= 0) return null;
+
+        // Token 2: duration
+        $duration = $this->parseDuration($tokens[1]);
+        if ($duration === null) return null;
+
+        // Token 3: email tài khoản
+        if (!filter_var($tokens[2], FILTER_VALIDATE_EMAIL)) return null;
+        $accountEmail = $tokens[2];
+
+        // Token 4+: tên dịch vụ + có thể chứa "full"
+        $hasFull = false;
+        $serviceTokens = [];
+        foreach (array_slice($tokens, 3) as $t) {
+            if (strcasecmp($t, 'full') === 0) {
+                $hasFull = true;
+            } else {
+                $serviceTokens[] = $t;
+            }
+        }
+        if (empty($serviceTokens)) return null; // phải có tên dịch vụ
+        $serviceName = implode(' ', $serviceTokens);
+
+        // Dòng 2: family email (gd_xxx@yyy.zz)
+        $familyEmail = null;
+        if (preg_match('/^gd_(.+)$/i', trim($line2), $m)) {
+            $candidate = trim($m[1]);
+            if (filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                $familyEmail = $candidate;
+            }
+        }
+
+        return [
+            'amount' => $amount,
+            'duration_days' => $duration['days'],
+            'duration_label' => $duration['label'],
+            'duration_unit' => $duration['unit'], // 'day' | 'month' | 'year'
+            'duration_value' => $duration['value'],
+            'email' => $accountEmail,
+            'service_name' => $serviceName,
+            'has_full' => $hasFull,
+            'family_email' => $familyEmail,
+        ];
+    }
+
+    /**
+     * Parse "1m" / "25d" / "1y" → ['days' => N, 'label' => '...', ...]
+     *   m = month (tháng), d = day (ngày), y = year (năm)
+     */
+    private function parseDuration(string $token): ?array
+    {
+        // Năm: Xy
+        if (preg_match('/^(\d+)y$/i', $token, $m)) {
+            $v = (int) $m[1];
+            return ['days' => $v * 365, 'label' => "{$v} năm", 'unit' => 'year', 'value' => $v];
+        }
+        // Tháng: Xm
+        if (preg_match('/^(\d+)m$/i', $token, $m)) {
+            $v = (int) $m[1];
+            return ['days' => $v * 30, 'label' => "{$v} tháng", 'unit' => 'month', 'value' => $v];
+        }
+        // Ngày: Xd
+        if (preg_match('/^(\d+)d$/i', $token, $m)) {
+            $v = (int) $m[1];
+            return ['days' => $v, 'label' => "{$v} ngày", 'unit' => 'day', 'value' => $v];
+        }
+        return null;
+    }
+
+    /**
+     * Build caption — gọn nếu format cũ, đầy đủ nếu format mới.
+     */
+    private function buildCaption(\App\Models\PendingOrder $order, ?array $parsed, ?string $note): string
+    {
+        $tail = "\n\n<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
+
+        if (!$parsed) {
+            // Format cũ — chỉ mã đơn + ghi chú nếu có (bỏ 💰 và 🕐 vì QR đã hiển thị tiền)
+            return "✅ <b>{$order->order_code}</b>"
+                . ($note ? "\n📒 {$note}" : '')
+                . $tail;
+        }
+
+        // Format mới — chi tiết đơn hàng
+        // Tính ngày hết hạn theo lịch (chuẩn hơn cộng days)
+        $today = now();
+        $expiresAt = match ($parsed['duration_unit']) {
+            'year'  => $today->copy()->addYears($parsed['duration_value']),
+            'month' => $today->copy()->addMonths($parsed['duration_value']),
+            default => $today->copy()->addDays($parsed['duration_value']),
+        };
+
+        $lines = [
+            "✅ <b>{$order->order_code}</b>",
+            '',
+            "📌 Tên dịch vụ: <b>{$parsed['service_name']}</b>",
+            "📌 Giá dịch vụ: <b>" . formatShortAmount($parsed['amount']) . "</b>",
+            "📌 Email tài khoản: <code>{$parsed['email']}</code>",
+        ];
+
+        if ($parsed['family_email']) {
+            $lines[] = "📌 Mã nhóm - gia đình: <code>{$parsed['family_email']}</code>";
+        }
+
+        $lines[] = sprintf(
+            "📌 Thời hạn tài khoản: từ %s đến %s (%s)",
+            $today->format('d/m/Y'),
+            $expiresAt->format('d/m/Y'),
+            $parsed['duration_label']
+        );
+
+        // Bảo hành: full nếu user gõ "full", không thì để trống cho user tự điền
+        $lines[] = "📌 Bảo hành: " . ($parsed['has_full'] ? '<b>full thời hạn</b>' : '');
+
+        return implode("\n", $lines) . $tail;
     }
 
     private function sendListPending(int|string $chatId): void
