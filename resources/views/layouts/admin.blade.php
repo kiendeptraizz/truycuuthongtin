@@ -210,6 +210,18 @@
                         Dịch vụ khách hàng
                     </a>
 
+                    <a class="nav-link {{ request()->routeIs('admin.pending-orders.*') ? 'active' : '' }}"
+                        href="{{ route('admin.pending-orders.index') }}">
+                        <i class="fas fa-receipt me-3"></i>
+                        Đơn chờ fill
+                        @php
+                            $pendingOrdersCount = \App\Models\PendingOrder::where('status', 'pending')->count();
+                        @endphp
+                        @if($pendingOrdersCount > 0)
+                            <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
+                        @endif
+                    </a>
+
                     <a class="nav-link {{ request()->routeIs('admin.customer-services.statistics') ? 'active' : '' }}"
                         href="{{ route('admin.customer-services.statistics') }}">
                         <i class="fas fa-chart-bar me-3"></i>

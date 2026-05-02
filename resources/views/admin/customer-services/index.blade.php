@@ -464,6 +464,9 @@
                                         <select name="filter" class="form-select form-select-sm">
                                             <option value="">Tất cả trạng thái</option>
                                             <optgroup label="Trạng thái dịch vụ">
+                                                <option value="pending" {{ request('filter') === 'pending' ? 'selected' : '' }}>
+                                                    ⏳ Chờ thanh toán
+                                                </option>
                                                 <option value="active" {{ request('filter') === 'active' ? 'selected' : '' }}>
                                                     Đang hoạt động
                                                 </option>

@@ -71,6 +71,10 @@ class CustomerServiceController extends Controller
                 case 'active':
                     $query->active();
                     break;
+                case 'pending':
+                    // Đơn từ bot Telegram chưa thanh toán — đã có CS nhưng chưa active
+                    $query->where('status', 'pending');
+                    break;
                 case 'expiring-not-reminded':
                     $query->expiringSoonNotReminded();
                     break;
