@@ -66,10 +66,14 @@
                                         <div>{{ $customerService->customer->address ?? 'Chưa có' }}</div>
                                     </div>
                                 </div>
-                                <div class="mt-3">
+                                <div class="mt-3 d-flex gap-2 flex-wrap">
                                     <a href="{{ route('admin.customers.show', $customerService->customer) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-external-link-alt me-1"></i>
                                         Xem chi tiết khách hàng
+                                    </a>
+                                    <a href="{{ route('admin.customer-services.audit', $customerService) }}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-history me-1"></i>
+                                        Lịch sử thay đổi
                                     </a>
                                 </div>
                             </div>

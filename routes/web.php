@@ -121,6 +121,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \
         ->name('customer-services.bulk-delete');
 
     // ===== THÙNG RÁC =====
+    Route::get('customer-services/{customerService}/audit', [CustomerServiceController::class, 'audit'])
+        ->name('customer-services.audit');
     Route::get('customer-services/trash', [CustomerServiceController::class, 'trash'])
         ->name('customer-services.trash');
     Route::post('customer-services/trash/{id}/restore', [CustomerServiceController::class, 'restore'])

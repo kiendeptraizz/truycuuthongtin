@@ -14,6 +14,19 @@ use Illuminate\Support\Facades\DB;
 class CustomerServiceController extends Controller
 {
     /**
+     * Hiển thị audit log của 1 CustomerService — ai sửa gì khi nào.
+     */
+    public function audit(CustomerService $customerService)
+    {
+        $audits = \App\Models\CustomerServiceAudit::where('customer_service_id', $customerService->id)
+            ->with('actor')
+            ->orderByDesc('created_at')
+            ->paginate(50);
+
+        return view('admin.customer-services.audit', compact('customerService', 'audits'));
+    }
+
+    /**
      * Fallback parse warranty input — nếu JS không chạy, hidden warranty_days
      * trống. Tính lại từ custom_warranty + warranty_unit (giống Thời hạn tùy chỉnh).
      */

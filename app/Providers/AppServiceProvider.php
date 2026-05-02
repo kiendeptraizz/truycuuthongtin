@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Console\Commands\CompleteBackupCommand;
 use App\Console\Commands\DeleteAllCustomers;
+use App\Models\CustomerService;
 use App\Models\PendingOrder;
+use App\Observers\CustomerServiceObserver;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\View;
@@ -54,5 +56,8 @@ class AppServiceProvider extends ServiceProvider
             }
         });
         PendingOrder::deleted(fn () => Cache::forget('admin.pending_orders_count'));
+
+        // Audit log mọi thay đổi của CustomerService — ghi vào customer_service_audits
+        CustomerService::observe(CustomerServiceObserver::class);
     }
 }
