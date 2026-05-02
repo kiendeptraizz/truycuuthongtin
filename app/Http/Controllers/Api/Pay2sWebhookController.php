@@ -105,35 +105,33 @@ class Pay2sWebhookController extends Controller
         $order->refresh();
         $createdCsId = $this->tryAutoCreateCustomerService($order);
 
-        // Telegram noti
+        // Telegram noti — format trang trọng để admin có thể forward cho khách
         try {
             $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
             $delta = $amount - (int) $order->amount;
             $deltaNote = $delta === 0
                 ? ''
-                : ($delta > 0 ? "\n⚠️ Khách trả dư " . formatShortAmount($delta) : "\n⚠️ Khách trả thiếu " . formatShortAmount(abs($delta)));
+                : ($delta > 0
+                    ? "\n\n⚠️ <i>Khách trả dư " . formatShortAmount($delta) . "</i>"
+                    : "\n\n⚠️ <i>Khách trả thiếu " . formatShortAmount(abs($delta)) . "</i>");
 
-            $csNote = $createdCsId
-                ? "✅ <b>Dịch vụ #{$createdCsId} đã active cho khách</b>"
-                : "👉 Vào web để fill thông tin đơn này.";
+            $order->load('customer');
+            $customerLine = $order->customer
+                ? "<code>{$order->customer->customer_code}</code> — <b>" . e($order->customer->name) . "</b>"
+                : "<i>(chưa gắn KH)</i>";
 
-            $msg = sprintf(
-                "💰 <b>ĐÃ NHẬN TIỀN</b>\n\n"
-                    . "📋 Đơn: <code>%s</code>\n"
-                    . "💵 Số tiền: <b>%s</b> (%sđ)%s\n"
-                    . "📝 Ghi chú: %s\n"
-                    . "🕐 %s\n\n%s",
-                $order->order_code,
-                formatShortAmount($amount),
-                number_format($amount, 0, ',', '.'),
-                $deltaNote,
-                $order->note ?: '—',
-                now()->format('H:i:s d/m/Y'),
-                $csNote
-            );
+            $lookupUrl = rtrim(config('app.url'), '/') . '/tra-cuu?code=' . urlencode((string) $order->order_code);
+
+            $msg = "💰 <b>ĐÃ NHẬN TIỀN — Cám ơn quý khách đã mua hàng!</b>\n\n"
+                . "👤 Mã khách hàng: {$customerLine}\n"
+                . "📋 Mã đơn hàng: <code>{$order->order_code}</code>\n"
+                . "💵 Số tiền: <b>" . formatShortAmount($amount) . "</b>"
+                . $deltaNote
+                . "\n\n"
+                . "🔗 <a href=\"{$lookupUrl}\">Theo dõi và xem chi tiết đơn hàng tại đây</a>";
 
             foreach ($adminIds as $chatId) {
-                $bot->sendMessage($chatId, $msg);
+                $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
             }
         } catch (\Throwable $e) {
             Log::error('Pay2S webhook: Telegram noti failed', ['error' => $e->getMessage()]);

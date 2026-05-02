@@ -69,24 +69,31 @@ class PendingOrder extends Model
 
     /**
      * Sinh mã đơn dạng DH-yymmdd-XXX (XXX = sequence trong ngày, 3 chữ số).
-     * Race-safe nhờ UNIQUE constraint của order_code — nếu trùng sẽ retry.
+     * Query CẢ 2 bảng pending_orders + customer_services để tránh va chạm
+     * khi web tạo CS độc lập gen cùng số trong cùng ngày (bug đã từng xảy ra
+     * 02/05/2026 khi CS web 023 conflict với PO bot 023).
      */
     public static function generateOrderCode(?\DateTimeInterface $date = null): string
     {
         $date = $date ?? now();
         $prefix = 'DH-' . $date->format('ymd') . '-';
 
-        // Lấy số đơn lớn nhất trong ngày để tăng tiếp
-        $latest = static::where('order_code', 'like', $prefix . '%')
-            ->orderByDesc('id')
+        $maxFromPo = static::where('order_code', 'like', $prefix . '%')
+            ->orderByDesc('order_code')
             ->value('order_code');
 
-        $nextSeq = 1;
-        if ($latest && preg_match('/-(\d+)$/', $latest, $m)) {
-            $nextSeq = (int) $m[1] + 1;
+        $maxFromCs = \App\Models\CustomerService::where('order_code', 'like', $prefix . '%')
+            ->orderByDesc('order_code')
+            ->value('order_code');
+
+        $maxSeq = 0;
+        foreach ([$maxFromPo, $maxFromCs] as $code) {
+            if ($code && preg_match('/-(\d+)$/', $code, $m)) {
+                $maxSeq = max($maxSeq, (int) $m[1]);
+            }
         }
 
-        return $prefix . str_pad((string) $nextSeq, 3, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) ($maxSeq + 1), 3, '0', STR_PAD_LEFT);
     }
 
     /**
