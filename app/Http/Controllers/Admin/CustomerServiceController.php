@@ -14,6 +14,31 @@ use Illuminate\Support\Facades\DB;
 class CustomerServiceController extends Controller
 {
     /**
+     * Fallback parse warranty input — nếu JS không chạy, hidden warranty_days
+     * trống. Tính lại từ custom_warranty + warranty_unit (giống Thời hạn tùy chỉnh).
+     */
+    private function normalizeWarrantyInput(Request $request): void
+    {
+        if ($request->filled('warranty_days')) {
+            return;
+        }
+        if (!$request->filled('custom_warranty')) {
+            return;
+        }
+        $value = (int) $request->input('custom_warranty');
+        if ($value <= 0) {
+            return;
+        }
+        $unit = $request->input('warranty_unit', 'days');
+        $multiplier = match ($unit) {
+            'years' => 365,
+            'months' => 30,
+            default => 1,
+        };
+        $request->merge(['warranty_days' => $value * $multiplier]);
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
@@ -213,6 +238,9 @@ class CustomerServiceController extends Controller
             'all_data' => $request->except(['_token', 'login_password'])
         ]);
 
+        // Fallback parse warranty (nếu JS không chạy, hidden warranty_days trống)
+        $this->normalizeWarrantyInput($request);
+
         // Parse currency values BEFORE validation
         if ($request->filled('profit_amount')) {
             $parsedProfit = parseCurrency($request->profit_amount);
@@ -370,6 +398,8 @@ class CustomerServiceController extends Controller
      */
     public function update(Request $request, CustomerService $customerService)
     {
+        $this->normalizeWarrantyInput($request);
+
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'service_package_id' => 'required|exists:service_packages,id',
@@ -795,6 +825,9 @@ class CustomerServiceController extends Controller
             'profit_amount_original' => $request->profit_amount,
             'all_data' => $request->except(['_token', 'login_password'])
         ]);
+
+        // Fallback parse warranty (nếu JS không chạy, hidden warranty_days trống)
+        $this->normalizeWarrantyInput($request);
 
         // Parse currency values BEFORE validation
         if ($request->filled('profit_amount')) {

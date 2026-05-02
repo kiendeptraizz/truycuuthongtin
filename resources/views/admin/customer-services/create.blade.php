@@ -226,26 +226,37 @@
                                 <div class="form-text">Giá bán cho khách hàng</div>
                             </div>
 
-                            {{-- Bảo hành (số ngày) — đồng bộ với bot bước 6 --}}
+                            {{-- Bảo hành — input-group số + select đơn vị (giống Thời hạn tùy chỉnh) --}}
                             <div class="col-md-6 mb-3">
-                                <label for="warranty_days" class="form-label">
+                                <label for="custom_warranty" class="form-label">
                                     <i class="fas fa-shield-alt me-1 text-info"></i>
-                                    Bảo hành (số ngày)
+                                    Bảo hành
                                 </label>
-                                <input type="number"
-                                    class="form-control @error('warranty_days') is-invalid @enderror"
-                                    id="warranty_days"
-                                    name="warranty_days"
-                                    min="0"
-                                    placeholder="Vd: 30"
-                                    value="{{ old('warranty_days') }}">
+                                <div class="input-group">
+                                    <input type="number"
+                                        class="form-control @error('warranty_days') is-invalid @enderror"
+                                        id="custom_warranty"
+                                        name="custom_warranty"
+                                        min="0"
+                                        placeholder="Nhập số"
+                                        value="{{ old('custom_warranty') }}">
+                                    <select class="form-select" id="warranty_unit" name="warranty_unit" style="max-width: 120px;">
+                                        <option value="days" selected>Ngày</option>
+                                        <option value="months">Tháng</option>
+                                        <option value="years">Năm</option>
+                                    </select>
+                                </div>
+                                <input type="hidden" name="warranty_days" id="warranty_days" value="{{ old('warranty_days') }}">
                                 @error('warranty_days')
-                                <div class="invalid-feedback">{{ $message }}</div>
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
-                                <div class="form-text">Để trống nếu không bảo hành. Nhập bằng thời hạn = full thời hạn.</div>
+                                <div class="form-text text-info" id="warranty_calculated_text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Để trống nếu không bảo hành
+                                </div>
                             </div>
 
-                            {{-- Số tiền đơn hàng — đồng bộ với amount của PendingOrder --}}
+                            {{-- Số tiền đơn hàng — format giống Số tiền lãi --}}
                             <div class="col-md-6 mb-3">
                                 <label for="order_amount" class="form-label">
                                     <i class="fas fa-money-bill me-1 text-success"></i>
@@ -253,11 +264,15 @@
                                 </label>
                                 <div class="input-group">
                                     <input type="text"
-                                        class="form-control currency-input @error('order_amount') is-invalid @enderror"
+                                        class="form-control @error('order_amount') is-invalid @enderror"
                                         id="order_amount"
                                         name="order_amount"
                                         placeholder="Vd: 100.000"
-                                        value="{{ old('order_amount') }}">
+                                        value="{{ old('order_amount') }}"
+                                        inputmode="numeric"
+                                        maxlength="20"
+                                        data-currency="VND"
+                                        data-show-currency="false">
                                     <span class="input-group-text">VNĐ</span>
                                 </div>
                                 @error('order_amount')
@@ -485,6 +500,45 @@
         function formatNumberInput(number) {
             return parseInt(number).toLocaleString('vi-VN');
         }
+
+        // =====================================================
+        // WARRANTY CALCULATOR — convert (số + đơn vị) -> số ngày
+        // =====================================================
+        (function initializeWarrantyCalculator() {
+            const unitSelect = document.getElementById('warranty_unit');
+            const customInput = document.getElementById('custom_warranty');
+            const hiddenDays = document.getElementById('warranty_days');
+            const calcText = document.getElementById('warranty_calculated_text');
+
+            if (!unitSelect || !customInput || !hiddenDays) return;
+
+            function calculate() {
+                const unit = unitSelect.value;
+                const value = parseInt(customInput.value) || 0;
+
+                if (value === 0) {
+                    hiddenDays.value = '';
+                    if (calcText) {
+                        calcText.innerHTML = '<i class="fas fa-info-circle me-1"></i>Để trống nếu không bảo hành';
+                    }
+                    return;
+                }
+
+                const days = unit === 'days' ? value : (unit === 'months' ? value * 30 : value * 365);
+                hiddenDays.value = days;
+
+                const labelMap = { days: 'ngày', months: 'tháng', years: 'năm' };
+                const extra = unit === 'days' ? '' : ` (${days} ngày)`;
+                if (calcText) {
+                    calcText.innerHTML = `<i class="fas fa-check-circle me-1 text-success"></i>Bảo hành: ${value} ${labelMap[unit]}${extra}`;
+                }
+            }
+
+            unitSelect.addEventListener('change', calculate);
+            customInput.addEventListener('input', calculate);
+            customInput.addEventListener('change', calculate);
+            calculate();
+        })();
     </script>
     @endpush
     @endsection
