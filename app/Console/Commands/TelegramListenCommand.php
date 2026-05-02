@@ -694,8 +694,108 @@ class TelegramListenCommand extends Command
         // Click trang giữa (📄 1/3) — không làm gì
         if ($cbData === 'noop') return;
 
+        // Click "❌ Huỷ đơn" trong /list — huỷ đơn theo id
+        if (preg_match('/^po_huy_(\d+)$/', $cbData, $m)) {
+            $this->handleCancelOrderCallback($chatId, $userId, (int) $m[1]);
+            return;
+        }
+
+        // Click "💳 Đã trả" trong /list — manual mark paid theo id
+        if (preg_match('/^po_paid_(\d+)$/', $cbData, $m)) {
+            $this->handleMarkPaidCallback($chatId, $userId, (int) $m[1]);
+            return;
+        }
+
         // Callback khác chưa hỗ trợ
         Log::info('Telegram callback_query unknown', ['data' => $cbData]);
+    }
+
+    /**
+     * User bấm nút "❌ Huỷ đơn" trong list /list.
+     */
+    private function handleCancelOrderCallback(int|string $chatId, string $userId, int $orderId): void
+    {
+        $order = PendingOrder::find($orderId);
+        if (!$order) {
+            $this->bot->sendMessage($chatId, "❌ Đơn không tồn tại (đã bị xoá?).");
+            return;
+        }
+        if ($order->status !== 'pending') {
+            $this->bot->sendMessage($chatId, "⚠️ Đơn <code>{$order->order_code}</code> không thể huỷ (trạng thái: {$order->status}).");
+            return;
+        }
+        if ($order->paid_at) {
+            $this->bot->sendMessage($chatId, "⚠️ Đơn <code>{$order->order_code}</code> đã thanh toán — không nên huỷ.");
+            return;
+        }
+
+        $order->update(['status' => 'cancelled']);
+        Log::info('Bot Telegram: cancelled pending order via /list button', [
+            'order_id' => $order->id,
+            'order_code' => $order->order_code,
+            'by_user' => $userId,
+        ]);
+
+        $this->bot->sendMessage($chatId, "✅ Đã huỷ đơn <code>{$order->order_code}</code>.");
+    }
+
+    /**
+     * User bấm nút "💳 Đã trả" trong list /list — manual mark paid (khi Pay2S
+     * chưa nhận, hoặc khách CK bằng cách khác).
+     */
+    private function handleMarkPaidCallback(int|string $chatId, string $userId, int $orderId): void
+    {
+        $order = PendingOrder::find($orderId);
+        if (!$order) {
+            $this->bot->sendMessage($chatId, "❌ Đơn không tồn tại.");
+            return;
+        }
+        if ($order->paid_at) {
+            $this->bot->sendMessage(
+                $chatId,
+                "⚠️ Đơn <code>{$order->order_code}</code> đã được đánh dấu thanh toán trước đó."
+            );
+            return;
+        }
+        if ($order->status === 'cancelled') {
+            $this->bot->sendMessage($chatId, "⚠️ Đơn <code>{$order->order_code}</code> đã huỷ — không thể mark paid.");
+            return;
+        }
+
+        // Delegate sang PaymentService — same logic với Pay2S webhook + admin web
+        $payment = app(\App\Services\PaymentService::class);
+        $bankTxId = "manual-bot-{$userId}-" . now()->timestamp;
+        $rawPayload = json_encode([
+            'source' => 'manual_telegram',
+            'admin_telegram_id' => $userId,
+            'marked_at' => now()->toIso8601String(),
+        ], JSON_UNESCAPED_UNICODE);
+
+        $result = $payment->markOrderPaid(
+            $order,
+            (int) $order->amount,
+            $bankTxId,
+            $rawPayload,
+            'manual'
+        );
+
+        if (!$result['ok']) {
+            $this->bot->sendMessage(
+                $chatId,
+                "❌ Lỗi đánh dấu thanh toán: " . ($result['error'] ?? $result['status'])
+            );
+            return;
+        }
+
+        $csNote = !empty($result['cs_id'])
+            ? "\n✅ Đã tạo/activate dịch vụ <b>#{$result['cs_id']}</b> cho khách."
+            : "\n⚠️ <i>Chưa đủ data structured — cần fill thủ công qua web</i>.";
+
+        $this->bot->sendMessage(
+            $chatId,
+            "💰 Đã đánh dấu đơn <code>{$order->order_code}</code> ("
+                . formatShortAmount((int) $order->amount) . ") là <b>đã thanh toán</b>.{$csNote}"
+        );
     }
 
     /**
@@ -1267,20 +1367,43 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        $lines = ["📋 <b>Đơn pending hôm nay (" . $orders->count() . "):</b>\n"];
+        // Header tổng hợp + tổng tiền
         $total = 0;
+        foreach ($orders as $o) $total += $o->amount;
+        $this->bot->sendMessage(
+            $chatId,
+            "📋 <b>Đơn pending hôm nay (" . $orders->count() . "):</b>\n\n"
+                . "💵 Tổng: <b>" . formatShortAmount($total) . "</b> ("
+                . number_format($total, 0, ',', '.') . "đ)"
+        );
+
+        // Mỗi đơn 1 message kèm inline button — tránh nhồi vào 1 message text dài
+        // không có cách click huỷ từng đơn riêng
         foreach ($orders as $o) {
-            $lines[] = sprintf(
-                "• <b>%s</b> · %s · %s%s",
+            $line = sprintf(
+                "• <b>%s</b>\n💵 %s · 🕐 %s%s",
                 $o->order_code,
                 formatShortAmount($o->amount),
                 $o->created_at->format('H:i'),
-                $o->note ? " · {$o->note}" : ''
+                $o->note ? "\n📝 " . e($o->note) : ''
             );
-            $total += $o->amount;
+            // Layer paid status hiển thị nếu có (đơn đã CK nhưng chưa fill)
+            if ($o->paid_at) {
+                $line .= "\n✅ <i>Đã thanh toán {$o->paid_at->format('H:i d/m')}</i>";
+            }
+
+            $buttons = [];
+            if (!$o->paid_at) {
+                $buttons[] = ['text' => '💳 Đã trả', 'callback_data' => "po_paid_{$o->id}"];
+            }
+            $buttons[] = ['text' => '❌ Huỷ đơn', 'callback_data' => "po_huy_{$o->id}"];
+
+            $this->bot->sendMessage(
+                $chatId,
+                $line,
+                ['reply_markup' => json_encode(['inline_keyboard' => [$buttons]])]
+            );
         }
-        $lines[] = "\n💵 Tổng: <b>" . formatShortAmount($total) . "</b> (" . number_format($total, 0, ',', '.') . "đ)";
-        $this->bot->sendMessage($chatId, implode("\n", $lines));
     }
 
     private function cancelOrder(int|string $chatId, string $orderCode): void
