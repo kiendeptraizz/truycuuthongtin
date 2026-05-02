@@ -44,14 +44,8 @@ class LookupController extends Controller
                 $customer = $singleService->customer;
                 $services = collect([$singleService]);
             } else {
-                // 2) Tìm theo mã khách hàng / email / phone
-                $customer = Customer::where(function ($query) use ($code) {
-                    $query->where('customer_code', $code)
-                        ->orWhere('email', $code)
-                        ->orWhere('phone', $code);
-                })
-                    ->with(['customerServices.servicePackage.category'])
-                    ->first();
+                // 2) Tìm theo mã KH / email / phone, fallback tên Zalo
+                $customer = $this->findCustomer($code);
 
                 if ($customer) {
                     $services = $customer->customerServices()
@@ -80,19 +74,13 @@ class LookupController extends Controller
                 $customer = $singleService->customer;
                 $services = collect([$singleService]);
             } else {
-                // 2) Tìm theo mã khách hàng / email / phone (exact match)
-                $customer = Customer::where(function ($query) use ($code) {
-                    $query->where('customer_code', $code)
-                        ->orWhere('email', $code)
-                        ->orWhere('phone', $code);
-                })
-                    ->with(['customerServices.servicePackage.category'])
-                    ->first();
+                // 2) Tìm theo mã KH / email / phone, fallback tên Zalo
+                $customer = $this->findCustomer($code);
 
                 if (!$customer) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Không tìm thấy thông tin. Vui lòng kiểm tra lại mã đơn (DH-XXX), mã khách hàng (KUN/CTV), email hoặc số điện thoại.'
+                        'message' => 'Không tìm thấy thông tin. Vui lòng kiểm tra lại mã đơn (DH-XXX), mã khách hàng (KUN/CTV), tên Zalo, email hoặc số điện thoại.'
                     ], 404);
                 }
 
@@ -133,6 +121,31 @@ class LookupController extends Controller
                 'message' => 'Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.'
             ], 500);
         }
+    }
+
+    /**
+     * Tìm khách hàng theo mã KH / email / phone (exact), fallback theo tên Zalo
+     * (LIKE %code%, sắp xếp theo id ASC để lấy KH cũ nhất nếu trùng tên).
+     * Yêu cầu len(code) >= 2 mới fallback name để tránh match toàn bộ.
+     */
+    private function findCustomer(string $code): ?Customer
+    {
+        $customer = Customer::where(function ($query) use ($code) {
+            $query->where('customer_code', $code)
+                ->orWhere('email', $code)
+                ->orWhere('phone', $code);
+        })
+            ->with(['customerServices.servicePackage.category'])
+            ->first();
+
+        if (!$customer && mb_strlen($code) >= 2) {
+            $customer = Customer::where('name', 'LIKE', '%' . $code . '%')
+                ->with(['customerServices.servicePackage.category'])
+                ->orderBy('id')
+                ->first();
+        }
+
+        return $customer;
     }
 
     /**

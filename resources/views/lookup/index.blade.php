@@ -1001,7 +1001,7 @@
                                     type="text"
                                     class="search-input"
                                     id="searchInput"
-                                    placeholder="Nhập mã đơn (DH-XXX), mã KH (KUN/CTV), email, SĐT hoặc tên..."
+                                    placeholder="Nhập mã đơn, mã KH, tên Zalo, email hoặc SĐT..."
                                     autocomplete="off"
                                     required>
                                 <button type="submit" class="search-btn" id="searchBtn">
@@ -1015,7 +1015,7 @@
                     <div class="search-hints mt-3 text-center">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
-                            Tra cứu bằng: <strong>Mã đơn</strong> (DH-XXX), <strong>Mã khách hàng</strong> (KUN/CTV), <strong>Email</strong>, <strong>Số điện thoại</strong>
+                            Tra cứu bằng: <strong>Mã đơn</strong> (DH-XXX), <strong>Mã khách hàng</strong> (KUN/CTV), <strong>Tên Zalo</strong>, <strong>Email</strong>, <strong>Số điện thoại</strong>
                         </small>
                     </div>
                 </div>
