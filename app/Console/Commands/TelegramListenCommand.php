@@ -351,8 +351,59 @@ class TelegramListenCommand extends Command
                 return;
 
             case 'warranty':
-                $lcInput = strtolower(trim($text));
-                $data['has_full'] = in_array($lcInput, ['full', 'có', 'co', 'yes', 'y', 'ok'], true);
+                $input = trim($text);
+                $lcInput = strtolower($input);
+
+                if (in_array($lcInput, ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ', '0'], true)) {
+                    // Không bảo hành
+                    $data['warranty_days'] = null;
+                    $data['warranty_label'] = null;
+                    $data['has_full'] = false;
+                } elseif (in_array($lcInput, ['full', 'có', 'co', 'yes', 'y', 'ok'], true)) {
+                    // Full thời hạn = warranty_days = duration_days
+                    $data['warranty_days'] = (int) ($data['duration_days'] ?? 0);
+                    $data['warranty_label'] = 'full thời hạn';
+                    $data['has_full'] = true;
+                } else {
+                    // Parse Xd / Xm / Xy
+                    $w = $this->parseDuration($input);
+                    if (!$w) {
+                        $this->bot->sendMessage(
+                            $chatId,
+                            "❌ Sai format bảo hành.\n"
+                                . "Gõ vd: <code>30d</code> (30 ngày), <code>1m</code> (1 tháng), <code>1y</code> (1 năm), <code>full</code> (full thời hạn) hoặc <code>skip</code>:",
+                            $this->navMarkup()
+                        );
+                        return;
+                    }
+                    $data['warranty_days'] = $w['days'];
+                    $data['warranty_label'] = $w['label'];
+                    $data['has_full'] = false;
+                }
+
+                $this->setState($chatId, ['step' => 'profit', 'data' => $data]);
+                $this->promptProfit($chatId);
+                return;
+
+            case 'profit':
+                $input = trim($text);
+                $lcInput = strtolower($input);
+
+                if (in_array($lcInput, ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
+                    $data['profit_amount'] = null;
+                } else {
+                    $profit = parseShortAmount($input);
+                    if ($profit < 0) {
+                        $this->bot->sendMessage(
+                            $chatId,
+                            "❌ Sai format. Gõ vd: <code>50k</code>, <code>200k</code>, <code>1.5tr</code>, hoặc <code>skip</code>:",
+                            $this->navMarkup()
+                        );
+                        return;
+                    }
+                    $data['profit_amount'] = $profit;
+                }
+
                 $this->finalizeOrder($chatId, $userId, $data);
                 $this->clearState($chatId);
                 return;
@@ -375,6 +426,11 @@ class TelegramListenCommand extends Command
                 'note' => $this->buildNote($data),
                 'customer_id' => $data['customer_id'] ?? null,
                 'service_package_id' => $data['service_package_id'] ?? null,
+                'account_email' => $data['email'] ?? null,
+                'family_code' => $data['family_email'] ?? null,
+                'duration_days' => $data['duration_days'] ?? null,
+                'warranty_days' => $data['warranty_days'] ?? null,
+                'profit_amount' => $data['profit_amount'] ?? null,
                 'created_via' => 'telegram',
                 'telegram_chat_id' => (string) $chatId,
             ]);
@@ -509,7 +565,7 @@ class TelegramListenCommand extends Command
 
         $this->bot->sendMessage(
             $chatId,
-            "📦 <b>Bước 4/6:</b> Chọn gói dịch vụ\n\n"
+            "📦 <b>Bước 4/7:</b> Chọn gói dịch vụ\n\n"
                 . "<b>2 cách:</b>\n"
                 . "• Click 📂 danh mục bên dưới\n"
                 . "• Hoặc gõ <b>keyword</b> để search nhanh (vd <code>claude</code>, <code>chatgpt</code>)",
@@ -620,7 +676,7 @@ class TelegramListenCommand extends Command
     /**
      * Thứ tự các bước conversation (dùng cho /lai để quay lại).
      */
-    private const STEP_ORDER = ['customer_name', 'duration', 'email', 'service_package', 'family_email', 'warranty'];
+    private const STEP_ORDER = ['customer_name', 'duration', 'email', 'service_package', 'family_email', 'warranty', 'profit'];
 
     /**
      * Quay lại bước trước. Clear field của step hiện tại + step trước trong $data,
@@ -646,7 +702,8 @@ class TelegramListenCommand extends Command
             'email' => ['email'],
             'service_package' => ['service_package_id', 'service_name', 'account_type', 'category_name'],
             'family_email' => ['family_email'],
-            'warranty' => ['has_full'],
+            'warranty' => ['warranty_days', 'warranty_label', 'has_full'],
+            'profit' => ['profit_amount'],
         ];
         foreach (($clearMap[$current] ?? []) as $f) unset($data[$f]);
 
@@ -669,6 +726,7 @@ class TelegramListenCommand extends Command
             'service_package' => $this->sendCategoryPicker($chatId),
             'family_email' => $this->promptFamilyEmail($chatId),
             'warranty' => $this->promptWarranty($chatId),
+            'profit' => $this->promptProfit($chatId),
             default => null,
         };
     }
@@ -693,7 +751,7 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
-                . "👤 <b>Bước 1/6:</b> Tên hoặc mã khách hàng?\n"
+                . "👤 <b>Bước 1/7:</b> Tên hoặc mã khách hàng?\n"
                 . "<i>• Gõ <b>tên</b> (vd: <code>Nguyễn Văn A</code>)</i>\n"
                 . "<i>• Hoặc <b>mã KH</b> (vd: <code>KUN98473</code>)</i>",
             $this->navMarkup(false) // Bước 1 không có back
@@ -704,7 +762,7 @@ class TelegramListenCommand extends Command
     {
         $this->bot->sendMessage(
             $chatId,
-            "⏰ <b>Bước 2/6:</b> Thời hạn tài khoản?\n"
+            "⏰ <b>Bước 2/7:</b> Thời hạn tài khoản?\n"
                 . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>",
             $this->navMarkup()
         );
@@ -714,7 +772,7 @@ class TelegramListenCommand extends Command
     {
         $this->bot->sendMessage(
             $chatId,
-            "📧 <b>Bước 3/6:</b> Email tài khoản?\n"
+            "📧 <b>Bước 3/7:</b> Email tài khoản?\n"
                 . "<i>Vd: <code>huatungthang@gmail.com</code></i>",
             $this->navMarkup()
         );
@@ -724,7 +782,7 @@ class TelegramListenCommand extends Command
     {
         $this->bot->sendMessage(
             $chatId,
-            "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình?\n"
+            "👥 <b>Bước 5/7:</b> Mã nhóm - gia đình?\n"
                 . "<i>Có thể là email / số / mã / text bất kỳ.</i>\n"
                 . "<i>Vd: <code>2</code>, <code>gd_abc@gmail.com</code>, <code>gia đình A</code></i>\n"
                 . "<i>Gõ <code>skip</code> nếu không có</i>",
@@ -736,8 +794,20 @@ class TelegramListenCommand extends Command
     {
         $this->bot->sendMessage(
             $chatId,
-            "🛡 <b>Bước 6/6:</b> Bảo hành full thời hạn?\n"
-                . "<i>Gõ <code>full</code> nếu có, <code>skip</code> để trống</i>",
+            "🛡 <b>Bước 6/7:</b> Bảo hành?\n"
+                . "<i>Vd: <code>30d</code> (30 ngày), <code>1m</code> (1 tháng), <code>1y</code> (1 năm)</i>\n"
+                . "<i>Gõ <code>full</code> = full thời hạn, <code>skip</code> = không bảo hành</i>",
+            $this->navMarkup()
+        );
+    }
+
+    private function promptProfit(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "💵 <b>Bước 7/7:</b> Lợi nhuận của đơn?\n"
+                . "<i>Vd: <code>50k</code>, <code>200k</code>, <code>1.5tr</code></i>\n"
+                . "<i>Gõ <code>skip</code> nếu chưa biết (có thể nhập sau qua web)</i>",
             $this->navMarkup()
         );
     }
@@ -807,7 +877,8 @@ class TelegramListenCommand extends Command
         if (!empty($data['email'])) $parts[] = "TK:{$data['email']}";
         if (!empty($data['family_email'])) $parts[] = "GD:{$data['family_email']}";
         if (!empty($data['duration_label'])) $parts[] = "Hạn:{$data['duration_label']}";
-        if (!empty($data['has_full'])) $parts[] = "BH:full";
+        if (!empty($data['warranty_label'])) $parts[] = "BH:{$data['warranty_label']}";
+        if (!empty($data['profit_amount'])) $parts[] = "LN:" . formatShortAmount((int) $data['profit_amount']);
         return implode(' | ', $parts);
     }
 
@@ -847,7 +918,9 @@ class TelegramListenCommand extends Command
             $data['duration_label'] ?? ''
         );
 
-        $lines[] = "📌 Bảo hành: " . (!empty($data['has_full']) ? '<b>full thời hạn</b>' : '');
+        if (!empty($data['warranty_label'])) {
+            $lines[] = "📌 Bảo hành: <b>{$data['warranty_label']}</b>";
+        }
 
         return implode("\n", $lines) . $tail;
     }
@@ -918,20 +991,22 @@ class TelegramListenCommand extends Command
     private function helpMessage(): string
     {
         return "🤖 <b>Bot tạo đơn pending</b>\n\n"
-            . "<b>Cách tạo đơn:</b> Gõ số tiền để bắt đầu, bot sẽ hỏi 6 bước:\n"
-            . "1️⃣ Tên khách hàng (mới sẽ tự tạo + sinh mã KUN, cũ sẽ tự tìm)\n"
+            . "<b>Cách tạo đơn:</b> Gõ số tiền để bắt đầu, bot sẽ hỏi 7 bước:\n"
+            . "1️⃣ Tên/mã khách hàng (mới: tự tạo + sinh KUN; cũ: gõ tên hoặc mã KUN/CTV)\n"
             . "2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"
             . "3️⃣ Email tài khoản\n"
-            . "4️⃣ Tên dịch vụ\n"
-            . "5️⃣ Mã nhóm-gia đình (gõ <code>skip</code> nếu không có)\n"
-            . "6️⃣ Bảo hành (gõ <code>full</code> hoặc <code>skip</code>)\n\n"
-            . "<b>Ví dụ số tiền hợp lệ:</b>\n"
+            . "4️⃣ Gói dịch vụ (chọn từ danh mục hoặc gõ keyword search)\n"
+            . "5️⃣ Mã nhóm-gia đình (email/số/text bất kỳ, hoặc <code>skip</code>)\n"
+            . "6️⃣ Bảo hành — <code>30d</code>/<code>1m</code>/<code>1y</code>, <code>full</code>=full thời hạn, <code>skip</code>=không\n"
+            . "7️⃣ Lợi nhuận — <code>50k</code>/<code>200k</code>/<code>1.5tr</code> hoặc <code>skip</code>\n\n"
+            . "<b>Số tiền hợp lệ:</b>\n"
             . "<code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
             . "<b>Lệnh:</b>\n"
             . "/list — đơn pending hôm nay\n"
-            . "/cancel DH-XXX-XXX — huỷ 1 đơn cụ thể\n"
-            . "/huy (hoặc <code>huy</code>) — huỷ conversation đang gõ\n"
+            . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
+            . "/huy — huỷ conversation đang gõ\n"
+            . "/lai — quay về bước trước\n"
             . "/help — hướng dẫn này\n\n"
-            . "Sau khi xong, bot trả về QR + chi tiết đơn để forward cho khách.";
+            . "Sau khi xong, bot trả về QR + chi tiết đơn. Khi khách CK, hệ thống tự tạo dịch vụ trên web.";
     }
 }

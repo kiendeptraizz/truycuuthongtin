@@ -25,6 +25,11 @@ class PendingOrder extends Model
         'customer_service_id',
         'created_by',
         'telegram_chat_id',
+        'account_email',
+        'family_code',
+        'duration_days',
+        'warranty_days',
+        'profit_amount',
     ];
 
     protected $casts = [
@@ -32,6 +37,9 @@ class PendingOrder extends Model
         'is_paid' => 'boolean',
         'paid_at' => 'datetime',
         'paid_amount' => 'integer',
+        'duration_days' => 'integer',
+        'warranty_days' => 'integer',
+        'profit_amount' => 'integer',
     ];
 
     public function isPaid(): bool

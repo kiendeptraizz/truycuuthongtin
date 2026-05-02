@@ -799,6 +799,7 @@ class CustomerServiceController extends Controller
                 'activated_at' => 'required|date',
                 'expires_at' => 'required|date|after:activated_at',
                 'duration_days' => 'required|integer|min:1',
+                'warranty_days' => 'nullable|integer|min:0',
                 'cost_price' => 'nullable|string',
                 'price' => 'nullable|string',
                 'internal_notes' => 'nullable|string',
@@ -817,15 +818,8 @@ class CustomerServiceController extends Controller
         $costPrice = $request->filled('cost_price') ? parseCurrency($request->cost_price) : 0;
         $price = $request->filled('price') ? parseCurrency($request->price) : 0;
 
-        // Check if service package is "add family" type — pre-validate (không lock, để báo lỗi nhanh)
+        // Family account giờ optional — bỏ ràng buộc bắt buộc cho gói "add family"
         $servicePackage = ServicePackage::findOrFail($request->service_package_id);
-        if (strpos($servicePackage->account_type, 'add family') !== false) {
-            if (!$request->filled('family_account_id')) {
-                return back()->withErrors([
-                    'family_account_id' => 'Vui lòng chọn Family Account để thêm khách hàng vào.'
-                ])->withInput();
-            }
-        }
 
         $sharedCredentialId = $request->filled('shared_credential_id') ? $request->shared_credential_id : null;
 
@@ -866,6 +860,7 @@ class CustomerServiceController extends Controller
                     'expires_at' => $request->expires_at,
                     'status' => 'active',
                     'duration_days' => $request->duration_days,
+                    'warranty_days' => $request->filled('warranty_days') ? (int) $request->warranty_days : null,
                     'cost_price' => $costPrice,
                     'price' => $price,
                     'internal_notes' => $request->internal_notes,

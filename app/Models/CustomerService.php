@@ -29,6 +29,7 @@ class CustomerService extends Model
         'customer_id',
         'service_package_id',
         'assigned_by',
+        'pending_order_id',
 
         'family_account_id',
         'shared_credential_id',
@@ -38,6 +39,7 @@ class CustomerService extends Model
         'expires_at',
         'status',
         'duration_days',
+        'warranty_days',
         'cost_price',
         'price',
         'internal_notes',

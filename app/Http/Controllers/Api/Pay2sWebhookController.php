@@ -101,6 +101,10 @@ class Pay2sWebhookController extends Controller
             'bank_raw_payload' => json_encode($tx, JSON_UNESCAPED_UNICODE),
         ]);
 
+        // Tự tạo CustomerService nếu đơn đã đủ data structured (qua bot Telegram 7 bước)
+        $order->refresh();
+        $createdCsId = $this->tryAutoCreateCustomerService($order);
+
         // Telegram noti
         try {
             $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
@@ -109,19 +113,23 @@ class Pay2sWebhookController extends Controller
                 ? ''
                 : ($delta > 0 ? "\n⚠️ Khách trả dư " . formatShortAmount($delta) : "\n⚠️ Khách trả thiếu " . formatShortAmount(abs($delta)));
 
+            $csNote = $createdCsId
+                ? "✅ <b>Đã tự tạo dịch vụ #{$createdCsId} cho khách trên web</b>"
+                : "👉 Vào web để fill thông tin đơn này.";
+
             $msg = sprintf(
                 "💰 <b>ĐÃ NHẬN TIỀN</b>\n\n"
                     . "📋 Đơn: <code>%s</code>\n"
                     . "💵 Số tiền: <b>%s</b> (%sđ)%s\n"
                     . "📝 Ghi chú: %s\n"
-                    . "🕐 %s\n\n"
-                    . "👉 Vào web để fill thông tin đơn này.",
+                    . "🕐 %s\n\n%s",
                 $order->order_code,
                 formatShortAmount($amount),
                 number_format($amount, 0, ',', '.'),
                 $deltaNote,
                 $order->note ?: '—',
-                now()->format('H:i:s d/m/Y')
+                now()->format('H:i:s d/m/Y'),
+                $csNote
             );
 
             foreach ($adminIds as $chatId) {
@@ -136,6 +144,87 @@ class Pay2sWebhookController extends Controller
             'matched' => true,
             'order_code' => $orderCode,
             'paid_amount' => $amount,
+            'customer_service_id' => $createdCsId,
         ];
+    }
+
+    /**
+     * Tự tạo CustomerService + Profit từ PendingOrder đã paid (nếu đủ data structured).
+     * Trả về customer_service_id nếu tạo thành công, null nếu thiếu data hoặc đã tạo.
+     */
+    private function tryAutoCreateCustomerService(PendingOrder $order): ?int
+    {
+        if ($order->customer_service_id) {
+            return $order->customer_service_id;
+        }
+
+        // Đủ điều kiện structured: cần customer + service_package + email + thời hạn
+        $missing = array_filter([
+            'customer_id' => !$order->customer_id,
+            'service_package_id' => !$order->service_package_id,
+            'account_email' => empty($order->account_email),
+            'duration_days' => !$order->duration_days,
+        ]);
+
+        if (!empty($missing)) {
+            Log::info('Pay2S webhook: skip auto-create CustomerService (thiếu data structured — đơn cần fill thủ công qua web)', [
+                'order_id' => $order->id,
+                'order_code' => $order->order_code,
+                'missing' => array_keys($missing),
+            ]);
+            return null;
+        }
+
+        try {
+            $now = now();
+            $expiresAt = $now->copy()->addDays((int) $order->duration_days);
+
+            $internalNotes = "📋 Tự tạo từ đơn {$order->order_code} qua Pay2S webhook ({$now->format('d/m/Y H:i')})";
+            if (!empty($order->family_code)) {
+                $internalNotes .= "\nMã nhóm-gia đình: {$order->family_code}";
+            }
+
+            $cs = \App\Models\CustomerService::create([
+                'pending_order_id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'service_package_id' => $order->service_package_id,
+                'login_email' => $order->account_email,
+                'activated_at' => $now,
+                'expires_at' => $expiresAt,
+                'status' => 'active',
+                'duration_days' => $order->duration_days,
+                'warranty_days' => $order->warranty_days,
+                'internal_notes' => $internalNotes,
+            ]);
+
+            // Profit record nếu bot có nhập
+            if (!empty($order->profit_amount) && $order->profit_amount > 0) {
+                \App\Models\Profit::create([
+                    'customer_service_id' => $cs->id,
+                    'profit_amount' => $order->profit_amount,
+                    'notes' => "Tự tạo từ đơn {$order->order_code} qua Pay2S webhook",
+                ]);
+            }
+
+            $order->update([
+                'customer_service_id' => $cs->id,
+                'status' => 'completed',
+            ]);
+
+            Log::info('Pay2S webhook: auto-created CustomerService', [
+                'order_id' => $order->id,
+                'order_code' => $order->order_code,
+                'customer_service_id' => $cs->id,
+            ]);
+
+            return $cs->id;
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: auto-create CustomerService failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return null;
+        }
     }
 }

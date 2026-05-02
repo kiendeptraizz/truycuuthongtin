@@ -95,7 +95,7 @@
                                             <div class="col-md-12 mb-3">
                                                 <label for="family_account_id" class="form-label">
                                                     <i class="fas fa-home me-2 text-primary"></i>
-                                                    Family Account <span class="text-danger">*</span>
+                                                    Family Account <span class="text-muted small">(không bắt buộc)</span>
                                                 </label>
                                                 <select class="form-select @error('family_account_id') is-invalid @enderror"
                                                     id="family_account_id"
