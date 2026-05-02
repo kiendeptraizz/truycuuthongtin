@@ -64,21 +64,21 @@ class RevenueController extends Controller
         // Query 1: Revenue + Orders cho tất cả periods (1 query thay vì 16)
         $revenueStats = DB::table('customer_services')
             ->selectRaw("
-                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(price, 0) ELSE 0 END) as today_revenue,
+                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(order_amount, 0) ELSE 0 END) as today_revenue,
                 SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as today_orders,
-                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(price, 0) ELSE 0 END) as yesterday_revenue,
+                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(order_amount, 0) ELSE 0 END) as yesterday_revenue,
                 SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as yesterday_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as week_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as week_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_week_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_week_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as month_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as month_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_month_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_month_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as year_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as year_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(price, 0) ELSE 0 END) as last_year_revenue,
+                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_year_revenue,
                 SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders
             ", [
                 $today, $today, $yesterday, $yesterday,
@@ -200,11 +200,11 @@ class RevenueController extends Controller
                         : $order->customer->name)
                     : '[Khách hàng không tồn tại]',
                 'service_name' => $order->servicePackage ? $order->servicePackage->name : '[Gói dịch vụ không tồn tại]',
-                'revenue' => $order->price ?? ($order->servicePackage ? $order->servicePackage->price : 0),
+                'revenue' => $order->order_amount ?? ($order->servicePackage ? $order->servicePackage->price : 0),
                 'profit' => $order->profit ? $order->profit->profit_amount : 0,
                 'profit_notes' => $order->profit ? $order->profit->notes : '',
                 'profit_margin' => (function () use ($order) {
-                    $revenue = $order->price ?? ($order->servicePackage ? $order->servicePackage->price : 0);
+                    $revenue = $order->order_amount ?? ($order->servicePackage ? $order->servicePackage->price : 0);
                     return $revenue > 0 && $order->profit
                         ? round(($order->profit->profit_amount / $revenue) * 100, 2)
                         : 0;
@@ -260,7 +260,7 @@ class RevenueController extends Controller
         $data = CustomerService::select(
             DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
             DB::raw('COUNT(*) as orders_count'),
-            DB::raw('SUM(COALESCE(customer_services.price, service_packages.price)) as revenue'),
+            DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price)) as revenue'),
             DB::raw('COALESCE(SUM(profits.profit_amount), 0) as profit')
         )
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
@@ -343,7 +343,7 @@ class RevenueController extends Controller
             ]);
 
             foreach ($orders as $o) {
-                $revenue = $o->price ?? ($o->servicePackage->price ?? 0);
+                $revenue = $o->order_amount ?? ($o->servicePackage->price ?? 0);
                 $profit = $o->profit?->profit_amount ?? 0;
                 $margin = $revenue > 0 ? round(($profit / $revenue) * 100, 2) : 0;
 
@@ -412,9 +412,9 @@ class RevenueController extends Controller
                 'customers.phone',
                 'customers.email',
                 DB::raw('COUNT(customer_services.id) as total_orders'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value')
+                DB::raw('AVG(COALESCE(customer_services.order_amount, service_packages.price, 0)) as avg_order_value')
             )
             ->groupBy('customers.id', 'customers.name', 'customers.customer_code', 'customers.phone', 'customers.email')
             ->orderBy('total_profit', 'desc')
@@ -449,9 +449,9 @@ class RevenueController extends Controller
                 'service_categories.name',
                 'service_categories.description',
                 DB::raw('COUNT(customer_services.id) as total_orders'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value'),
+                DB::raw('AVG(COALESCE(customer_services.order_amount, service_packages.price, 0)) as avg_order_value'),
                 DB::raw('COUNT(DISTINCT service_packages.id) as services_count')
             )
             ->groupBy('service_categories.id', 'service_categories.name', 'service_categories.description')
@@ -493,11 +493,11 @@ class RevenueController extends Controller
                 DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
                 DB::raw('COUNT(DISTINCT customer_services.customer_id) as unique_customers'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit'),
-                DB::raw('AVG(COALESCE(customer_services.price, service_packages.price, 0)) as avg_order_value'),
-                DB::raw('MAX(COALESCE(customer_services.price, service_packages.price, 0)) as max_order_value'),
-                DB::raw('MIN(COALESCE(customer_services.price, service_packages.price, 0)) as min_order_value')
+                DB::raw('AVG(COALESCE(customer_services.order_amount, service_packages.price, 0)) as avg_order_value'),
+                DB::raw('MAX(COALESCE(customer_services.order_amount, service_packages.price, 0)) as max_order_value'),
+                DB::raw('MIN(COALESCE(customer_services.order_amount, service_packages.price, 0)) as min_order_value')
             )
             ->groupBy('period')
             ->orderBy('period')
@@ -535,7 +535,7 @@ class RevenueController extends Controller
             ->select(
                 DB::raw('HOUR(customer_services.created_at) as hour'),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit')
             )
             ->groupBy('hour')
@@ -596,7 +596,7 @@ class RevenueController extends Controller
                 'service_packages.name',
                 'service_packages.price',
                 DB::raw('COUNT(customer_services.id) as orders_count'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price)) as total_revenue'),
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit')
             )
             ->groupBy('service_packages.id', 'service_packages.name', 'service_packages.price')
@@ -750,7 +750,7 @@ class RevenueController extends Controller
     {
         $revenue = CustomerService::join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->whereBetween('customer_services.created_at', [$start, $end])
-            ->sum(DB::raw('COALESCE(customer_services.price, service_packages.price, 0)'));
+            ->sum(DB::raw('COALESCE(customer_services.order_amount, service_packages.price, 0)'));
 
         $orders = CustomerService::whereBetween('created_at', [$start, $end])->count();
 
@@ -800,7 +800,7 @@ class RevenueController extends Controller
             ->select(
                 DB::raw('DATE(customer_services.created_at) as date'),
                 DB::raw('COUNT(customer_services.id) as orders'),
-                DB::raw('SUM(COALESCE(customer_services.price, service_packages.price, 0)) as revenue')
+                DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as revenue')
             )
             ->groupBy('date')
             ->orderBy('date')
