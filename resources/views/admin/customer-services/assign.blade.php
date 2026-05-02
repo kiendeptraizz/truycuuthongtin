@@ -424,6 +424,65 @@
                             </div>
                         </div>
 
+                        {{-- Bảo hành (số ngày) — đồng bộ với bot bước 6 --}}
+                        <div class="col-md-6 mb-3">
+                            <label for="warranty_days" class="form-label">
+                                <i class="fas fa-shield-alt me-1 text-info"></i>
+                                Bảo hành (số ngày)
+                            </label>
+                            <input type="number"
+                                class="form-control @error('warranty_days') is-invalid @enderror"
+                                id="warranty_days"
+                                name="warranty_days"
+                                min="0"
+                                placeholder="Vd: 30"
+                                value="{{ old('warranty_days') }}">
+                            @error('warranty_days')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <div class="form-text">Để trống nếu không bảo hành. Nhập bằng thời hạn = full thời hạn.</div>
+                        </div>
+
+                        {{-- Số tiền đơn hàng — đồng bộ với amount của PendingOrder --}}
+                        <div class="col-md-6 mb-3">
+                            <label for="order_amount" class="form-label">
+                                <i class="fas fa-money-bill me-1 text-success"></i>
+                                Số tiền đơn hàng
+                            </label>
+                            <div class="input-group">
+                                <input type="text"
+                                    class="form-control currency-input @error('order_amount') is-invalid @enderror"
+                                    id="order_amount"
+                                    name="order_amount"
+                                    placeholder="Vd: 100.000"
+                                    value="{{ old('order_amount') }}">
+                                <span class="input-group-text">VNĐ</span>
+                            </div>
+                            @error('order_amount')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                            @enderror
+                            <div class="form-text">Số tiền khách trả cho đơn này.</div>
+                        </div>
+
+                        {{-- Mã nhóm-gia đình text free — đồng bộ với bot bước 5 --}}
+                        <div class="col-md-12 mb-3">
+                            <label for="family_code" class="form-label">
+                                <i class="fas fa-users me-1 text-primary"></i>
+                                Mã nhóm-gia đình (text)
+                            </label>
+                            <input type="text"
+                                class="form-control @error('family_code') is-invalid @enderror"
+                                id="family_code"
+                                name="family_code"
+                                maxlength="100"
+                                placeholder="Vd: 2 / gd_email@gmail.com / 'gia đình A'"
+                                value="{{ old('family_code') }}">
+                            @error('family_code')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <div class="form-text">Mã ngắn để admin nhớ — KHÁC với "Family Account" ở trên (là link tới module Family Accounts).</div>
+                        </div>
+
                         <div class="col-md-12 mb-3">
                             <label for="internal_notes" class="form-label">Ghi chú nội bộ</label>
                             <textarea class="form-control @error('internal_notes') is-invalid @enderror"

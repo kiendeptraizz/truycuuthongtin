@@ -479,6 +479,8 @@ class TelegramListenCommand extends Command
                 'status' => 'pending',
                 'duration_days' => $data['duration_days'],
                 'warranty_days' => $data['warranty_days'] ?? null,
+                'order_amount' => $data['amount'] ?? null,
+                'family_code' => $data['family_email'] ?? null,
                 'price' => 0,
                 'cost_price' => 0,
                 'internal_notes' => "📋 Tạo từ bot Telegram đơn {$order->order_code} ("

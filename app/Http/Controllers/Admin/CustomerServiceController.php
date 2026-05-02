@@ -804,6 +804,8 @@ class CustomerServiceController extends Controller
                 'expires_at' => 'required|date|after:activated_at',
                 'duration_days' => 'required|integer|min:1',
                 'warranty_days' => 'nullable|integer|min:0',
+                'order_amount' => 'nullable|string',
+                'family_code' => 'nullable|string|max:100',
                 'cost_price' => 'nullable|string',
                 'price' => 'nullable|string',
                 'internal_notes' => 'nullable|string',
@@ -821,6 +823,7 @@ class CustomerServiceController extends Controller
         // Parse currency inputs (default to 0 if not provided)
         $costPrice = $request->filled('cost_price') ? parseCurrency($request->cost_price) : 0;
         $price = $request->filled('price') ? parseCurrency($request->price) : 0;
+        $orderAmount = $request->filled('order_amount') ? parseCurrency($request->order_amount) : null;
 
         // Family account giờ optional — bỏ ràng buộc bắt buộc cho gói "add family"
         $servicePackage = ServicePackage::findOrFail($request->service_package_id);
@@ -828,7 +831,7 @@ class CustomerServiceController extends Controller
         $sharedCredentialId = $request->filled('shared_credential_id') ? $request->shared_credential_id : null;
 
         try {
-            $customerService = DB::transaction(function () use ($request, $customer, $servicePackage, $costPrice, $price, $sharedCredentialId) {
+            $customerService = DB::transaction(function () use ($request, $customer, $servicePackage, $costPrice, $price, $orderAmount, $sharedCredentialId) {
                 // Lock + check slot family ở trong transaction (pessimistic lock chống race)
                 if (strpos($servicePackage->account_type, 'add family') !== false && $request->filled('family_account_id')) {
                     $familyAccount = \App\Models\FamilyAccount::lockForUpdate()->find($request->family_account_id);
@@ -865,6 +868,8 @@ class CustomerServiceController extends Controller
                     'status' => 'active',
                     'duration_days' => $request->duration_days,
                     'warranty_days' => $request->filled('warranty_days') ? (int) $request->warranty_days : null,
+                    'order_amount' => $orderAmount,
+                    'family_code' => $request->filled('family_code') ? trim($request->family_code) : null,
                     'cost_price' => $costPrice,
                     'price' => $price,
                     'internal_notes' => $request->internal_notes,

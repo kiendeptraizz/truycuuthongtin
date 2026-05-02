@@ -40,6 +40,8 @@ class CustomerService extends Model
         'status',
         'duration_days',
         'warranty_days',
+        'order_amount',
+        'family_code',
         'cost_price',
         'price',
         'internal_notes',

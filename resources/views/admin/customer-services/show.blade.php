@@ -111,6 +111,82 @@
                     </div>
                 </div>
 
+                {{-- Thông tin đơn hàng (đồng bộ với bot Telegram) --}}
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card border border-success">
+                            <div class="card-header bg-success bg-opacity-10">
+                                <h6 class="mb-0 text-success">
+                                    <i class="fas fa-receipt me-2"></i>
+                                    Thông tin đơn hàng
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <strong>💰 Số tiền đơn:</strong>
+                                        <div class="text-success fw-bold">
+                                            @if(!is_null($customerService->order_amount))
+                                                {{ number_format($customerService->order_amount, 0, ',', '.') }} VNĐ
+                                            @elseif($customerService->pending_order_id)
+                                                {{ optional(\App\Models\PendingOrder::find($customerService->pending_order_id))->amount ? number_format(\App\Models\PendingOrder::find($customerService->pending_order_id)->amount, 0, ',', '.') . ' VNĐ' : '—' }}
+                                                <span class="badge bg-info ms-1">từ pending order</span>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>🛡 Bảo hành:</strong>
+                                        <div>
+                                            @if($customerService->warranty_days > 0)
+                                                @if($customerService->warranty_days == $customerService->duration_days)
+                                                    <span class="badge bg-warning text-dark">full thời hạn ({{ $customerService->warranty_days }} ngày)</span>
+                                                @else
+                                                    {{ $customerService->warranty_days }} ngày
+                                                @endif
+                                            @else
+                                                <span class="text-muted">Không bảo hành</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>👥 Mã nhóm-gia đình:</strong>
+                                        <div>
+                                            @if($customerService->family_code)
+                                                <code class="bg-light px-2 py-1 rounded">{{ $customerService->family_code }}</code>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    @if($customerService->pending_order_id)
+                                        <div class="col-12">
+                                            <strong>📋 Đơn pending gốc:</strong>
+                                            @php $po = \App\Models\PendingOrder::find($customerService->pending_order_id); @endphp
+                                            @if($po)
+                                                <div>
+                                                    <code>{{ $po->order_code }}</code>
+                                                    @if($po->paid_at)
+                                                        <span class="badge bg-success ms-1">Đã thanh toán {{ $po->paid_at->format('H:i d/m/Y') }}</span>
+                                                    @else
+                                                        <span class="badge bg-warning text-dark ms-1">Chưa thanh toán</span>
+                                                    @endif
+                                                    @if($po->created_via === 'telegram')
+                                                        <span class="badge bg-info ms-1"><i class="fab fa-telegram me-1"></i>Tạo qua bot</span>
+                                                    @endif
+                                                </div>
+                                            @else
+                                                <div class="text-muted">Đơn không tìm thấy (đã xoá)</div>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Family Account Information -->
                 @if($customerService->family_account_id && $customerService->familyAccount)
                 <div class="row mt-4">

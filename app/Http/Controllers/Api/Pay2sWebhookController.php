@@ -268,6 +268,8 @@ class Pay2sWebhookController extends Controller
                 'status' => 'active',
                 'duration_days' => $order->duration_days,
                 'warranty_days' => $order->warranty_days,
+                'order_amount' => $order->amount,
+                'family_code' => $order->family_code,
                 'internal_notes' => $internalNotes,
             ]);
 
