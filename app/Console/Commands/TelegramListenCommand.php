@@ -164,7 +164,7 @@ class TelegramListenCommand extends Command
         }
 
         $caption = sprintf(
-            "✅ <b>%s</b>\n💰 <b>%s</b> (%sđ)\n🕐 %s%s",
+            "✅ <b>%s</b>\n💰 <b>%s</b> (%sđ)\n🕐 %s%s\n\n<i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ 🙏</i>",
             $order->order_code,
             formatShortAmount($order->amount),
             number_format($order->amount, 0, ',', '.'),
