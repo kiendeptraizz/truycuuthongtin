@@ -256,9 +256,142 @@ class TelegramListenCommand extends Command
                 );
                 break;
 
+            case '/dh':
+                if (!$arg) {
+                    $this->bot->sendMessage($chatId, "Cú pháp: <code>/dh DH-260501-001</code>");
+                    break;
+                }
+                $this->sendOrderDetails($chatId, $arg);
+                break;
+
             default:
                 $this->bot->sendMessage($chatId, "❓ Lệnh không nhận diện được. Gõ /help để xem hướng dẫn.");
         }
+    }
+
+    /**
+     * Trả chi tiết 1 đơn theo mã (cho lệnh /dh DH-XXX-XXX).
+     * Tolerant với format có/không dấu gạch.
+     */
+    private function sendOrderDetails(int|string $chatId, string $rawCode): void
+    {
+        $code = strtoupper(trim($rawCode));
+        // Match cả "DH260501001" lẫn "DH-260501-001"
+        if (preg_match('/^DH[-\s]?(\d{6})[-\s]?(\d{3})$/i', $code, $m)) {
+            $code = "DH-{$m[1]}-{$m[2]}";
+        }
+
+        $order = PendingOrder::with(['customer', 'servicePackage.category'])
+            ->where('order_code', $code)
+            ->first();
+
+        // Fallback: tìm CS theo order_code (đơn web nhanh không qua PO)
+        if (!$order) {
+            $cs = \App\Models\CustomerService::with(['customer', 'servicePackage.category'])
+                ->where('order_code', $code)
+                ->first();
+            if ($cs) {
+                $this->sendCustomerServiceDetails($chatId, $cs);
+                return;
+            }
+            $this->bot->sendMessage($chatId, "❌ Không tìm thấy đơn <code>{$code}</code>");
+            return;
+        }
+
+        $statusEmoji = match ($order->status) {
+            'pending' => '⏳',
+            'completed' => '✅',
+            'cancelled' => '❌',
+            default => '❓',
+        };
+        $statusLabel = match ($order->status) {
+            'pending' => 'Chờ thanh toán',
+            'completed' => 'Đã hoàn tất',
+            'cancelled' => 'Đã huỷ',
+            default => $order->status,
+        };
+
+        $lines = [
+            "📋 <b>{$order->order_code}</b>",
+            "{$statusEmoji} Trạng thái: <b>{$statusLabel}</b>",
+            "💵 Số tiền: <b>" . formatShortAmount((int) $order->amount) . "</b>",
+            "🕐 Tạo lúc: " . $order->created_at->format('H:i d/m/Y'),
+        ];
+
+        if ($order->customer) {
+            $lines[] = "👤 Khách: <code>{$order->customer->customer_code}</code> — <b>" . e($order->customer->name) . "</b>";
+        }
+        if ($order->servicePackage) {
+            $lines[] = "📦 Gói: <b>" . e($order->servicePackage->name) . "</b>";
+        }
+        if ($order->account_email) {
+            $lines[] = "📧 Email TK: <code>" . e($order->account_email) . "</code>";
+        }
+        if ($order->paid_at) {
+            $lines[] = "✅ Đã thanh toán: " . $order->paid_at->format('H:i d/m/Y') . " (" . formatShortAmount((int) $order->paid_amount) . ")";
+        }
+        if ($order->customer_service_id) {
+            $lines[] = "🔗 Dịch vụ KH: #{$order->customer_service_id}";
+        }
+        if ($order->note) {
+            $lines[] = "📝 " . e($order->note);
+        }
+
+        // Inline buttons: tuỳ status mà show button khác nhau
+        $buttons = [];
+        if ($order->status === 'pending') {
+            $buttons[] = ['text' => '📷 Xem QR', 'callback_data' => "po_qr_{$order->id}"];
+            if (!$order->paid_at) {
+                $buttons[] = ['text' => '💳 Đã trả', 'callback_data' => "po_paid_{$order->id}"];
+            }
+            $buttons[] = ['text' => '❌ Huỷ', 'callback_data' => "po_huy_{$order->id}"];
+        }
+
+        $extras = [];
+        if (!empty($buttons)) {
+            $extras['reply_markup'] = json_encode(['inline_keyboard' => [$buttons]]);
+        }
+
+        $this->bot->sendMessage($chatId, implode("\n", $lines), $extras);
+    }
+
+    private function sendCustomerServiceDetails(int|string $chatId, \App\Models\CustomerService $cs): void
+    {
+        $statusEmoji = match ($cs->status) {
+            'active' => '✅',
+            'expired' => '⏰',
+            'cancelled' => '❌',
+            'pending' => '⏳',
+            default => '❓',
+        };
+
+        $lines = [
+            "📋 <b>{$cs->order_code}</b> (dịch vụ KH #{$cs->id})",
+            "{$statusEmoji} Trạng thái: <b>{$cs->status}</b>",
+        ];
+        if ($cs->customer) {
+            $lines[] = "👤 Khách: <code>{$cs->customer->customer_code}</code> — <b>" . e($cs->customer->name) . "</b>";
+        }
+        if ($cs->servicePackage) {
+            $lines[] = "📦 Gói: <b>" . e($cs->servicePackage->name) . "</b>";
+        }
+        if ($cs->login_email) {
+            $lines[] = "📧 Email TK: <code>" . e($cs->login_email) . "</code>";
+        }
+        if ($cs->order_amount) {
+            $lines[] = "💵 Số tiền: <b>" . formatShortAmount((int) $cs->order_amount) . "</b>";
+        }
+        if ($cs->activated_at) {
+            $lines[] = "🟢 Kích hoạt: " . $cs->activated_at->format('d/m/Y');
+        }
+        if ($cs->expires_at) {
+            $lines[] = "🔴 Hết hạn: " . $cs->expires_at->format('d/m/Y');
+        }
+        if ($cs->warranty_days) {
+            $lines[] = "🛡 Bảo hành: {$cs->warranty_days} ngày";
+        }
+
+        $this->bot->sendMessage($chatId, implode("\n", $lines));
     }
 
     /**
@@ -706,6 +839,12 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Click "📷 Xem QR" trong /list — gửi lại ảnh QR
+        if (preg_match('/^po_qr_(\d+)$/', $cbData, $m)) {
+            $this->handleViewQrCallback($chatId, (int) $m[1]);
+            return;
+        }
+
         // Callback khác chưa hỗ trợ
         Log::info('Telegram callback_query unknown', ['data' => $cbData]);
     }
@@ -737,6 +876,40 @@ class TelegramListenCommand extends Command
         ]);
 
         $this->bot->sendMessage($chatId, "✅ Đã huỷ đơn <code>{$order->order_code}</code>.");
+    }
+
+    /**
+     * User bấm "📷 Xem QR" — gửi lại ảnh QR thanh toán (admin forward cho khách).
+     */
+    private function handleViewQrCallback(int|string $chatId, int $orderId): void
+    {
+        $order = PendingOrder::find($orderId);
+        if (!$order) {
+            $this->bot->sendMessage($chatId, "❌ Đơn không tồn tại.");
+            return;
+        }
+        if ($order->paid_at) {
+            $this->bot->sendMessage(
+                $chatId,
+                "ℹ️ Đơn <code>{$order->order_code}</code> đã được thanh toán — không cần QR nữa."
+            );
+            return;
+        }
+        if ($order->status === 'cancelled') {
+            $this->bot->sendMessage($chatId, "❌ Đơn <code>{$order->order_code}</code> đã huỷ.");
+            return;
+        }
+
+        $caption = sprintf(
+            "📷 <b>%s</b>\n💵 %s",
+            $order->order_code,
+            formatShortAmount((int) $order->amount)
+        );
+        if ($order->note) {
+            $caption .= "\n📝 " . e($order->note);
+        }
+
+        $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
     }
 
     /**
@@ -1394,9 +1567,10 @@ class TelegramListenCommand extends Command
 
             $buttons = [];
             if (!$o->paid_at) {
+                $buttons[] = ['text' => '📷 Xem QR', 'callback_data' => "po_qr_{$o->id}"];
                 $buttons[] = ['text' => '💳 Đã trả', 'callback_data' => "po_paid_{$o->id}"];
             }
-            $buttons[] = ['text' => '❌ Huỷ đơn', 'callback_data' => "po_huy_{$o->id}"];
+            $buttons[] = ['text' => '❌ Huỷ', 'callback_data' => "po_huy_{$o->id}"];
 
             $this->bot->sendMessage(
                 $chatId,
@@ -1441,6 +1615,7 @@ class TelegramListenCommand extends Command
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
+            . "/dh DH-XXX-XXX — xem chi tiết 1 đơn\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
