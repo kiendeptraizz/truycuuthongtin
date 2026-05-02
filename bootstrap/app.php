@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'prevent.caching' => \App\Http\Middleware\PreventCaching::class,
             'normalize.customer.name' => \App\Http\Middleware\NormalizeCustomerName::class,
             'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
+            'two-factor' => \App\Http\Middleware\EnsureTwoFactorVerified::class,
         ]);
 
         // Apply security headers globally

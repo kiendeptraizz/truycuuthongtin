@@ -41,10 +41,27 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// Change password (requires auth)
+// 2FA challenge (sau login khi user có 2FA bật) — KHÔNG apply middleware two-factor
+// vì bản thân các route này phục vụ verify, sẽ loop nếu enforced.
 Route::middleware('auth')->group(function () {
+    Route::get('/2fa/challenge', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'showChallenge'])->name('two-factor.challenge');
+    Route::post('/2fa/verify', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'verify'])
+        ->middleware('throttle:5,1')
+        ->name('two-factor.verify');
+});
+
+// Các route post-2FA: yêu cầu auth + đã verify 2FA (nếu user có 2FA bật)
+Route::middleware(['auth', 'two-factor'])->group(function () {
     Route::get('/change-password', [AuthController::class, 'showChangePasswordForm'])->name('password.change');
     Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.update');
+
+    // 2FA setup/manage
+    Route::get('/2fa/setup', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'showSetup'])->name('two-factor.setup');
+    Route::post('/2fa/enable', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'enable'])
+        ->middleware('throttle:10,1')
+        ->name('two-factor.enable');
+    Route::get('/2fa/settings', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'settings'])->name('two-factor.settings');
+    Route::post('/2fa/disable', [\App\Http\Controllers\Auth\TwoFactorAuthController::class, 'disable'])->name('two-factor.disable');
 });
 
 // ============================================================================
@@ -65,7 +82,7 @@ Route::post('/tra-cuu/search', [LookupController::class, 'search'])
 // ============================================================================
 // 🔒 ADMIN ROUTES (Yêu cầu đăng nhập)
 // ============================================================================
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \App\Http\Middleware\EnsureDailyBackup::class])->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'prevent.caching', \App\Http\Middleware\EnsureDailyBackup::class])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Cấu hình trang chủ (override stats hiển thị trên trang tra cứu công khai)

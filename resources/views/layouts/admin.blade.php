@@ -384,6 +384,17 @@
                                         </a>
                                     </li>
                                     <li>
+                                        <a href="{{ route('two-factor.settings') }}" class="dropdown-item">
+                                            <i class="fas fa-shield-alt me-2"></i>
+                                            Bảo mật 2 lớp (2FA)
+                                            @if(Auth::user()?->hasTwoFactorEnabled())
+                                                <span class="badge bg-success ms-1" style="font-size: 0.65rem;">BẬT</span>
+                                            @else
+                                                <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">TẮT</span>
+                                            @endif
+                                        </a>
+                                    </li>
+                                    <li>
                                         <hr class="dropdown-divider">
                                     </li>
                                     <li>
