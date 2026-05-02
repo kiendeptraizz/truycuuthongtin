@@ -337,13 +337,14 @@ class TelegramListenCommand extends Command
             case 'family_email':
                 $input = trim($text);
                 $lcInput = strtolower($input);
-                if (in_array($lcInput, ['skip', 'không', 'khong', 'no', '-', 'k', 'bo', 'bỏ'], true)) {
+                if (in_array($lcInput, ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
                     $data['family_email'] = null;
-                } elseif (filter_var($input, FILTER_VALIDATE_EMAIL)) {
-                    $data['family_email'] = $input;
-                } else {
-                    $this->bot->sendMessage($chatId, "❌ Email không hợp lệ. Gõ lại hoặc <code>skip</code>:");
+                } elseif ($input === '') {
+                    $this->bot->sendMessage($chatId, "❌ Trống. Gõ mã/email/số hoặc <code>skip</code>:");
                     return;
+                } else {
+                    // Cho phép bất cứ định dạng gì: email, số, text, code...
+                    $data['family_email'] = $input;
                 }
                 $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
                 $this->promptWarranty($chatId);
@@ -723,7 +724,9 @@ class TelegramListenCommand extends Command
     {
         $this->bot->sendMessage(
             $chatId,
-            "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n"
+            "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình?\n"
+                . "<i>Có thể là email / số / mã / text bất kỳ.</i>\n"
+                . "<i>Vd: <code>2</code>, <code>gd_abc@gmail.com</code>, <code>gia đình A</code></i>\n"
                 . "<i>Gõ <code>skip</code> nếu không có</i>",
             $this->navMarkup()
         );
@@ -832,7 +835,9 @@ class TelegramListenCommand extends Command
         ];
 
         if (!empty($data['family_email'])) {
-            $lines[] = "📌 Mã nhóm - gia đình: <code>{$data['family_email']}</code>";
+            // family_email giờ free-form (email/số/text) — escape HTML để tránh vỡ markup
+            $safe = htmlspecialchars((string) $data['family_email'], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $lines[] = "📌 Mã nhóm - gia đình: <code>{$safe}</code>";
         }
 
         $lines[] = sprintf(
