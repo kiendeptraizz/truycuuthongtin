@@ -185,19 +185,13 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        $data = ['amount' => $amount];
         $this->setState($chatId, [
             'step' => 'customer_name',
-            'data' => ['amount' => $amount],
+            'data' => $data,
         ]);
 
-        $this->bot->sendMessage(
-            $chatId,
-            "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
-                . "👤 <b>Bước 1/6:</b> Tên hoặc mã khách hàng?\n"
-                . "<i>• Gõ <b>tên</b> (vd: <code>Nguyễn Văn A</code>) — KH cũ sẽ tự tìm, KH mới sẽ tự tạo</i>\n"
-                . "<i>• Hoặc gõ <b>mã KH</b> (vd: <code>KUN98473</code>, <code>CTV12345</code>) để chọn KH đã có</i>\n"
-                . "<i>• Gõ /huy để huỷ</i>"
-        );
+        $this->promptCustomerName($chatId, $data);
     }
 
     /**
@@ -254,11 +248,8 @@ class TelegramListenCommand extends Command
                 }
 
                 $this->setState($chatId, ['step' => 'duration', 'data' => $data]);
-                $this->bot->sendMessage(
-                    $chatId,
-                    $headLine . "\n\n⏰ <b>Bước 2/6:</b> Thời hạn tài khoản?\n"
-                        . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>"
-                );
+                $this->bot->sendMessage($chatId, $headLine);
+                $this->promptDuration($chatId);
                 return;
 
             case 'duration':
@@ -277,10 +268,7 @@ class TelegramListenCommand extends Command
                 $data['duration_value'] = $dur['value'];
 
                 $this->setState($chatId, ['step' => 'email', 'data' => $data]);
-                $this->bot->sendMessage(
-                    $chatId,
-                    "📧 <b>Bước 3/6:</b> Email tài khoản?\n<i>Vd: <code>huatungthang@gmail.com</code></i>"
-                );
+                $this->promptEmail($chatId);
                 return;
 
             case 'email':
@@ -333,8 +321,9 @@ class TelegramListenCommand extends Command
                 }
                 // Nút điều hướng
                 $buttons[] = [
-                    ['text' => '📂 Xem theo danh mục', 'callback_data' => 'cats'],
+                    ['text' => '📂 Danh mục', 'callback_data' => 'cats'],
                     ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                    ['text' => '❌ Huỷ', 'callback_data' => 'cancel'],
                 ];
 
                 $this->bot->sendMessage(
@@ -357,10 +346,7 @@ class TelegramListenCommand extends Command
                     return;
                 }
                 $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
-                $this->bot->sendMessage(
-                    $chatId,
-                    "🛡 <b>Bước 6/6:</b> Bảo hành full thời hạn?\n<i>Gõ <code>full</code> nếu có, hoặc <code>skip</code> để trống</i>"
-                );
+                $this->promptWarranty($chatId);
                 return;
 
             case 'warranty':
@@ -436,6 +422,15 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Click "❌ Huỷ đơn" — clear state, kết thúc phiên
+        if ($cbData === 'cancel') {
+            if ($state) {
+                $this->clearState($chatId);
+            }
+            $this->bot->sendMessage($chatId, "❌ Đã huỷ đơn. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
+            return;
+        }
+
         // Click "↩ Quay lại danh mục"
         if ($cbData === 'cats') {
             if (!$atServicePackageStep) {
@@ -505,8 +500,11 @@ class TelegramListenCommand extends Command
                 'callback_data' => "cat_{$cat->id}_p1",
             ]];
         }
-        // Nút quay lại bước email
-        $buttons[] = [['text' => '↩ Bước trước (email)', 'callback_data' => 'back']];
+        // Nút điều hướng cuối: back + cancel
+        $buttons[] = [
+            ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+            ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
+        ];
 
         $this->bot->sendMessage(
             $chatId,
@@ -569,10 +567,11 @@ class TelegramListenCommand extends Command
             $buttons[] = $navRow;
         }
 
-        // Quay lại danh mục + về bước trước
+        // Hàng cuối: danh mục / bước trước / huỷ
         $buttons[] = [
             ['text' => '↩ Danh mục', 'callback_data' => 'cats'],
             ['text' => '⏮ Bước trước', 'callback_data' => 'back'],
+            ['text' => '❌ Huỷ', 'callback_data' => 'cancel'],
         ];
 
         $this->bot->sendMessage(
@@ -598,9 +597,9 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "✅ Đã chọn: <b>{$pkg->name}</b>\n"
-                . "<i>Loại: {$pkg->account_type} · Danh mục: " . ($pkg->category?->name ?? '—') . "</i>\n\n"
-                . "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n<i>Gõ <code>skip</code> nếu không có</i>"
+                . "<i>Loại: {$pkg->account_type} · Danh mục: " . ($pkg->category?->name ?? '—') . "</i>"
         );
+        $this->promptFamilyEmail($chatId);
     }
 
     /**
@@ -673,6 +672,20 @@ class TelegramListenCommand extends Command
         };
     }
 
+    /**
+     * Build reply_markup với inline keyboard "↩ Bước trước" + "❌ Huỷ đơn".
+     * @param bool $includeBack Có nút back hay không (step 1 không có).
+     */
+    private function navMarkup(bool $includeBack = true): array
+    {
+        $row = [];
+        if ($includeBack) {
+            $row[] = ['text' => '↩ Bước trước', 'callback_data' => 'back'];
+        }
+        $row[] = ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'];
+        return ['reply_markup' => json_encode(['inline_keyboard' => [$row]])];
+    }
+
     private function promptCustomerName(int|string $chatId, array $data): void
     {
         $amount = (int) ($data['amount'] ?? 0);
@@ -681,8 +694,8 @@ class TelegramListenCommand extends Command
             "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
                 . "👤 <b>Bước 1/6:</b> Tên hoặc mã khách hàng?\n"
                 . "<i>• Gõ <b>tên</b> (vd: <code>Nguyễn Văn A</code>)</i>\n"
-                . "<i>• Hoặc <b>mã KH</b> (vd: <code>KUN98473</code>)</i>\n"
-                . "<i>• /huy để huỷ</i>"
+                . "<i>• Hoặc <b>mã KH</b> (vd: <code>KUN98473</code>)</i>",
+            $this->navMarkup(false) // Bước 1 không có back
         );
     }
 
@@ -691,8 +704,8 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "⏰ <b>Bước 2/6:</b> Thời hạn tài khoản?\n"
-                . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>\n"
-                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+                . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>",
+            $this->navMarkup()
         );
     }
 
@@ -701,8 +714,8 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "📧 <b>Bước 3/6:</b> Email tài khoản?\n"
-                . "<i>Vd: <code>huatungthang@gmail.com</code></i>\n"
-                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+                . "<i>Vd: <code>huatungthang@gmail.com</code></i>",
+            $this->navMarkup()
         );
     }
 
@@ -711,8 +724,8 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "👥 <b>Bước 5/6:</b> Mã nhóm - gia đình (email)?\n"
-                . "<i>Gõ <code>skip</code> nếu không có</i>\n"
-                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+                . "<i>Gõ <code>skip</code> nếu không có</i>",
+            $this->navMarkup()
         );
     }
 
@@ -721,8 +734,8 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "🛡 <b>Bước 6/6:</b> Bảo hành full thời hạn?\n"
-                . "<i>Gõ <code>full</code> nếu có, <code>skip</code> để trống</i>\n"
-                . "<i>/lai để về bước trước, /huy để huỷ</i>"
+                . "<i>Gõ <code>full</code> nếu có, <code>skip</code> để trống</i>",
+            $this->navMarkup()
         );
     }
 
