@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PendingOrder;
 use App\Models\Customer;
 use App\Models\ServicePackage;
+use App\Services\PaymentService;
 use App\Services\VietQrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -212,6 +213,84 @@ class PendingOrderController extends Controller
         }
 
         return back()->with('success', "Đã huỷ đơn {$code}");
+    }
+
+    /**
+     * Manual mark đơn pending là đã thanh toán (admin xác nhận thủ công khi
+     * Pay2S webhook fail / khách CK bằng cách khác / test).
+     *
+     * Dùng cùng PaymentService như Pay2S webhook → atomic + activate/create CS
+     * + tạo Profit nhất quán.
+     */
+    public function markPaid(Request $request, PendingOrder $pendingOrder, PaymentService $payment)
+    {
+        if ($pendingOrder->status === 'cancelled') {
+            $msg = 'Không thể đánh dấu đơn đã huỷ là đã thanh toán.';
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+            return back()->withErrors(['error' => $msg]);
+        }
+
+        $validated = $request->validate([
+            'paid_amount' => 'nullable|numeric|min:0',
+            'note' => 'nullable|string|max:500',
+        ]);
+
+        // Default = số tiền đơn nếu admin không sửa
+        $amount = (int) ($validated['paid_amount'] ?? $pendingOrder->amount);
+        $bankTxId = 'manual-' . auth()->id() . '-' . now()->timestamp;
+        $rawPayload = json_encode([
+            'source' => 'manual',
+            'admin_id' => auth()->id(),
+            'admin_name' => auth()->user()?->name,
+            'note' => $validated['note'] ?? null,
+            'marked_at' => now()->toIso8601String(),
+        ], JSON_UNESCAPED_UNICODE);
+
+        $result = $payment->markOrderPaid($pendingOrder, $amount, $bankTxId, $rawPayload, 'manual');
+
+        if (!$result['ok']) {
+            $msg = 'Lỗi đánh dấu thanh toán: ' . ($result['error'] ?? $result['status']);
+            Log::error('Manual markPaid failed', [
+                'order_id' => $pendingOrder->id,
+                'admin_id' => auth()->id(),
+                'result' => $result,
+            ]);
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 500);
+            }
+            return back()->withErrors(['error' => $msg]);
+        }
+
+        if ($result['status'] === 'already_paid') {
+            $msg = "Đơn {$pendingOrder->order_code} đã được đánh dấu thanh toán trước đó.";
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => $msg, 'cs_id' => $result['cs_id'] ?? null]);
+            }
+            return back()->with('info', $msg);
+        }
+
+        $csId = $result['cs_id'] ?? null;
+        $msg = "✅ Đã đánh dấu đơn {$pendingOrder->order_code} là thanh toán" .
+            ($csId ? " và tạo dịch vụ #{$csId} cho khách." : '. Cần fill thủ công vì thiếu data.');
+
+        Log::info('Manual markPaid success', [
+            'order_id' => $pendingOrder->id,
+            'order_code' => $pendingOrder->order_code,
+            'admin_id' => auth()->id(),
+            'amount' => $amount,
+            'cs_id' => $csId,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'cs_id' => $csId,
+            ]);
+        }
+        return back()->with('success', $msg);
     }
 
     /**

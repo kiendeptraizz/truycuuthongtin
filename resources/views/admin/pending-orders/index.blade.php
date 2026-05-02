@@ -190,8 +190,18 @@
                                 </td>
                                 <td class="text-end">
                                     @if($order->status === 'pending')
+                                        @if(!$order->paid_at)
+                                            <form action="{{ route('admin.pending-orders.mark-paid', $order) }}"
+                                                  method="POST" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-success" title="Đánh dấu đã thanh toán (khi Pay2S không nhận được)"
+                                                        data-confirm="Xác nhận đơn {{ $order->order_code }} ({{ formatShortAmount($order->amount) }}) đã được khách thanh toán?">
+                                                    <i class="fas fa-check-circle me-1"></i>Đã trả
+                                                </button>
+                                            </form>
+                                        @endif
                                         <a href="{{ route('admin.pending-orders.fill-form', $order) }}"
-                                           class="btn btn-sm btn-success" title="Fill thông tin">
+                                           class="btn btn-sm btn-outline-primary" title="Fill thông tin">
                                             <i class="fas fa-edit me-1"></i>Fill
                                         </a>
                                         <form action="{{ route('admin.pending-orders.destroy', $order) }}"

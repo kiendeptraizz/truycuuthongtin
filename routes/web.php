@@ -110,6 +110,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \
         Route::post('/', [\App\Http\Controllers\Admin\PendingOrderController::class, 'store'])->name('store');
         Route::get('/{pendingOrder}/fill', [\App\Http\Controllers\Admin\PendingOrderController::class, 'fillForm'])->name('fill-form');
         Route::post('/{pendingOrder}/fill', [\App\Http\Controllers\Admin\PendingOrderController::class, 'fill'])->name('fill');
+        Route::post('/{pendingOrder}/mark-paid', [\App\Http\Controllers\Admin\PendingOrderController::class, 'markPaid'])->name('mark-paid');
         Route::delete('/{pendingOrder}', [\App\Http\Controllers\Admin\PendingOrderController::class, 'destroy'])->name('destroy');
         Route::get('/{pendingOrder}/qr', [\App\Http\Controllers\Admin\PendingOrderController::class, 'qr'])->name('qr');
     });
