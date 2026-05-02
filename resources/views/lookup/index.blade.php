@@ -392,6 +392,110 @@
             margin: 0;
         }
 
+        /* Stats Bar — số liệu thực */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            animation: fadeInUp 1s ease;
+            animation-delay: 0.2s;
+            animation-fill-mode: both;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.25rem 1rem;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-3px);
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: white;
+            line-height: 1;
+            margin-bottom: 0.35rem;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f4ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        @media (max-width: 576px) {
+            .stat-number { font-size: 1.5rem; }
+            .stat-label { font-size: 0.7rem; }
+        }
+
+        /* Categories Preview */
+        .categories-section {
+            margin-top: 2rem;
+            animation: fadeInUp 1s ease;
+            animation-delay: 0.4s;
+            animation-fill-mode: both;
+        }
+
+        .categories-title {
+            color: white;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            letter-spacing: 0.02em;
+        }
+
+        .categories-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.6rem;
+        }
+
+        .category-chip {
+            background: rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 0.55rem 1.1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .category-chip:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .category-chip .count {
+            background: rgba(255, 255, 255, 0.25);
+            padding: 0.1rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
         /* Autocomplete suggestions */
         .autocomplete-suggestions {
             position: absolute;
@@ -916,6 +1020,24 @@
                     </div>
                 </div>
 
+                {{-- Stats Bar — số liệu thực từ DB --}}
+                @isset($stats)
+                <div class="stats-bar">
+                    <div class="stat-item">
+                        <div class="stat-number">{{ number_format($stats['customers']) }}+</div>
+                        <div class="stat-label"><i class="fas fa-users me-1"></i>Khách hàng</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ number_format($stats['services']) }}+</div>
+                        <div class="stat-label"><i class="fas fa-bolt me-1"></i>Dịch vụ đang hoạt động</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ number_format($stats['packages']) }}+</div>
+                        <div class="stat-label"><i class="fas fa-box me-1"></i>Gói dịch vụ</div>
+                    </div>
+                </div>
+                @endisset
+
                 <!-- Features Section -->
                 <div class="features-section mt-4" id="featuresSection">
                     <div class="row g-3">
@@ -948,6 +1070,26 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- Categories Preview — list các danh mục dịch vụ shop có --}}
+                @isset($categories)
+                @if($categories->count() > 0)
+                <div class="categories-section">
+                    <div class="categories-title">
+                        <i class="fas fa-th-large me-2"></i>Danh mục dịch vụ
+                    </div>
+                    <div class="categories-grid">
+                        @foreach($categories as $cat)
+                        <span class="category-chip">
+                            <i class="fas fa-folder-open"></i>
+                            {{ $cat->name }}
+                            <span class="count">{{ $cat->active_count }}</span>
+                        </span>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+                @endisset
 
                 <!-- Loading State -->
                 <div class="loading-container" id="loadingContainer">

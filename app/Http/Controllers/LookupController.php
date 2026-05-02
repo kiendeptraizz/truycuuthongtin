@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use App\Models\Customer;
 use App\Models\CustomerService;
+use App\Models\ServiceCategory;
+use App\Models\ServicePackage;
 
 class LookupController extends Controller
 {
@@ -14,6 +17,23 @@ class LookupController extends Controller
         $services = collect();
         $singleService = null; // Khi tra cứu theo mã đơn → chỉ 1 dịch vụ
         $code = $request->get('code');
+
+        // Stats + categories cho trang chủ — cache 1 giờ vì ít đổi
+        $stats = Cache::remember('home_stats', 3600, function () {
+            return [
+                'customers' => Customer::count(),
+                'services' => CustomerService::where('status', 'active')->count(),
+                'packages' => ServicePackage::where('is_active', true)->count(),
+            ];
+        });
+
+        $categories = Cache::remember('home_categories', 3600, function () {
+            return ServiceCategory::query()
+                ->withCount(['servicePackages as active_count' => fn($q) => $q->where('is_active', true)])
+                ->having('active_count', '>', 0)
+                ->orderBy('name')
+                ->get();
+        });
 
         if ($code) {
             $code = trim($code);
@@ -42,7 +62,7 @@ class LookupController extends Controller
             }
         }
 
-        return view('lookup.index', compact('customer', 'services', 'singleService', 'code'));
+        return view('lookup.index', compact('customer', 'services', 'singleService', 'code', 'stats', 'categories'));
     }
 
     public function search(Request $request)

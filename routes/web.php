@@ -32,15 +32,11 @@ Route::post('/api/webhook/pay2s', \App\Http\Controllers\Api\Pay2sWebhookControll
 // 🔐 AUTHENTICATION ROUTES
 // ============================================================================
 
-// Trang chủ - chuyển hướng đến admin dashboard (nếu đã đăng nhập) hoặc login
-Route::get('/', function () {
-    if (auth()->check()) {
-        return redirect()->route('admin.dashboard');
-    }
-    return redirect()->route('login');
-});
+// Trang chủ — public lookup (khách tra cứu trực tiếp). Không redirect login.
+// Login chỉ hiện khi vào /admin/* (middleware auth tự bật) hoặc trực tiếp /login.
+Route::get('/', [LookupController::class, 'index'])->name('home');
 
-// Login routes
+// Login routes (truy cập trực tiếp /login hoặc qua /admin)
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
