@@ -70,6 +70,18 @@ class Pay2sWebhookController extends Controller
             return ['ok' => true, 'skipped' => 'not_credit'];
         }
 
+        // Verify HMAC checksum (defense-in-depth — kẻ xấu có token vẫn không
+        // forge được giao dịch nếu không có secret). Default OFF nếu chưa
+        // cấu hình PAY2S_HMAC_SECRET (giữ backward compat).
+        if (!$this->verifyChecksum($tx)) {
+            Log::warning('Pay2S webhook: invalid checksum', [
+                'tx_id' => $bankTxId,
+                'content' => $content,
+                'amount' => $amount,
+            ]);
+            return ['ok' => false, 'error' => 'invalid_checksum'];
+        }
+
         // Idempotent layer 1 — bankTxId duplicate
         if ($bankTxId !== '' && PendingOrder::where('bank_transaction_id', $bankTxId)->exists()) {
             return ['ok' => true, 'skipped' => 'duplicate', 'tx' => $bankTxId];
@@ -122,6 +134,58 @@ class Pay2sWebhookController extends Controller
             'paid_amount' => $amount,
             'customer_service_id' => $result['cs_id'] ?? null,
         ];
+    }
+
+    /**
+     * Verify HMAC checksum của transaction từ Pay2S.
+     *
+     * Cấu hình env (default OFF — backward compat):
+     *   PAY2S_HMAC_SECRET=<secret từ Pay2S dashboard>
+     *   PAY2S_HMAC_FIELDS=id,transferAmount,content   (mặc định)
+     *   PAY2S_HMAC_ALGO=md5                            (md5/sha1/sha256)
+     *   PAY2S_HMAC_SEPARATOR=|
+     *
+     * User cần xem tài liệu Pay2S để biết exact format HMAC rồi điền 4
+     * env này. Nếu PAY2S_HMAC_SECRET trống → skip verify (return true).
+     *
+     * @return bool true nếu valid hoặc HMAC chưa bật; false nếu fail.
+     */
+    private function verifyChecksum(array $tx): bool
+    {
+        $secret = (string) env('PAY2S_HMAC_SECRET', '');
+        if ($secret === '') {
+            // HMAC chưa cấu hình — giữ behavior cũ (chỉ verify token Bearer)
+            return true;
+        }
+
+        $expected = (string) ($tx['checksum'] ?? '');
+        if ($expected === '') {
+            // HMAC bật mà payload không có checksum → reject
+            return false;
+        }
+
+        $fields = explode(',', (string) env('PAY2S_HMAC_FIELDS', 'id,transferAmount,content'));
+        $separator = (string) env('PAY2S_HMAC_SEPARATOR', '|');
+        $algo = (string) env('PAY2S_HMAC_ALGO', 'md5');
+
+        $parts = [];
+        foreach ($fields as $f) {
+            $f = trim($f);
+            $parts[] = (string) ($tx[$f] ?? '');
+        }
+        $payload = implode($separator, $parts);
+
+        try {
+            $computed = hash_hmac($algo, $payload, $secret);
+        } catch (\Throwable $e) {
+            Log::error('Pay2S HMAC: compute failed', [
+                'algo' => $algo,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+
+        return hash_equals(strtolower($expected), strtolower($computed));
     }
 
     private function sendPaidNotification(TelegramBotService $bot, PendingOrder $order, int $amount): void
