@@ -1119,6 +1119,7 @@
                                     type="text"
                                     class="search-input"
                                     id="searchInput"
+                                    value="{{ $code ?? '' }}"
                                     placeholder="Nhập mã đơn, mã KH, tên Zalo, email hoặc SĐT..."
                                     autocomplete="off"
                                     required>
@@ -1273,6 +1274,12 @@
                 e.preventDefault();
                 performSearch();
             });
+
+            // Auto-search nếu URL có ?code=DH-XXX hoặc input đã pre-fill từ server
+            // (vd link tracking từ Telegram bot khi đơn paid).
+            if (searchInput.value.trim() !== '') {
+                performSearch();
+            }
 
             function performSearch() {
                 const query = searchInput.value.trim();
