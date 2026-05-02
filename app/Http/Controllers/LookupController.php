@@ -147,13 +147,78 @@ class LookupController extends Controller
             ->first();
 
         if (!$customer && mb_strlen($code) >= 2) {
+            // Fuzzy search by name — bỏ dấu tiếng Việt + lowercase 2 phía
+            // để khách gõ "phung dai" vẫn match "Phùng Văn Đại".
+            $stripped = $this->stripVietnameseAccents($code);
+            $stripped = mb_strtolower($stripped);
+
+            // Pass 1: LIKE thẳng (có dấu) — nhanh nhất
             $customer = Customer::where('name', 'LIKE', '%' . $code . '%')
                 ->with(['customerServices.servicePackage.category'])
                 ->orderBy('id')
                 ->first();
+
+            // Pass 2: nếu không match, scan customers có tên chứa keyword sau khi strip
+            // (chỉ chạy khi pass 1 fail — giảm load query). Limit 200 KH gần nhất.
+            if (!$customer) {
+                $candidates = Customer::orderByDesc('id')->limit(200)->get(['id', 'name']);
+                $matchedId = null;
+                foreach ($candidates as $cand) {
+                    $candStripped = mb_strtolower($this->stripVietnameseAccents($cand->name));
+                    if (str_contains($candStripped, $stripped)) {
+                        $matchedId = $cand->id;
+                        break;
+                    }
+                }
+                if ($matchedId) {
+                    $customer = Customer::with(['customerServices.servicePackage.category'])
+                        ->find($matchedId);
+                }
+            }
         }
 
         return $customer;
+    }
+
+    /**
+     * Bỏ dấu tiếng Việt: "Phùng Văn Đại" → "Phung Van Dai".
+     * Dùng cho fuzzy match — không thay đổi data gốc.
+     */
+    private function stripVietnameseAccents(string $str): string
+    {
+        $vi = [
+            'à','á','ả','ã','ạ','ă','ằ','ắ','ẳ','ẵ','ặ','â','ầ','ấ','ẩ','ẫ','ậ',
+            'è','é','ẻ','ẽ','ẹ','ê','ề','ế','ể','ễ','ệ',
+            'ì','í','ỉ','ĩ','ị',
+            'ò','ó','ỏ','õ','ọ','ô','ồ','ố','ổ','ỗ','ộ','ơ','ờ','ớ','ở','ỡ','ợ',
+            'ù','ú','ủ','ũ','ụ','ư','ừ','ứ','ử','ữ','ự',
+            'ỳ','ý','ỷ','ỹ','ỵ',
+            'đ',
+            'À','Á','Ả','Ã','Ạ','Ă','Ằ','Ắ','Ẳ','Ẵ','Ặ','Â','Ầ','Ấ','Ẩ','Ẫ','Ậ',
+            'È','É','Ẻ','Ẽ','Ẹ','Ê','Ề','Ế','Ể','Ễ','Ệ',
+            'Ì','Í','Ỉ','Ĩ','Ị',
+            'Ò','Ó','Ỏ','Õ','Ọ','Ô','Ồ','Ố','Ổ','Ỗ','Ộ','Ơ','Ờ','Ớ','Ở','Ỡ','Ợ',
+            'Ù','Ú','Ủ','Ũ','Ụ','Ư','Ừ','Ứ','Ử','Ữ','Ự',
+            'Ỳ','Ý','Ỷ','Ỹ','Ỵ',
+            'Đ',
+        ];
+        $en = [
+            'a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a','a',
+            'e','e','e','e','e','e','e','e','e','e','e',
+            'i','i','i','i','i',
+            'o','o','o','o','o','o','o','o','o','o','o','o','o','o','o','o','o',
+            'u','u','u','u','u','u','u','u','u','u','u',
+            'y','y','y','y','y',
+            'd',
+            'A','A','A','A','A','A','A','A','A','A','A','A','A','A','A','A','A',
+            'E','E','E','E','E','E','E','E','E','E','E',
+            'I','I','I','I','I',
+            'O','O','O','O','O','O','O','O','O','O','O','O','O','O','O','O','O',
+            'U','U','U','U','U','U','U','U','U','U','U',
+            'Y','Y','Y','Y','Y',
+            'D',
+        ];
+        return str_replace($vi, $en, $str);
     }
 
     /**
