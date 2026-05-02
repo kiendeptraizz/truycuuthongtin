@@ -280,11 +280,7 @@ class TelegramListenCommand extends Command
                 }
                 $data['email'] = $email;
                 $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
-                $this->bot->sendMessage(
-                    $chatId,
-                    "📦 <b>Bước 4/6:</b> Gõ <b>tên gói dịch vụ</b> để tìm.\n"
-                        . "<i>Vd: <code>claude</code>, <code>chatgpt</code>, <code>gemini</code>, <code>spotify</code>...</i>"
-                );
+                $this->sendCategoryPicker($chatId);
                 return;
 
             case 'service_package':
@@ -410,24 +406,150 @@ class TelegramListenCommand extends Command
 
         if (!$chatId || !$this->bot->isAdmin($userId)) return;
 
-        // Chọn gói dịch vụ
+        // Mọi callback liên quan tới chọn gói đều yêu cầu state đang ở step service_package
+        $state = $this->getState($chatId);
+        $atServicePackageStep = $state && ($state['step'] ?? '') === 'service_package';
+
+        // Click "↩ Quay lại danh mục"
+        if ($cbData === 'cats') {
+            if (!$atServicePackageStep) {
+                $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết. Gõ số tiền để bắt đầu đơn mới.");
+                return;
+            }
+            $this->sendCategoryPicker($chatId);
+            return;
+        }
+
+        // Click button category hoặc paginate trong category — format cat_<id>_p<page>
+        if (preg_match('/^cat_(\d+)_p(\d+)$/', $cbData, $m)) {
+            if (!$atServicePackageStep) {
+                $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết. Gõ số tiền để bắt đầu đơn mới.");
+                return;
+            }
+            $this->sendPackagesInCategory($chatId, (int) $m[1], (int) $m[2]);
+            return;
+        }
+
+        // Click chọn package
         if (preg_match('/^pkg_(\d+)$/', $cbData, $m)) {
-            $state = $this->getState($chatId);
-            if (!$state || ($state['step'] ?? '') !== 'service_package') {
+            if (!$atServicePackageStep) {
                 $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết hoặc không còn ở bước chọn gói.");
                 return;
             }
             $pkg = \App\Models\ServicePackage::with('category')->find((int) $m[1]);
             if (!$pkg) {
-                $this->bot->sendMessage($chatId, "❌ Gói này không còn tồn tại. Gõ keyword khác:");
+                $this->bot->sendMessage($chatId, "❌ Gói này không còn tồn tại. Quay lại chọn lại:");
+                $this->sendCategoryPicker($chatId);
                 return;
             }
             $this->selectServicePackage($chatId, $pkg, $state['data'] ?? []);
             return;
         }
 
-        // Callback khác (chưa hỗ trợ)
+        // Click trang giữa (📄 1/3) — không làm gì
+        if ($cbData === 'noop') return;
+
+        // Callback khác chưa hỗ trợ
         Log::info('Telegram callback_query unknown', ['data' => $cbData]);
+    }
+
+    /**
+     * Gửi inline keyboard với list categories có active packages.
+     */
+    private function sendCategoryPicker(int|string $chatId): void
+    {
+        $cats = \App\Models\ServiceCategory::query()
+            ->withCount(['servicePackages as active_count' => fn($q) => $q->where('is_active', true)])
+            ->having('active_count', '>', 0)
+            ->orderBy('name')
+            ->get();
+
+        if ($cats->isEmpty()) {
+            $this->bot->sendMessage(
+                $chatId,
+                "❌ Chưa có danh mục nào. Hãy gõ <b>keyword</b> để search trực tiếp:"
+            );
+            return;
+        }
+
+        $buttons = [];
+        foreach ($cats as $cat) {
+            $buttons[] = [[
+                'text' => "📂 {$cat->name} ({$cat->active_count} gói)",
+                'callback_data' => "cat_{$cat->id}_p1",
+            ]];
+        }
+
+        $this->bot->sendMessage(
+            $chatId,
+            "📦 <b>Bước 4/6:</b> Chọn gói dịch vụ\n\n"
+                . "<b>2 cách:</b>\n"
+                . "• Click 📂 danh mục bên dưới\n"
+                . "• Hoặc gõ <b>keyword</b> để search nhanh (vd <code>claude</code>, <code>chatgpt</code>)",
+            ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
+        );
+    }
+
+    /**
+     * Gửi inline keyboard list packages trong 1 category, paginate 8/page.
+     */
+    private function sendPackagesInCategory(int|string $chatId, int $categoryId, int $page = 1): void
+    {
+        $perPage = 8;
+
+        $cat = \App\Models\ServiceCategory::find($categoryId);
+        if (!$cat) {
+            $this->bot->sendMessage($chatId, "❌ Danh mục không tồn tại.");
+            return;
+        }
+
+        $query = \App\Models\ServicePackage::active()->where('category_id', $categoryId);
+        $total = (clone $query)->count();
+        if ($total === 0) {
+            $this->bot->sendMessage($chatId, "📭 Danh mục <b>{$cat->name}</b> chưa có gói nào active.");
+            return;
+        }
+
+        $totalPages = max(1, (int) ceil($total / $perPage));
+        $page = max(1, min($page, $totalPages));
+
+        $packages = $query
+            ->orderBy('name')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        $buttons = [];
+        foreach ($packages as $pkg) {
+            $type = $this->shortAccountType((string) $pkg->account_type);
+            $buttons[] = [[
+                'text' => "{$pkg->name} · {$type}",
+                'callback_data' => "pkg_{$pkg->id}",
+            ]];
+        }
+
+        // Hàng paginate (chỉ nếu có nhiều page)
+        if ($totalPages > 1) {
+            $navRow = [];
+            if ($page > 1) {
+                $navRow[] = ['text' => '« Trước', 'callback_data' => "cat_{$categoryId}_p" . ($page - 1)];
+            }
+            $navRow[] = ['text' => "📄 {$page}/{$totalPages}", 'callback_data' => 'noop'];
+            if ($page < $totalPages) {
+                $navRow[] = ['text' => 'Sau »', 'callback_data' => "cat_{$categoryId}_p" . ($page + 1)];
+            }
+            $buttons[] = $navRow;
+        }
+
+        // Quay lại danh mục
+        $buttons[] = [['text' => '↩ Quay lại danh mục', 'callback_data' => 'cats']];
+
+        $this->bot->sendMessage(
+            $chatId,
+            "📦 <b>{$cat->name}</b> — {$total} gói (trang {$page}/{$totalPages})\n"
+                . "<i>Click 1 gói để chọn, hoặc gõ keyword để search:</i>",
+            ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
+        );
     }
 
     /**
