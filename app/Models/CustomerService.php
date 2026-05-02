@@ -23,9 +23,55 @@ class CustomerService extends Model
         static::created($clearCache);
         static::updated($clearCache);
         static::deleted($clearCache);
+
+        // Auto-gen order_code khi tạo CS — đảm bảo mọi đơn đều có mã DH-YYMMDD-XXX
+        static::creating(function (CustomerService $cs) {
+            if (!empty($cs->order_code)) {
+                return; // đã có (vd webhook copy từ PendingOrder)
+            }
+            // Nếu link với PendingOrder → copy luôn order_code
+            if (!empty($cs->pending_order_id)) {
+                $po = PendingOrder::find($cs->pending_order_id);
+                if ($po && !empty($po->order_code)) {
+                    $cs->order_code = $po->order_code;
+                    return;
+                }
+            }
+            // Còn lại — gen mới theo today (giống PendingOrder::generateOrderCode nhưng query
+            // cả 2 bảng để tránh trùng)
+            $cs->order_code = static::generateOrderCode();
+        });
+    }
+
+    /**
+     * Sinh mã đơn DH-yymmdd-XXX (XXX = 3 chữ số sequence trong ngày).
+     * Race-safe nhờ UNIQUE constraint của order_code — collision sẽ bị retry.
+     */
+    public static function generateOrderCode(?\DateTimeInterface $date = null): string
+    {
+        $date = $date ?? now();
+        $prefix = 'DH-' . $date->format('ymd') . '-';
+
+        // Lấy seq lớn nhất trong ngày từ cả 2 bảng (cs + pending_orders)
+        $maxFromCs = static::where('order_code', 'like', $prefix . '%')
+            ->orderByDesc('order_code')
+            ->value('order_code');
+
+        $maxFromPo = PendingOrder::where('order_code', 'like', $prefix . '%')
+            ->orderByDesc('order_code')
+            ->value('order_code');
+
+        $maxSeq = 0;
+        foreach ([$maxFromCs, $maxFromPo] as $code) {
+            if ($code && preg_match('/-(\d+)$/', $code, $m)) {
+                $maxSeq = max($maxSeq, (int) $m[1]);
+            }
+        }
+        return $prefix . str_pad((string) ($maxSeq + 1), 3, '0', STR_PAD_LEFT);
     }
 
     protected $fillable = [
+        'order_code',
         'customer_id',
         'service_package_id',
         'assigned_by',

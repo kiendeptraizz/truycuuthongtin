@@ -152,6 +152,12 @@
                                         <div class="row">
                                             <!-- Tên dịch vụ & Family -->
                                             <div class="col-md-4 mb-2 mb-md-0">
+                                                @if($service->order_code)
+                                                <small class="d-block mb-1">
+                                                    <i class="fas fa-receipt text-success me-1"></i>
+                                                    Mã đơn: <code class="text-success">{{ $service->order_code }}</code>
+                                                </small>
+                                                @endif
                                                 <strong>{{ $service->servicePackage->name }}</strong>
                                                 <br>
                                                 <small class="text-muted">{{ $service->servicePackage->category->name ?? 'Chưa phân loại' }}</small>

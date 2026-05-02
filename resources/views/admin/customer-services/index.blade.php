@@ -571,6 +571,7 @@
                                             <input type="checkbox" id="selectAll" class="form-check-input" title="Chọn tất cả">
                                         </th>
                                         <th class="sticky-column" style="position: sticky; left: 40px; background: #f8f9fa; z-index: 10; min-width: 120px;">Thao tác</th>
+                                        <th style="min-width: 130px;">Mã đơn</th>
                                         <th style="min-width: 150px;">Khách hàng</th>
                                         <th style="min-width: 180px;">Dịch vụ</th>
                                         <th style="min-width: 150px;">Family</th>
@@ -676,6 +677,14 @@
                                                     </button>
                                                 </div>
                                             </div>
+                                        </td>
+                                        <!-- Cột Mã đơn -->
+                                        <td>
+                                            @if($service->order_code)
+                                                <code class="text-success">{{ $service->order_code }}</code>
+                                            @else
+                                                <span class="text-muted small">—</span>
+                                            @endif
                                         </td>
                                         <!-- Cột Khách hàng -->
                                         <td>

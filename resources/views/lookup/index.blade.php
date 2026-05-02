@@ -897,7 +897,7 @@
                                     type="text"
                                     class="search-input"
                                     id="searchInput"
-                                    placeholder="Nhập mã KH, email, SĐT hoặc tên..."
+                                    placeholder="Nhập mã đơn (DH-XXX), mã KH (KUN/CTV), email, SĐT hoặc tên..."
                                     autocomplete="off"
                                     required>
                                 <button type="submit" class="search-btn" id="searchBtn">
@@ -911,7 +911,7 @@
                     <div class="search-hints mt-3 text-center">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
-                            Bạn có thể tra cứu bằng: <strong>Mã khách hàng</strong>, <strong>Email</strong>, <strong>Số điện thoại</strong> hoặc <strong>Tên</strong>
+                            Tra cứu bằng: <strong>Mã đơn</strong> (DH-XXX), <strong>Mã khách hàng</strong> (KUN/CTV), <strong>Email</strong>, <strong>Số điện thoại</strong>
                         </small>
                     </div>
                 </div>
@@ -1154,6 +1154,7 @@
                             <div class="service-title-group">
                                 <span class="service-category">${service.category_name || 'Dịch vụ'}</span>
                                 <h4 class="service-name">${service.package_name}</h4>
+                                ${service.order_code ? `<small class="text-muted"><i class="fas fa-receipt me-1"></i>Mã đơn: <code>${service.order_code}</code></small>` : ''}
                             </div>
                                 </div>
 
@@ -1161,7 +1162,7 @@
                             <i class="${status.icon}"></i>
                             <span>${status.text}</span>
                                     </div>
-                                    
+
                         <div class="service-details">
                             <div class="detail-row">
                                 <span class="detail-label">

@@ -123,6 +123,17 @@
                             </div>
                             <div class="card-body">
                                 <div class="row g-3">
+                                    <div class="col-12 mb-2 pb-2 border-bottom">
+                                        <strong>📋 Mã đơn hàng:</strong>
+                                        @if($customerService->order_code)
+                                            <code class="bg-success bg-opacity-10 text-success px-2 py-1 rounded fs-6 ms-2">{{ $customerService->order_code }}</code>
+                                            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="navigator.clipboard.writeText('{{ $customerService->order_code }}'); this.innerHTML='<i class=\'fas fa-check\'></i> Đã copy'" title="Copy mã đơn">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        @else
+                                            <span class="text-muted ms-2">— (đơn cũ chưa có mã)</span>
+                                        @endif
+                                    </div>
                                     <div class="col-md-4">
                                         <strong>💰 Số tiền đơn:</strong>
                                         <div class="text-success fw-bold">

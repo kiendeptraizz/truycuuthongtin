@@ -129,13 +129,16 @@ class CustomerServiceController extends Controller
         if ($request->filled('search')) {
             $search = trim($request->search);
             $query->where(function ($q) use ($search) {
-                // Tìm kiếm trong thông tin khách hàng
-                $q->whereHas('customer', function ($subQ) use ($search) {
-                    $subQ->where('name', 'like', "%{$search}%")
-                        ->orWhere('customer_code', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%");
-                })
+                // Tìm theo mã đơn DH-YYMMDD-XXX (cả format có/không dấu gạch)
+                $q->where('order_code', 'like', "%{$search}%")
+                    ->orWhereRaw('REPLACE(order_code, "-", "") LIKE ?', ['%' . str_replace('-', '', $search) . '%'])
+                    // Tìm kiếm trong thông tin khách hàng
+                    ->orWhereHas('customer', function ($subQ) use ($search) {
+                        $subQ->where('name', 'like', "%{$search}%")
+                            ->orWhere('customer_code', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    })
                     // Tìm kiếm trong email đăng nhập dịch vụ (không phân biệt hoa thường)
                     ->orWhereRaw('LOWER(login_email) LIKE ?', ['%' . strtolower($search) . '%'])
                     // Tìm kiếm trong tên gói dịch vụ
