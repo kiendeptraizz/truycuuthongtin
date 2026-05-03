@@ -864,35 +864,34 @@ class TelegramListenCommand extends Command
         // Build caption + QR tổng
         $totalAmount = (int) array_sum(array_column($drafts, 'amount'));
         $groupCode = $result['groupCode'];
-        $bankShort = $this->qr->bankShortName();
-        $accNumber = $this->qr->accountNumber();
-        $accName = $this->qr->accountName();
         $qrUrl = $this->qr->buildQrUrl($totalAmount, $groupCode);
 
-        // Liệt kê từng đơn trong caption
-        $orderLines = collect($result['orders'])->map(function ($item) {
-            $order = $item['order'];
-            $order->loadMissing('servicePackage');
-            $pkgName = $order->servicePackage?->name ?? 'Gói chưa rõ';
-            return "  • <code>{$order->order_code}</code> — " . e($pkgName)
-                . " (" . formatShortAmount((int) $order->amount) . ")";
-        })->implode("\n");
-
-        $customerLine = '';
+        // Header: lô + KH + tổng tiền
+        $header = [
+            "🛒 <b>LÔ ĐƠN — " . count($drafts) . " dịch vụ</b>",
+            "🏷 Mã lô: <code>{$groupCode}</code>",
+        ];
         if (!empty($drafts[0]['customer_code']) && !empty($drafts[0]['customer_name'])) {
-            $customerLine = "👤 KH: <code>{$drafts[0]['customer_code']}</code> — <b>" . e($drafts[0]['customer_name']) . "</b>\n";
+            $header[] = "👤 Khách hàng: <code>{$drafts[0]['customer_code']}</code> — <b>" . e($drafts[0]['customer_name']) . "</b>";
         }
+        $header[] = "💵 Tổng tiền: <b>" . formatShortAmount($totalAmount) . "</b>";
 
-        $caption = "🛒 <b>LÔ ĐƠN — " . count($drafts) . " dịch vụ</b>\n\n"
-            . $customerLine
-            . "🏷 Mã lô: <code>{$groupCode}</code>\n\n"
-            . $orderLines . "\n\n"
-            . "💵 <b>Tổng tiền:</b> " . formatShortAmount($totalAmount)
-            . " (<code>" . number_format($totalAmount, 0, ',', '.') . "đ</code>)\n"
-            . "🏦 <b>Ngân hàng:</b> {$bankShort}\n"
-            . "💳 <b>Số TK:</b> <code>{$accNumber}</code>\n"
-            . "👤 <b>Chủ TK:</b> {$accName}\n\n"
-            . "<b><i>📌 Khách CK đúng số tiền + đúng nội dung <code>{$groupCode}</code> để bot tự xác nhận. Quét QR sẽ điền sẵn — quý khách không cần sửa.</i></b>";
+        // Block từng đơn — format giống đơn lẻ (✅ mã đơn + 📌 dịch vụ/giá/email/...)
+        $blocks = collect($result['orders'])->map(function ($item) {
+            $order = $item['order'];
+            $draft = $item['draft'];
+            $lines = ["✅ <b>{$order->order_code}</b>"];
+            $lines = array_merge($lines, $this->buildOrderDetailsLines($draft));
+            return implode("\n", $lines);
+        })->implode("\n\n──────\n\n");
+
+        $tail = "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
+
+        $caption = implode("\n", $header)
+            . "\n\n──────\n\n"
+            . $blocks
+            . "\n\n──────\n\n"
+            . $tail;
 
         $this->bot->sendPhoto($chatId, $qrUrl, $caption);
         $this->bot->sendMessage(
@@ -1751,6 +1750,24 @@ class TelegramListenCommand extends Command
     {
         $tail = "\n\n<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
+        $lines = [
+            "✅ <b>{$order->order_code}</b>",
+            '',
+            "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>{$data['customer_name']}</b>",
+        ];
+        $lines = array_merge($lines, $this->buildOrderDetailsLines($data));
+
+        return implode("\n", $lines) . $tail;
+    }
+
+    /**
+     * Trả về các dòng mô tả 1 đơn (KHÔNG có header order_code, KHÔNG có customer line,
+     * KHÔNG có tail). Reuse cho cả buildCaption (đơn lẻ) lẫn finalizeMultiOrder (lô).
+     *
+     * Lines: 📌 Tên dịch vụ / 📌 Giá / 📌 Email / 📌 Mã nhóm (nếu có) / 📌 Thời hạn / 📌 Bảo hành (nếu có)
+     */
+    private function buildOrderDetailsLines(array $data): array
+    {
         $today = now();
         $expiresAt = match ($data['duration_unit'] ?? 'day') {
             'year'  => $today->copy()->addYears((int) ($data['duration_value'] ?? 0)),
@@ -1759,9 +1776,6 @@ class TelegramListenCommand extends Command
         };
 
         $lines = [
-            "✅ <b>{$order->order_code}</b>",
-            '',
-            "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>{$data['customer_name']}</b>",
             "📌 Tên dịch vụ: <b>{$data['service_name']}</b>",
             "📌 Giá dịch vụ: <b>" . formatShortAmount($data['amount']) . "</b>",
             "📌 Email tài khoản: <code>{$data['email']}</code>",
@@ -1784,7 +1798,7 @@ class TelegramListenCommand extends Command
             $lines[] = "📌 Bảo hành: <b>{$data['warranty_label']}</b>";
         }
 
-        return implode("\n", $lines) . $tail;
+        return $lines;
     }
 
     // ========================================================================
