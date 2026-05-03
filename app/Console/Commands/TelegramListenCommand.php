@@ -335,8 +335,11 @@ class TelegramListenCommand extends Command
             ->first();
 
         // Fallback: tìm CS theo order_code (đơn web nhanh không qua PO)
+        // withTrashed() để CS đã bị soft-delete vẫn lookup được — show view có
+        // badge "đã trashed" thay vì user nhận thông báo "không tìm thấy".
         if (!$order) {
-            $cs = \App\Models\CustomerService::with(['customer', 'servicePackage.category'])
+            $cs = \App\Models\CustomerService::withTrashed()
+                ->with(['customer', 'servicePackage.category'])
                 ->where('order_code', $code)
                 ->first();
             if ($cs) {
@@ -349,14 +352,16 @@ class TelegramListenCommand extends Command
 
         // ƯU TIÊN: nếu PO đã có CS link (đơn đã activate thành dịch vụ) → show CS view
         // để có menu refund + warranty. View PO chỉ phù hợp cho đơn pending.
+        // withTrashed() — CS soft-deleted vẫn render CS view có badge cảnh báo.
         if ($order->customer_service_id) {
-            $cs = \App\Models\CustomerService::with(['customer', 'servicePackage.category'])
+            $cs = \App\Models\CustomerService::withTrashed()
+                ->with(['customer', 'servicePackage.category'])
                 ->find($order->customer_service_id);
             if ($cs) {
                 $this->sendCustomerServiceDetails($chatId, $cs);
                 return;
             }
-            // CS bị xoá đâu rồi (orphan) → fall through render PO view
+            // CS hard-deleted (orphan) → fall through render PO view
         }
 
         $statusEmoji = match ($order->status) {
@@ -463,9 +468,15 @@ class TelegramListenCommand extends Command
             $lines[] = "↩️ Đã hoàn: <b>" . formatShortAmount((int) $cs->refund_amount) . "</b> ({$cs->refunded_at->format('d/m/Y')})";
         }
 
-        // Action menu inline: chỉ hiện cho CS chưa cancelled
+        // Cảnh báo nếu CS đã chuyển thùng rác (soft-delete)
+        $isTrashed = method_exists($cs, 'trashed') ? $cs->trashed() : ($cs->deleted_at !== null);
+        if ($isTrashed) {
+            $lines[] = "🗑 <b>Đã chuyển vào thùng rác</b> ({$cs->deleted_at->format('d/m/Y H:i')}) — khôi phục tại <code>/admin/customer-services/trash</code>";
+        }
+
+        // Action menu inline: chỉ hiện cho CS chưa cancelled VÀ chưa trashed
         $extras = [];
-        if ($cs->status !== 'cancelled') {
+        if ($cs->status !== 'cancelled' && !$isTrashed) {
             $rows = [];
             // Hàng 1: Tính tiền hoàn (nếu có order_amount > 0)
             if ((int) $cs->order_amount > 0) {
