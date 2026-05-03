@@ -75,6 +75,16 @@
                                         <i class="fas fa-history me-1"></i>
                                         Lịch sử thay đổi
                                     </a>
+                                    @if($customerService->status !== 'cancelled')
+                                        <a href="{{ route('admin.customer-services.warranty', $customerService) }}" class="btn btn-sm btn-outline-info"
+                                           title="Lịch sử + ghi nhận bảo hành (đổi TK/gia hạn/ghi chú)">
+                                            <i class="fas fa-shield-alt me-1"></i>
+                                            Bảo hành
+                                            @if($customerService->warranties_count ?? 0)
+                                                <span class="badge bg-info ms-1">{{ $customerService->warranties_count }}</span>
+                                            @endif
+                                        </a>
+                                    @endif
                                     @if($customerService->refunded_at)
                                         {{-- Đã hoàn — show nút xám với số tiền đã hoàn --}}
                                         <a href="{{ route('admin.customer-services.refund', $customerService) }}" class="btn btn-sm btn-outline-secondary"

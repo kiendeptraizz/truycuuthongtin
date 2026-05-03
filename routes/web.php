@@ -146,6 +146,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
         ->name('customer-services.refund');
     Route::post('customer-services/{customerService}/refund', [\App\Http\Controllers\Admin\RefundController::class, 'confirm'])
         ->name('customer-services.refund.confirm');
+
+    // Bảo hành (đổi TK / gia hạn / ghi chú) — list lịch sử + form thêm mới
+    Route::get('customer-services/{customerService}/warranty', [\App\Http\Controllers\Admin\WarrantyController::class, 'index'])
+        ->name('customer-services.warranty');
+    Route::post('customer-services/{customerService}/warranty', [\App\Http\Controllers\Admin\WarrantyController::class, 'store'])
+        ->name('customer-services.warranty.store');
     Route::get('customer-services/trash', [CustomerServiceController::class, 'trash'])
         ->name('customer-services.trash');
     Route::post('customer-services/trash/{id}/restore', [CustomerServiceController::class, 'restore'])

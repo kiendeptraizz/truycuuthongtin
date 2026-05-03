@@ -370,14 +370,22 @@ class TelegramListenCommand extends Command
         $statusEmoji = match ($cs->status) {
             'active' => '✅',
             'expired' => '⏰',
-            'cancelled' => '❌',
+            'cancelled' => $cs->refunded_at ? '↩️' : '❌',
             'pending' => '⏳',
             default => '❓',
+        };
+        $statusLabel = match (true) {
+            $cs->status === 'cancelled' && $cs->refunded_at !== null => 'Đã hoàn tiền',
+            $cs->status === 'cancelled' => 'Đã huỷ',
+            $cs->status === 'active' => 'Đang hoạt động',
+            $cs->status === 'expired' => 'Đã hết hạn',
+            $cs->status === 'pending' => 'Chờ thanh toán',
+            default => $cs->status,
         };
 
         $lines = [
             "📋 <b>{$cs->order_code}</b> (dịch vụ KH #{$cs->id})",
-            "{$statusEmoji} Trạng thái: <b>{$cs->status}</b>",
+            "{$statusEmoji} Trạng thái: <b>{$statusLabel}</b>",
         ];
         if ($cs->customer) {
             $lines[] = "👤 Khách: <code>{$cs->customer->customer_code}</code> — <b>" . e($cs->customer->name) . "</b>";
@@ -400,8 +408,30 @@ class TelegramListenCommand extends Command
         if ($cs->warranty_days) {
             $lines[] = "🛡 Bảo hành: {$cs->warranty_days} ngày";
         }
+        if ($cs->refunded_at) {
+            $lines[] = "↩️ Đã hoàn: <b>" . formatShortAmount((int) $cs->refund_amount) . "</b> ({$cs->refunded_at->format('d/m/Y')})";
+        }
 
-        $this->bot->sendMessage($chatId, implode("\n", $lines));
+        // Action menu inline: chỉ hiện cho CS chưa cancelled
+        $extras = [];
+        if ($cs->status !== 'cancelled') {
+            $rows = [];
+            // Hàng 1: Tính tiền hoàn (nếu có order_amount > 0)
+            if ((int) $cs->order_amount > 0) {
+                $rows[] = [
+                    ['text' => '💰 Tính tiền hoàn', 'callback_data' => "cs_refund_{$cs->id}"],
+                ];
+            }
+            // Hàng 2: Bảo hành
+            $rows[] = [
+                ['text' => '🛡 Bảo hành đơn hàng', 'callback_data' => "cs_warranty_{$cs->id}"],
+            ];
+            if (!empty($rows)) {
+                $extras['reply_markup'] = json_encode(['inline_keyboard' => $rows]);
+            }
+        }
+
+        $this->bot->sendMessage($chatId, implode("\n", $lines), $extras);
     }
 
     /**
@@ -483,6 +513,68 @@ class TelegramListenCommand extends Command
                 }
                 $this->clearState($chatId);
                 $this->sendQuickQr($chatId, $amount);
+                return;
+
+            case 'warranty_email':
+                $email = trim($text);
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Email không hợp lệ. Gõ lại email TK mới hoặc bấm <b>⏭ Bỏ qua</b>.",
+                        ['reply_markup' => json_encode([
+                            'inline_keyboard' => [[
+                                ['text' => '⏭ Bỏ qua (không đổi TK)', 'callback_data' => 'wr_skip_email'],
+                            ]],
+                        ])]
+                    );
+                    return;
+                }
+                $data = $state['data'] ?? [];
+                $data['replacement_email'] = $email;
+                $this->setState($chatId, ['step' => 'warranty_password', 'data' => $data]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "🔑 Nhập <b>mật khẩu TK mới</b> (gõ <code>-</code> nếu chưa có hoặc giữ pass cũ):"
+                );
+                return;
+
+            case 'warranty_password':
+                $pwd = trim($text);
+                $data = $state['data'] ?? [];
+                $data['replacement_password'] = ($pwd === '-' || $pwd === '') ? null : $pwd;
+                $this->setState($chatId, ['step' => 'warranty_extend', 'data' => $data]);
+                $this->promptWarrantyExtend($chatId);
+                return;
+
+            case 'warranty_extend':
+                $days = (int) preg_replace('/\D/', '', $text);
+                if ($days < 0 || $days > 3650) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Số ngày phải từ 0 đến 3650. Gõ lại hoặc bấm <b>⏭ Bỏ qua</b>.",
+                        ['reply_markup' => json_encode([
+                            'inline_keyboard' => [[
+                                ['text' => '⏭ Bỏ qua (không gia hạn)', 'callback_data' => 'wr_skip_extend'],
+                            ]],
+                        ])]
+                    );
+                    return;
+                }
+                $data = $state['data'] ?? [];
+                $data['extended_days'] = $days > 0 ? $days : null;
+                $this->setState($chatId, ['step' => 'warranty_note', 'data' => $data]);
+                $this->promptWarrantyNote($chatId);
+                return;
+
+            case 'warranty_note':
+                $note = trim($text);
+                if (mb_strlen($note) < 3) {
+                    $this->bot->sendMessage($chatId, "❌ Ghi chú quá ngắn (≥ 3 ký tự). Gõ lại:");
+                    return;
+                }
+                $data = $state['data'] ?? [];
+                $this->finalizeWarranty($chatId, $data, $note);
+                $this->clearState($chatId);
                 return;
 
             case 'awaiting_multi_count':
@@ -1053,6 +1145,28 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Click "💰 Tính tiền hoàn" — gửi preview refund của CS
+        if (preg_match('/^cs_refund_(\d+)$/', $cbData, $m)) {
+            $this->handleRefundPreviewCallback($chatId, (int) $m[1]);
+            return;
+        }
+
+        // Click "🛡 Bảo hành đơn hàng" — start warranty conversation
+        if (preg_match('/^cs_warranty_(\d+)$/', $cbData, $m)) {
+            $this->handleWarrantyStartCallback($chatId, $userId, (int) $m[1]);
+            return;
+        }
+
+        // Click "Bỏ qua TK mới" trong warranty flow
+        if ($cbData === 'wr_skip_email') {
+            $this->handleWarrantySkipEmail($chatId);
+            return;
+        }
+        if ($cbData === 'wr_skip_extend') {
+            $this->handleWarrantySkipExtend($chatId);
+            return;
+        }
+
         // Callback khác chưa hỗ trợ
         Log::info('Telegram callback_query unknown', ['data' => $cbData]);
     }
@@ -1176,6 +1290,208 @@ class TelegramListenCommand extends Command
             $chatId,
             "💰 Đã đánh dấu đơn <code>{$order->order_code}</code> ("
                 . formatShortAmount((int) $order->amount) . ") là <b>đã thanh toán</b>.{$csNote}"
+        );
+    }
+
+    /**
+     * User bấm "💰 Tính tiền hoàn" — gửi preview + link web để xác nhận.
+     */
+    private function handleRefundPreviewCallback(int|string $chatId, int $csId): void
+    {
+        $cs = \App\Models\CustomerService::with(['customer', 'servicePackage'])->find($csId);
+        if (!$cs) {
+            $this->bot->sendMessage($chatId, "❌ Dịch vụ không tồn tại.");
+            return;
+        }
+
+        $calc = app(\App\Services\RefundCalculator::class)->compute($cs);
+
+        if (!$calc['ok']) {
+            $reasonMap = [
+                'already_refunded' => 'Đơn đã được hoàn tiền trước đó',
+                'already_cancelled' => 'Đơn đã huỷ — không thể hoàn',
+                'no_order_amount' => 'Đơn không có số tiền dịch vụ → không tính được',
+                'no_expires_at' => 'Đơn thiếu ngày hết hạn → không tính được',
+            ];
+            $reason = $reasonMap[$calc['reason'] ?? ''] ?? ($calc['reason'] ?? 'Không xác định');
+            $this->bot->sendMessage($chatId, "⚠️ Không thể tính tiền hoàn: {$reason}.");
+            return;
+        }
+
+        $lines = [
+            "💰 <b>TÍNH TIỀN HOÀN</b> — đơn <code>{$cs->order_code}</code>",
+            "",
+            "💵 Số tiền đơn: <b>" . formatShortAmount((int) ($calc['order_amount'] ?? 0)) . "</b>",
+        ];
+
+        if ($calc['mode'] === 'full') {
+            $lines[] = "🟢 Đơn chưa kích hoạt → hoàn <b>FULL</b>.";
+        } elseif ($calc['mode'] === 'expired') {
+            $lines[] = "🔴 Đơn đã hết hạn → hoàn <b>0đ</b>.";
+        } else {
+            // partial
+            $lines[] = "📅 Tổng thời hạn: {$calc['total_days']} ngày";
+            $lines[] = "✅ Đã dùng: {$calc['days_used']} ngày";
+            $lines[] = "⏳ Còn lại: <b>{$calc['days_remaining']} ngày</b> ({$calc['percent_remaining']}%)";
+        }
+
+        $lines[] = "";
+        $lines[] = "💸 <b>Hoàn đề xuất: " . formatShortAmount((int) ($calc['refund_amount'] ?? 0)) . "</b>";
+        $lines[] = "";
+        $appUrl = rtrim(config('app.url'), '/');
+        $lines[] = "🔗 <a href=\"{$appUrl}/admin/customer-services/{$cs->id}/refund\">Mở web để xác nhận hoàn tiền</a>";
+
+        $this->bot->sendMessage(
+            $chatId,
+            implode("\n", $lines),
+            ['disable_web_page_preview' => true]
+        );
+    }
+
+    /**
+     * User bấm "🛡 Bảo hành" — start state machine: hỏi email TK mới (hoặc skip),
+     * gia hạn ngày (hoặc skip), ghi chú.
+     */
+    private function handleWarrantyStartCallback(int|string $chatId, string $userId, int $csId): void
+    {
+        $cs = \App\Models\CustomerService::find($csId);
+        if (!$cs) {
+            $this->bot->sendMessage($chatId, "❌ Dịch vụ không tồn tại.");
+            return;
+        }
+        if ($cs->status === 'cancelled') {
+            $this->bot->sendMessage($chatId, "⚠️ Đơn đã huỷ — không thể bảo hành.");
+            return;
+        }
+
+        // Set state warranty step 1: email mới
+        $this->setState($chatId, [
+            'step' => 'warranty_email',
+            'data' => [
+                'cs_id' => $csId,
+                'order_code' => $cs->order_code,
+                'telegram_user_id' => $userId,
+            ],
+        ]);
+
+        $this->bot->sendMessage(
+            $chatId,
+            "🛡 <b>BẢO HÀNH</b> — đơn <code>{$cs->order_code}</code>\n\n"
+                . "Email TK hiện tại: <code>" . e($cs->login_email ?? '—') . "</code>\n\n"
+                . "<b>Bước 1/3:</b> Nhập email TK <b>mới</b> (nếu đổi TK).",
+            ['reply_markup' => json_encode([
+                'inline_keyboard' => [[
+                    ['text' => '⏭ Bỏ qua (không đổi TK)', 'callback_data' => 'wr_skip_email'],
+                ]],
+            ])]
+        );
+    }
+
+    private function handleWarrantySkipEmail(int|string $chatId): void
+    {
+        $state = $this->getState($chatId);
+        if (!$state || ($state['step'] ?? '') !== 'warranty_email') return;
+
+        $data = $state['data'] ?? [];
+        $data['replacement_email'] = null;
+        $data['replacement_password'] = null;
+
+        $this->setState($chatId, ['step' => 'warranty_extend', 'data' => $data]);
+        $this->promptWarrantyExtend($chatId);
+    }
+
+    private function handleWarrantySkipExtend(int|string $chatId): void
+    {
+        $state = $this->getState($chatId);
+        if (!$state || ($state['step'] ?? '') !== 'warranty_extend') return;
+
+        $data = $state['data'] ?? [];
+        $data['extended_days'] = null;
+
+        $this->setState($chatId, ['step' => 'warranty_note', 'data' => $data]);
+        $this->promptWarrantyNote($chatId);
+    }
+
+    private function promptWarrantyExtend(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "<b>Bước 2/3:</b> Số ngày <b>gia hạn thêm</b> cho đơn (cộng vào ngày hết hạn hiện tại).\n"
+                . "<i>VD: <code>7</code> = thêm 7 ngày, <code>30</code> = thêm 30 ngày.</i>",
+            ['reply_markup' => json_encode([
+                'inline_keyboard' => [[
+                    ['text' => '⏭ Bỏ qua (không gia hạn)', 'callback_data' => 'wr_skip_extend'],
+                ]],
+            ])]
+        );
+    }
+
+    private function promptWarrantyNote(int|string $chatId): void
+    {
+        $this->bot->sendMessage(
+            $chatId,
+            "<b>Bước 3/3:</b> Nhập <b>ghi chú bảo hành</b> (lý do, mô tả lỗi, …)\n"
+                . "<i>VD: \"TK lỗi đăng nhập, đã đổi TK mới\" / \"Khách báo lỗi tạm, đã hỗ trợ qua Zalo\".</i>"
+        );
+    }
+
+    /**
+     * Submit warranty từ bot — gọi WarrantyService rồi reply summary.
+     */
+    private function finalizeWarranty(int|string $chatId, array $data, string $note): void
+    {
+        $csId = $data['cs_id'] ?? null;
+        if (!$csId) {
+            $this->bot->sendMessage($chatId, "❌ State lỗi (thiếu cs_id). Hãy thử lại từ /dh.");
+            return;
+        }
+
+        $cs = \App\Models\CustomerService::find($csId);
+        if (!$cs) {
+            $this->bot->sendMessage($chatId, "❌ Dịch vụ không tồn tại.");
+            return;
+        }
+
+        $service = app(\App\Services\WarrantyService::class);
+        $result = $service->apply($cs, [
+            'replacement_email' => $data['replacement_email'] ?? null,
+            'replacement_password' => $data['replacement_password'] ?? null,
+            'extended_days' => $data['extended_days'] ?? null,
+            'note' => $note,
+            'actor_type' => 'bot',
+            'actor_id' => null,
+            'actor_label' => 'telegram:' . ($data['telegram_user_id'] ?? '?'),
+        ]);
+
+        if (!$result['ok']) {
+            $this->bot->sendMessage(
+                $chatId,
+                "❌ Lỗi ghi nhận bảo hành: " . ($result['error'] ?? '?')
+            );
+            return;
+        }
+
+        $lines = ["✅ <b>Đã ghi nhận bảo hành</b> cho đơn <code>{$cs->order_code}</code>"];
+        if (!empty($data['replacement_email'])) {
+            $lines[] = "📧 TK mới: <code>" . e($data['replacement_email']) . "</code>";
+        }
+        if (!empty($data['extended_days'])) {
+            $cs->refresh();
+            $lines[] = "⏰ Gia hạn thêm <b>{$data['extended_days']} ngày</b>";
+            if ($cs->expires_at) {
+                $lines[] = "🔴 Ngày hết hạn mới: <b>" . $cs->expires_at->format('d/m/Y') . "</b>";
+            }
+        }
+        $lines[] = "📝 " . e($note);
+
+        $appUrl = rtrim(config('app.url'), '/');
+        $lines[] = "";
+        $lines[] = "🔗 <a href=\"{$appUrl}/admin/customer-services/{$cs->id}/warranty\">Xem lịch sử bảo hành</a>";
+
+        $this->bot->sendMessage(
+            $chatId,
+            implode("\n", $lines),
+            ['disable_web_page_preview' => true]
         );
     }
 

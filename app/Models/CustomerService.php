@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
@@ -170,6 +171,11 @@ class CustomerService extends Model
     public function profit(): HasOne
     {
         return $this->hasOne(Profit::class);
+    }
+
+    public function warranties(): HasMany
+    {
+        return $this->hasMany(CustomerServiceWarranty::class)->orderByDesc('created_at');
     }
 
     // Kiểm tra xem dịch vụ có sắp hết hạn không (trong vòng 5 ngày)
