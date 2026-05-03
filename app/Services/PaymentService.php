@@ -123,6 +123,7 @@ class PaymentService
                 $delta = $totalAmount - $totalExpected;
 
                 $results = [];
+                $newlyPaidCount = 0; // số đơn ACTUALLY chuyển pending → paid lần này
                 foreach ($orders as $idx => $order) {
                     if ($order->paid_at !== null) {
                         $results[] = [
@@ -152,6 +153,7 @@ class PaymentService
                         'status' => $csId ? 'paid_and_activated' : 'paid_only',
                         'cs_id' => $csId,
                     ];
+                    $newlyPaidCount++;
                 }
 
                 Log::info('PaymentService: markGroupPaid completed', [
@@ -160,14 +162,17 @@ class PaymentService
                     'total_expected' => $totalExpected,
                     'delta' => $delta,
                     'order_count' => count($results),
+                    'newly_paid_count' => $newlyPaidCount,
                     'source' => $source,
                 ]);
 
                 return [
                     'ok' => true,
-                    'status' => 'group_paid',
+                    // Status 'group_already_paid' khi tất cả đơn đã paid trước đó (Pay2S retry)
+                    'status' => $newlyPaidCount > 0 ? 'group_paid' : 'group_already_paid',
                     'group_code' => $groupCode,
                     'count' => count($results),
+                    'newly_paid_count' => $newlyPaidCount,
                     'orders' => $results,
                     'total_expected' => $totalExpected,
                     'delta' => $delta,

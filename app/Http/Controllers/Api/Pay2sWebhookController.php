@@ -83,8 +83,16 @@ class Pay2sWebhookController extends Controller
         }
 
         // Idempotent layer 1 — bankTxId duplicate
-        if ($bankTxId !== '' && PendingOrder::where('bank_transaction_id', $bankTxId)->exists()) {
-            return ['ok' => true, 'skipped' => 'duplicate', 'tx' => $bankTxId];
+        // - Đơn lẻ: bank_transaction_id = $bankTxId exact
+        // - Lô đơn: bank_transaction_id = "$bankTxId-0", "$bankTxId-1", ... (suffix index)
+        // → check cả 2 pattern để chặn Pay2S retry trước khi vào DB transaction.
+        if ($bankTxId !== '') {
+            $duplicate = PendingOrder::where('bank_transaction_id', $bankTxId)
+                ->orWhere('bank_transaction_id', 'LIKE', $bankTxId . '-%')
+                ->exists();
+            if ($duplicate) {
+                return ['ok' => true, 'skipped' => 'duplicate', 'tx' => $bankTxId];
+            }
         }
         if ($bankTxId === '') {
             Log::warning('Pay2S webhook: empty bankTxId, fallback to paid_at lock check', [
@@ -105,7 +113,9 @@ class Pay2sWebhookController extends Controller
                 'pay2s'
             );
 
-            if ($groupResult['ok'] && $groupResult['count'] > 0) {
+            // Chỉ gửi noti khi có đơn thực sự chuyển pending → paid LẦN NÀY.
+            // Tránh spam noti khi Pay2S retry webhook (tất cả đơn đã paid trước đó).
+            if ($groupResult['ok'] && ($groupResult['newly_paid_count'] ?? 0) > 0) {
                 $this->sendGroupPaidNotification($bot, $groupCode, $amount, $groupResult);
             }
 
