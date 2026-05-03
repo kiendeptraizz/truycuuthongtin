@@ -589,15 +589,17 @@
                                     // Tính toán trạng thái theo logic mới
                                     $daysRemaining = $service->getDaysRemaining();
 
-                                    // Xác định trạng thái
-                                    if (!$service->expires_at) {
-                                    $status = 'active'; // Không giới hạn thời gian
+                                    // Ưu tiên column status DB cho cancelled (admin huỷ / refund)
+                                    if ($service->status === 'cancelled') {
+                                        $status = $service->refunded_at ? 'refunded' : 'cancelled';
+                                    } elseif (!$service->expires_at) {
+                                        $status = 'active'; // Không giới hạn thời gian
                                     } elseif ($service->expires_at->startOfDay()->isPast()) {
-                                    $status = 'expired'; // Đã hết hạn
+                                        $status = 'expired'; // Đã hết hạn
                                     } elseif ($service->isExpiringSoon()) {
-                                    $status = 'expiring'; // Sắp hết hạn (5 ngày)
+                                        $status = 'expiring'; // Sắp hết hạn (5 ngày)
                                     } else {
-                                    $status = 'active'; // Đang hoạt động bình thường
+                                        $status = 'active'; // Đang hoạt động bình thường
                                     }
 
                                     $rowClass = '';
@@ -738,19 +740,26 @@
                                             @endif
                                         </td>
                                         <td>
-                                            @if($status === 'active')
-                                            <span class="badge bg-success">Đang hoạt động</span>
+                                            @if($status === 'refunded')
+                                                <span class="badge bg-warning text-dark"
+                                                      title="Đã hoàn {{ number_format((int) $service->refund_amount, 0, ',', '.') }}đ lúc {{ $service->refunded_at->format('H:i d/m/Y') }}">
+                                                    <i class="fas fa-undo-alt"></i> Đã hoàn tiền
+                                                </span>
+                                            @elseif($status === 'cancelled')
+                                                <span class="badge bg-secondary">Đã huỷ</span>
+                                            @elseif($status === 'active')
+                                                <span class="badge bg-success">Đang hoạt động</span>
                                             @elseif($status === 'expiring')
-                                            @if($daysRemaining <= 1)
-                                                <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> SẮP HẾT HẠN</span>
+                                                @if($daysRemaining <= 1)
+                                                    <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> SẮP HẾT HẠN</span>
                                                 @else
-                                                <span class="badge bg-warning">Sắp hết hạn</span>
+                                                    <span class="badge bg-warning">Sắp hết hạn</span>
                                                 @endif
-                                                @elseif($status === 'expired')
+                                            @elseif($status === 'expired')
                                                 <span class="badge bg-danger">Đã hết hạn</span>
-                                                @else
+                                            @else
                                                 <span class="badge bg-secondary">Chưa kích hoạt</span>
-                                                @endif
+                                            @endif
                                         </td>
                                         <td>
                                             @if($service->reminder_sent)

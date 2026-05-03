@@ -185,12 +185,19 @@
 
                                             <!-- Hết hạn & Trạng thái -->
                                             <div class="col-md-4 text-md-end">
-                                                @if($service->status === 'active')
-                                                <span class="badge bg-success">Hoạt động</span>
+                                                @if($service->status === 'cancelled' && $service->refunded_at)
+                                                    <span class="badge bg-warning text-dark"
+                                                          title="Đã hoàn {{ number_format((int) $service->refund_amount, 0, ',', '.') }}đ lúc {{ $service->refunded_at->format('H:i d/m/Y') }}">
+                                                        <i class="fas fa-undo-alt"></i> Đã hoàn tiền
+                                                    </span>
+                                                @elseif($service->status === 'cancelled')
+                                                    <span class="badge bg-secondary">Đã huỷ</span>
+                                                @elseif($service->status === 'active')
+                                                    <span class="badge bg-success">Hoạt động</span>
                                                 @elseif($service->status === 'expired')
-                                                <span class="badge bg-danger">Hết hạn</span>
+                                                    <span class="badge bg-danger">Hết hạn</span>
                                                 @else
-                                                <span class="badge bg-secondary">Đã hủy</span>
+                                                    <span class="badge bg-secondary">{{ $service->status }}</span>
                                                 @endif
                                                 <br>
                                                 <small class="text-muted">
