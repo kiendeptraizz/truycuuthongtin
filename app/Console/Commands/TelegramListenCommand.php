@@ -17,10 +17,16 @@ use Illuminate\Support\Facades\Log;
  *   php artisan telegram:listen
  *
  * Bot xử lý:
- *   - Tin nhắn dạng số (vd "100000", "100k") → tạo pending order, gửi lại QR
+ *   - Bấm nút "📝 Tạo đơn" → bot hỏi 7 bước (amount → tên KH → ...) → tạo PendingOrder + QR
+ *   - Bấm nút "🛒 Đơn nhiều DV" → flow lô đơn nhiều dịch vụ cùng lúc (mã lô GR-XXX)
+ *   - Bấm nút "⚡ QR nhanh" → chỉ hỏi số tiền, gửi QR (KHÔNG tạo đơn, KHÔNG lưu DB)
  *   - /start, /help — hướng dẫn
- *   - /list — 5 đơn pending hôm nay
+ *   - /list — 10 đơn pending hôm nay
+ *   - /dh DH-XXX — xem chi tiết 1 đơn + menu hành động (refund / bảo hành)
  *   - /cancel DH-XXX-XXX — huỷ đơn
+ *
+ * LƯU Ý: chỉ tạo đơn khi user BẤM NÚT "📝 Tạo đơn" — gõ số tiền root KHÔNG còn
+ * tự start flow nữa (tránh /dh, text vô tình bị treat như input).
  *
  * Bảo mật: chỉ user có ID trong TELEGRAM_ADMIN_IDS mới được dùng.
  */
@@ -160,8 +166,27 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Đang trong conversation? → tiếp tục
         $state = $this->getState($chatId);
+
+        // User trong conversation gõ COMMAND (không phải /skip /full /huy /lai)
+        // → auto-cancel state + chạy command. Tránh tình huống user gõ /dh DH-XXX
+        // bị treat như tên KH, hay /list bị treat như input bước email...
+        if ($state && str_starts_with($text, '/')) {
+            $cmdLc = strtolower(preg_split('/\s+/', $text)[0]);
+            $allowedInConversation = ['/skip', '/full', '/huy', '/huỷ', '/cancel', '/lai', '/lại', '/back'];
+            if (!in_array($cmdLc, $allowedInConversation, true)) {
+                $stepLabel = $this->stepLabel($state['step'] ?? '');
+                $this->clearState($chatId);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "⚠️ Đã huỷ phiên đang dở (bước <i>{$stepLabel}</i>) vì bạn dùng lệnh khác.\n"
+                        . "Để tạo đơn lại, bấm 📝 <b>Tạo đơn</b>."
+                );
+                $state = null; // đã clear, fall through xuống handleCommand
+            }
+        }
+
+        // Đang trong conversation? → tiếp tục
         if ($state) {
             $this->handleConversationStep($chatId, $userId, $text, $state);
             return;
@@ -178,8 +203,15 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Bắt đầu conversation từ số tiền
-        $this->startConversation($chatId, $userId, $text);
+        // Text root khác — KHÔNG auto-start tạo đơn nữa (trước đây gõ số tiền sẽ
+        // tự bắt đầu flow → user vô tình gõ "260503001" liền bị tạo KH rác).
+        // Giờ chỉ nudge user dùng nút menu cho rõ ý đồ.
+        $this->bot->sendMessage(
+            $chatId,
+            "🤔 Bot không hiểu yêu cầu này.\n\n"
+                . "💡 Bấm <b>📝 Tạo đơn</b> để bắt đầu đơn mới, hoặc <b>❓ Hướng dẫn</b> để xem các chức năng.",
+            $this->mainMenuMarkup()
+        );
     }
 
     /**
@@ -432,31 +464,6 @@ class TelegramListenCommand extends Command
         }
 
         $this->bot->sendMessage($chatId, implode("\n", $lines), $extras);
-    }
-
-    /**
-     * Bắt đầu conversation mới — user gõ số tiền → bot hỏi tên KH.
-     */
-    private function startConversation(int|string $chatId, string $userId, string $text): void
-    {
-        $amount = parseShortAmount($text);
-        if ($amount <= 0) {
-            $this->bot->sendMessage(
-                $chatId,
-                "❌ Vui lòng gõ số tiền để bắt đầu đơn mới.\n\n"
-                    . "Ví dụ: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>\n\n"
-                    . "Gõ /help để xem hướng dẫn."
-            );
-            return;
-        }
-
-        $data = ['amount' => $amount];
-        $this->setState($chatId, [
-            'step' => 'customer_name',
-            'data' => $data,
-        ]);
-
-        $this->promptCustomerName($chatId, $data);
     }
 
     /**
@@ -2230,7 +2237,7 @@ class TelegramListenCommand extends Command
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
-            . "<i>Có thể gõ trực tiếp số tiền (vd <code>100k</code>) để bắt đầu đơn — không cần bấm nút.</i>";
+            . "<i>📝 Để tạo đơn mới, bấm nút <b>📝 Tạo đơn</b>.</i>";
     }
 
     /**
