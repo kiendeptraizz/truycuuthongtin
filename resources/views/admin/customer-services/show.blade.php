@@ -75,17 +75,19 @@
                                         <i class="fas fa-history me-1"></i>
                                         Lịch sử thay đổi
                                     </a>
-                                    @if(!$customerService->refunded_at && $customerService->status !== 'cancelled')
-                                        <a href="{{ route('admin.customer-services.refund', $customerService) }}" class="btn btn-sm btn-outline-warning"
-                                           title="Tính tiền hoàn cho đơn lỗi">
-                                            <i class="fas fa-undo-alt me-1"></i>
-                                            Tính tiền hoàn
-                                        </a>
-                                    @elseif($customerService->refunded_at)
+                                    @if($customerService->refunded_at)
+                                        {{-- Đã hoàn — show nút xám với số tiền đã hoàn --}}
                                         <a href="{{ route('admin.customer-services.refund', $customerService) }}" class="btn btn-sm btn-outline-secondary"
                                            title="Đã hoàn {{ number_format((int) $customerService->refund_amount, 0, ',', '.') }}đ lúc {{ $customerService->refunded_at->format('d/m/Y') }}">
                                             <i class="fas fa-receipt me-1"></i>
                                             Đã hoàn {{ number_format((int) $customerService->refund_amount, 0, ',', '.') }}đ
+                                        </a>
+                                    @elseif($customerService->status !== 'cancelled' && (int) $customerService->order_amount > 0)
+                                        {{-- Chỉ hiện nút Tính tiền hoàn khi: chưa cancelled + có order_amount > 0 (đơn dịch vụ có giá) --}}
+                                        <a href="{{ route('admin.customer-services.refund', $customerService) }}" class="btn btn-sm btn-outline-warning"
+                                           title="Tính tiền hoàn cho đơn lỗi (theo % thời gian còn lại của số tiền dịch vụ)">
+                                            <i class="fas fa-undo-alt me-1"></i>
+                                            Tính tiền hoàn
                                         </a>
                                     @endif
                                 </div>
