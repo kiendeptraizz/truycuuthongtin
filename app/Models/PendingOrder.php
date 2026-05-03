@@ -11,6 +11,7 @@ class PendingOrder extends Model
 {
     protected $fillable = [
         'order_code',
+        'group_code',
         'amount',
         'note',
         'status',
@@ -105,6 +106,48 @@ class PendingOrder extends Model
             (int) $this->amount,
             $this->order_code
         );
+    }
+
+    /**
+     * Sinh mã group GR-yymmdd-XXX cho lô đơn nhiều dịch vụ cùng lúc.
+     * Sequence = max(seq trong ngày) + 1, query DISTINCT group_code để tránh
+     * trùng (vì 1 lô có N PO cùng group_code, không thể count rows).
+     */
+    public static function generateGroupCode(?\DateTimeInterface $date = null): string
+    {
+        $date = $date ?? now();
+        $prefix = 'GR-' . $date->format('ymd') . '-';
+
+        $maxFromGroup = static::where('group_code', 'like', $prefix . '%')
+            ->orderByDesc('group_code')
+            ->value('group_code');
+
+        $maxSeq = 0;
+        if ($maxFromGroup && preg_match('/-(\d+)$/', $maxFromGroup, $m)) {
+            $maxSeq = (int) $m[1];
+        }
+
+        return $prefix . str_pad((string) ($maxSeq + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Hỏi xem đơn này có thuộc 1 lô (group) không.
+     */
+    public function hasGroup(): bool
+    {
+        return !empty($this->group_code);
+    }
+
+    /**
+     * Lấy tất cả PendingOrder cùng lô (kể cả chính nó). Trả về collection rỗng
+     * nếu đơn không thuộc lô nào.
+     */
+    public function siblingsInGroup()
+    {
+        if (!$this->hasGroup()) {
+            return collect();
+        }
+        return static::where('group_code', $this->group_code)->orderBy('order_code')->get();
     }
 
     /**

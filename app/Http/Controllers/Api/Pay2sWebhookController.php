@@ -93,9 +93,35 @@ class Pay2sWebhookController extends Controller
             ]);
         }
 
-        // Match order_code linh hoạt: "DH-260502-001", "DH260502001", "DH 260502 001"
+        // PRIORITY 1: Match GROUP code trước (lô nhiều đơn): "GR-260502-001", "GR260502001"
+        // Nếu match → mark TẤT CẢ PO trong lô paid, gửi 1 noti gộp.
+        if (preg_match('/GR[-\s]?(\d{6})[-\s]?(\d{3})/i', $content, $g)) {
+            $groupCode = sprintf('GR-%s-%s', $g[1], $g[2]);
+            $groupResult = $payment->markGroupPaid(
+                $groupCode,
+                $amount,
+                $bankTxId ?: null,
+                json_encode($tx, JSON_UNESCAPED_UNICODE),
+                'pay2s'
+            );
+
+            if ($groupResult['ok'] && $groupResult['count'] > 0) {
+                $this->sendGroupPaidNotification($bot, $groupCode, $amount, $groupResult);
+            }
+
+            return [
+                'ok' => $groupResult['ok'],
+                'matched' => true,
+                'group_code' => $groupCode,
+                'count' => $groupResult['count'] ?? 0,
+                'status' => $groupResult['status'],
+                'orders' => $groupResult['orders'] ?? [],
+            ];
+        }
+
+        // PRIORITY 2: Match order_code linh hoạt: "DH-260502-001", "DH260502001", "DH 260502 001"
         if (!preg_match('/DH[-\s]?(\d{6})[-\s]?(\d{3})/i', $content, $m)) {
-            Log::info('Pay2S webhook: no order_code in content', ['content' => $content]);
+            Log::info('Pay2S webhook: no order_code or group_code in content', ['content' => $content]);
             return ['ok' => true, 'matched' => false, 'content' => $content];
         }
         $orderCode = sprintf('DH-%s-%s', $m[1], $m[2]);
@@ -134,6 +160,63 @@ class Pay2sWebhookController extends Controller
             'paid_amount' => $amount,
             'customer_service_id' => $result['cs_id'] ?? null,
         ];
+    }
+
+    /**
+     * Telegram noti khi cả LÔ đơn được mark paid. 1 message gộp thay vì N
+     * message rời rạc. Link tracking trỏ đến /tra-cuu?code=GR-XXX để khách
+     * thấy đủ N service vừa mua trong cùng trang.
+     */
+    private function sendGroupPaidNotification(TelegramBotService $bot, string $groupCode, int $amount, array $groupResult): void
+    {
+        try {
+            $orders = PendingOrder::where('group_code', $groupCode)
+                ->with('customer', 'servicePackage')
+                ->orderBy('order_code')
+                ->get();
+
+            if ($orders->isEmpty()) return;
+
+            $customer = $orders->first()->customer;
+            $totalExpected = (int) $groupResult['total_expected'];
+            $delta = (int) $groupResult['delta'];
+
+            $deltaNote = $delta === 0
+                ? ''
+                : ($delta > 0
+                    ? "\n⚠️ <i>Khách trả dư " . formatShortAmount($delta) . " (so với tổng lô " . formatShortAmount($totalExpected) . ")</i>"
+                    : "\n⚠️ <i>Khách trả thiếu " . formatShortAmount(abs($delta)) . " (so với tổng lô " . formatShortAmount($totalExpected) . ")</i>");
+
+            $customerLine = $customer
+                ? "<code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>"
+                : "<i>(chưa gắn KH)</i>";
+
+            $orderLines = $orders->map(function ($o) {
+                $pkg = $o->servicePackage->name ?? 'N/A';
+                return "  • <code>{$o->order_code}</code> — " . e($pkg) . " (" . formatShortAmount((int) $o->amount) . ")";
+            })->implode("\n");
+
+            $lookupUrl = rtrim(config('app.url'), '/') . '/tra-cuu?code=' . urlencode($groupCode);
+
+            $msg = "💰 <b>ĐÃ NHẬN TIỀN — Cám ơn quý khách đã mua hàng!</b>\n\n"
+                . "👤 Mã khách hàng: {$customerLine}\n"
+                . "🛒 Mã lô: <code>{$groupCode}</code> ({$groupResult['count']} đơn)\n"
+                . $orderLines . "\n\n"
+                . "💵 Tổng tiền nhận: <b>" . formatShortAmount($amount) . "</b>"
+                . $deltaNote
+                . "\n\n"
+                . "🔗 <a href=\"{$lookupUrl}\">Theo dõi và xem chi tiết các đơn tại đây</a>";
+
+            $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
+            foreach ($adminIds as $chatId) {
+                $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: Group Telegram noti failed', [
+                'group_code' => $groupCode,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

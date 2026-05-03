@@ -35,6 +35,7 @@ class TelegramListenCommand extends Command
     // Label các nút trên persistent reply keyboard. Khi user bấm, Telegram gửi
     // lại đúng text này — bot match để route đến handler tương ứng.
     private const BTN_NEW_ORDER = '📝 Tạo đơn';
+    private const BTN_MULTI_ORDER = '🛒 Đơn nhiều DV';
     private const BTN_PENDING = '📋 Đơn pending';
     private const BTN_STATS = '📊 Thống kê';
     private const BTN_EXPIRING = '⏰ Hết hạn';
@@ -202,6 +203,9 @@ class TelegramListenCommand extends Command
             case self::BTN_QUICK_QR:
                 $this->promptQuickQr($chatId);
                 return true;
+            case self::BTN_MULTI_ORDER:
+                $this->promptMultiCount($chatId);
+                return true;
             case self::BTN_HELP:
                 $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
                 return true;
@@ -222,6 +226,7 @@ class TelegramListenCommand extends Command
                     "👋 <b>Chào admin!</b>\n\n"
                         . "Bot đã sẵn sàng. Bấm nút bên dưới để chọn chức năng:\n\n"
                         . "📝 <b>Tạo đơn</b> — bot sẽ hỏi 7 bước (tên KH, gói, ...)\n"
+                        . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc, CK 1 lần (mã lô GR-XXX)\n"
                         . "📋 <b>Đơn pending</b> — list đơn chưa thanh toán hôm nay\n"
                         . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
                         . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
@@ -444,9 +449,25 @@ class TelegramListenCommand extends Command
                     );
                     return;
                 }
-                $data = ['amount' => $amount];
-                $this->setState($chatId, ['step' => 'customer_name', 'data' => $data]);
-                $this->promptCustomerName($chatId, $data);
+                // Giữ _multi nếu đang multi-mode, chỉ reset các field per-order
+                $multi = $data['_multi'] ?? null;
+                $newData = ['amount' => $amount];
+                if ($multi) {
+                    $newData['_multi'] = $multi;
+                }
+
+                // Đơn 2+: skip step customer_name, dùng customer chung từ đơn 1
+                if ($multi && ($multi['index'] ?? 0) > 0 && !empty($multi['shared_customer_id'])) {
+                    $newData['customer_id'] = $multi['shared_customer_id'];
+                    $newData['customer_code'] = $multi['shared_customer_code'];
+                    $newData['customer_name'] = $multi['shared_customer_name'];
+                    $this->setState($chatId, ['step' => 'duration', 'data' => $newData]);
+                    $this->promptDuration($chatId);
+                    return;
+                }
+
+                $this->setState($chatId, ['step' => 'customer_name', 'data' => $newData]);
+                $this->promptCustomerName($chatId, $newData);
                 return;
 
             case 'awaiting_quick_qr':
@@ -462,6 +483,37 @@ class TelegramListenCommand extends Command
                 }
                 $this->clearState($chatId);
                 $this->sendQuickQr($chatId, $amount);
+                return;
+
+            case 'awaiting_multi_count':
+                $count = (int) preg_replace('/\D/', '', $text);
+                if ($count < 2 || $count > 5) {
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "❌ Số đơn phải từ 2 đến 5. Gõ lại số (vd <code>2</code> hoặc <code>3</code>):",
+                        $this->navMarkup(false)
+                    );
+                    return;
+                }
+                // Khởi tạo state multi-mode (lưu trong data._multi để propagate qua mọi step).
+                $newData = [
+                    '_multi' => [
+                        'count' => $count,
+                        'index' => 0,
+                        'drafts' => [], // chứa data của các đơn đã hoàn thành
+                        'shared_customer_id' => null,
+                        'shared_customer_code' => null,
+                        'shared_customer_name' => null,
+                    ],
+                ];
+                $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => $newData]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "🛒 <b>Bắt đầu lô {$count} đơn</b>\n\n"
+                        . "📦 <b>Đơn 1/{$count}:</b> Gõ số tiền\n"
+                        . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code></i>",
+                    $this->navMarkup(false)
+                );
                 return;
 
             case 'customer_name':
@@ -499,6 +551,13 @@ class TelegramListenCommand extends Command
                 $data['customer_id'] = $customer->id;
                 $data['customer_code'] = $customer->customer_code;
                 $data['customer_name'] = $customer->name;
+
+                // Multi-mode: lưu customer làm shared cho cả lô (các đơn 2+ sẽ skip step này)
+                if (!empty($data['_multi'])) {
+                    $data['_multi']['shared_customer_id'] = $customer->id;
+                    $data['_multi']['shared_customer_code'] = $customer->customer_code;
+                    $data['_multi']['shared_customer_name'] = $customer->name;
+                }
 
                 if ($matchedByCode) {
                     $headLine = "✅ Tìm thấy KH theo mã: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
@@ -665,8 +724,8 @@ class TelegramListenCommand extends Command
                     $data['profit_amount'] = $profit;
                 }
 
+                // finalizeOrder xử lý multi-mode internally + tự clearState khi xong
                 $this->finalizeOrder($chatId, $userId, $data);
-                $this->clearState($chatId);
                 return;
 
             default:
@@ -683,9 +742,44 @@ class TelegramListenCommand extends Command
      * Hybrid flow: tạo CS pending NGAY khi finalize → admin/khách thấy đơn trên web
      * (không bị coi là đã giao dịch vụ vì status='pending'). Khi Pay2S báo paid,
      * webhook sẽ đổi status='active' + set activated_at/expires_at.
+     *
+     * **Multi-mode**: nếu data['_multi'] tồn tại → đây là 1 trong N đơn của lô.
+     * - Nếu chưa phải đơn cuối: lưu draft, prompt cho đơn tiếp theo.
+     * - Nếu là đơn cuối: tạo TẤT CẢ N PendingOrder cùng group_code, gửi 1 QR tổng.
      */
     private function finalizeOrder(int|string $chatId, string $userId, array $data): void
     {
+        // ===== Multi-mode handling =====
+        $multi = $data['_multi'] ?? null;
+        if ($multi) {
+            // Lưu draft đơn vừa hoàn thành (không kèm _multi metadata)
+            $draftData = $data;
+            unset($draftData['_multi']);
+            $multi['drafts'][] = $draftData;
+            $multi['index']++;
+
+            // Còn đơn để tạo → reset state về 'awaiting_amount' với customer giữ nguyên
+            if ($multi['index'] < $multi['count']) {
+                $next = $multi['index'] + 1;
+                $newData = ['_multi' => $multi];
+                $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => $newData]);
+                $this->bot->sendMessage(
+                    $chatId,
+                    "✅ Đã lưu đơn {$multi['index']}/{$multi['count']}.\n\n"
+                        . "📦 <b>Đơn {$next}/{$multi['count']}:</b> Gõ số tiền\n"
+                        . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code></i>",
+                    $this->navMarkup(false)
+                );
+                return;
+            }
+
+            // Đơn cuối → tạo lô
+            $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
+            $this->clearState($chatId);
+            return;
+        }
+
+        // ===== Single-order mode (flow cũ) =====
         try {
             $order = PendingOrderController::createOrder([
                 'amount' => $data['amount'],
@@ -703,6 +797,7 @@ class TelegramListenCommand extends Command
         } catch (\Throwable $e) {
             Log::error('Telegram: finalizeOrder failed', ['error' => $e->getMessage(), 'data' => $data]);
             $this->bot->sendMessage($chatId, "❌ Lỗi tạo đơn: " . $e->getMessage());
+            $this->clearState($chatId);
             return;
         }
 
@@ -711,6 +806,100 @@ class TelegramListenCommand extends Command
 
         $caption = $this->buildCaption($order, $data);
         $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
+
+        $this->clearState($chatId);
+    }
+
+    /**
+     * Tạo lô đơn (multi-order): N PendingOrder + N CustomerService pending share cùng
+     * group_code. Gửi 1 QR tổng (amount = sum, addInfo = group_code) thay vì N QR rời.
+     *
+     * @param  int|string $chatId
+     * @param  string $userId
+     * @param  array<int, array> $drafts  Mỗi draft là full $data của 1 đơn (đủ 7 bước).
+     */
+    private function finalizeMultiOrder(int|string $chatId, string $userId, array $drafts): void
+    {
+        if (empty($drafts)) {
+            $this->bot->sendMessage($chatId, "❌ Lô rỗng — không có đơn nào để tạo.");
+            return;
+        }
+
+        try {
+            $result = \Illuminate\Support\Facades\DB::transaction(function () use ($chatId, $drafts) {
+                $groupCode = PendingOrder::generateGroupCode();
+                $orders = [];
+                foreach ($drafts as $draft) {
+                    $order = PendingOrderController::createOrder([
+                        'amount' => $draft['amount'],
+                        'note' => $this->buildNote($draft),
+                        'group_code' => $groupCode, // chia sẻ cho cả lô
+                        'customer_id' => $draft['customer_id'] ?? null,
+                        'service_package_id' => $draft['service_package_id'] ?? null,
+                        'account_email' => $draft['email'] ?? null,
+                        'family_code' => $draft['family_email'] ?? null,
+                        'duration_days' => $draft['duration_days'] ?? null,
+                        'warranty_days' => $draft['warranty_days'] ?? null,
+                        'profit_amount' => $draft['profit_amount'] ?? null,
+                        'created_via' => 'telegram',
+                        'telegram_chat_id' => (string) $chatId,
+                    ]);
+
+                    // Tạo CS pending tương ứng
+                    $this->tryCreatePendingCustomerService($order, $draft);
+
+                    $orders[] = ['order' => $order, 'draft' => $draft];
+                }
+                return ['groupCode' => $groupCode, 'orders' => $orders];
+            });
+        } catch (\Throwable $e) {
+            Log::error('Telegram: finalizeMultiOrder failed', [
+                'error' => $e->getMessage(),
+                'drafts_count' => count($drafts),
+            ]);
+            $this->bot->sendMessage($chatId, "❌ Lỗi tạo lô đơn: " . $e->getMessage());
+            return;
+        }
+
+        // Build caption + QR tổng
+        $totalAmount = (int) array_sum(array_column($drafts, 'amount'));
+        $groupCode = $result['groupCode'];
+        $bankShort = $this->qr->bankShortName();
+        $accNumber = $this->qr->accountNumber();
+        $accName = $this->qr->accountName();
+        $qrUrl = $this->qr->buildQrUrl($totalAmount, $groupCode);
+
+        // Liệt kê từng đơn trong caption
+        $orderLines = collect($result['orders'])->map(function ($item) {
+            $order = $item['order'];
+            $order->loadMissing('servicePackage');
+            $pkgName = $order->servicePackage?->name ?? 'Gói chưa rõ';
+            return "  • <code>{$order->order_code}</code> — " . e($pkgName)
+                . " (" . formatShortAmount((int) $order->amount) . ")";
+        })->implode("\n");
+
+        $customerLine = '';
+        if (!empty($drafts[0]['customer_code']) && !empty($drafts[0]['customer_name'])) {
+            $customerLine = "👤 KH: <code>{$drafts[0]['customer_code']}</code> — <b>" . e($drafts[0]['customer_name']) . "</b>\n";
+        }
+
+        $caption = "🛒 <b>LÔ ĐƠN — " . count($drafts) . " dịch vụ</b>\n\n"
+            . $customerLine
+            . "🏷 Mã lô: <code>{$groupCode}</code>\n\n"
+            . $orderLines . "\n\n"
+            . "💵 <b>Tổng tiền:</b> " . formatShortAmount($totalAmount)
+            . " (<code>" . number_format($totalAmount, 0, ',', '.') . "đ</code>)\n"
+            . "🏦 <b>Ngân hàng:</b> {$bankShort}\n"
+            . "💳 <b>Số TK:</b> <code>{$accNumber}</code>\n"
+            . "👤 <b>Chủ TK:</b> {$accName}\n\n"
+            . "<b><i>📌 Khách CK đúng số tiền + đúng nội dung <code>{$groupCode}</code> để bot tự xác nhận. Quét QR sẽ điền sẵn — quý khách không cần sửa.</i></b>";
+
+        $this->bot->sendPhoto($chatId, $qrUrl, $caption);
+        $this->bot->sendMessage(
+            $chatId,
+            "✅ Đã tạo lô <code>{$groupCode}</code> gồm " . count($drafts) . " đơn. Đợi khách CK 1 lần là bot tự active cả lô.",
+            $this->mainMenuMarkup()
+        );
     }
 
     /**
@@ -1212,9 +1401,10 @@ class TelegramListenCommand extends Command
     private function mainMenuMarkup(): array
     {
         $keyboard = [
-            [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_PENDING]],
-            [['text' => self::BTN_STATS], ['text' => self::BTN_EXPIRING]],
-            [['text' => self::BTN_QUICK_QR], ['text' => self::BTN_HELP]],
+            [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_MULTI_ORDER]],
+            [['text' => self::BTN_PENDING], ['text' => self::BTN_STATS]],
+            [['text' => self::BTN_EXPIRING], ['text' => self::BTN_QUICK_QR]],
+            [['text' => self::BTN_HELP]],
         ];
         return ['reply_markup' => json_encode([
             'keyboard' => $keyboard,
@@ -1251,6 +1441,28 @@ class TelegramListenCommand extends Command
             "⚡ <b>QR nhanh</b> — Nhập số tiền\n\n"
                 . "<i>Bot sẽ gửi QR ngay. KHÔNG lưu vào hệ thống, KHÔNG tạo đơn.</i>\n\n"
                 . "Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
+                . "Gõ /huy để huỷ.",
+            $this->navMarkup(false)
+        );
+    }
+
+    /**
+     * "🛒 Đơn nhiều DV" — bắt đầu flow tạo lô đơn (2-5 đơn cùng 1 KH cùng 1 lần CK).
+     * State machine sẽ track multi_mode + multi_index + customer_id shared.
+     */
+    private function promptMultiCount(int|string $chatId): void
+    {
+        $this->setState($chatId, [
+            'step' => 'awaiting_multi_count',
+            'data' => [],
+        ]);
+        $this->bot->sendMessage(
+            $chatId,
+            "🛒 <b>Đơn nhiều dịch vụ</b> — Khách mua nhiều DV cùng lúc, CK 1 lần.\n\n"
+                . "Số đơn cần tạo? (2 đến 5 đơn)\n"
+                . "<i>Vd: gõ <code>2</code> hoặc <code>3</code></i>\n\n"
+                . "Sau đó bot sẽ hỏi tên KH (1 lần) + thông tin từng đơn (gói, email, ...). "
+                . "Cuối cùng bot sinh 1 QR tổng + mã lô <code>GR-XXX</code>.\n\n"
                 . "Gõ /huy để huỷ.",
             $this->navMarkup(false)
         );
@@ -1680,6 +1892,7 @@ class TelegramListenCommand extends Command
             . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
             . "⚡ <b>QR nhanh</b> — Nhập 1 số tiền → bot gửi QR ngay. KHÔNG tạo PendingOrder, KHÔNG lưu DB. Dùng cho thanh toán lẻ tẻ không cần track (tip, phí phụ, refund...).\n\n"
+            . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc + CK 1 lần. Bot hỏi tên KH 1 lần + thông tin từng đơn → sinh mã lô <code>GR-XXX</code> + 1 QR tổng. Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
@@ -1727,6 +1940,7 @@ class TelegramListenCommand extends Command
         return match ($step) {
             'awaiting_amount' => 'số tiền',
             'awaiting_quick_qr' => 'số tiền (QR nhanh)',
+            'awaiting_multi_count' => 'số đơn (lô đa dịch vụ)',
             'customer_name' => 'tên hoặc mã khách hàng',
             'duration' => 'thời hạn',
             'email' => 'email tài khoản',

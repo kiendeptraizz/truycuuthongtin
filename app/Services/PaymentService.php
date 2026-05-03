@@ -77,6 +77,121 @@ class PaymentService
     }
 
     /**
+     * Mark cả LÔ đơn (group_code) là đã thanh toán + activate/create N CustomerService.
+     *
+     * Khách CK 1 lần với content chứa GR-XXX → Pay2S match → call method này.
+     * Tất cả PO trong group được lock + mark paid trong cùng 1 DB transaction.
+     * Nếu 1 đơn fail → rollback toàn bộ → giữ data nhất quán.
+     *
+     * Số tiền bank transfer được PHÂN BỔ vào từng đơn theo amount riêng của
+     * từng đơn (KHÔNG chia đều). Vd group có 2 đơn 100k + 200k, khách CK 300k
+     * → đơn 1 ghi paid_amount=100k, đơn 2 ghi paid_amount=200k.
+     *
+     * @param  string $groupCode  GR-yymmdd-XXX
+     * @param  int    $totalAmount  Tổng tiền nhận từ bank
+     * @param  string|null $bankTxId  Bank transaction ID (chung cho cả lô)
+     * @param  string|null $rawPayload  Raw payload (chung cho cả lô)
+     * @param  string $source  'pay2s' | 'manual' | ...
+     * @return array{ok: bool, status: string, group_code: string, count: int, orders: array, total_expected: int, delta: int}
+     */
+    public function markGroupPaid(
+        string $groupCode,
+        int $totalAmount,
+        ?string $bankTxId = null,
+        ?string $rawPayload = null,
+        string $source = 'pay2s'
+    ): array {
+        try {
+            return DB::transaction(function () use ($groupCode, $totalAmount, $bankTxId, $rawPayload, $source) {
+                // Lock TẤT CẢ PO trong group (để tránh race với webhook khác cùng group_code)
+                $orders = PendingOrder::where('group_code', $groupCode)
+                    ->lockForUpdate()
+                    ->orderBy('order_code')
+                    ->get();
+
+                if ($orders->isEmpty()) {
+                    return [
+                        'ok' => false,
+                        'status' => 'group_not_found',
+                        'group_code' => $groupCode,
+                        'count' => 0,
+                        'orders' => [],
+                    ];
+                }
+
+                $totalExpected = (int) $orders->sum('amount');
+                $delta = $totalAmount - $totalExpected;
+
+                $results = [];
+                foreach ($orders as $idx => $order) {
+                    if ($order->paid_at !== null) {
+                        $results[] = [
+                            'order_code' => $order->order_code,
+                            'status' => 'already_paid',
+                            'cs_id' => $order->customer_service_id,
+                        ];
+                        continue;
+                    }
+
+                    // Phân bổ paid_amount = amount riêng của đơn (KHÔNG chia đều).
+                    // bankTxId thêm suffix index để unique-constraint không vỡ.
+                    $perOrderTxId = $bankTxId ? ($bankTxId . '-' . $idx) : null;
+
+                    $order->update([
+                        'paid_at' => now(),
+                        'paid_amount' => (int) $order->amount,
+                        'bank_transaction_id' => $perOrderTxId,
+                        'bank_raw_payload' => $rawPayload, // chung — show toàn payload
+                    ]);
+
+                    $order->refresh();
+                    $csId = $this->tryAutoCreateCustomerService($order, $source);
+
+                    $results[] = [
+                        'order_code' => $order->order_code,
+                        'status' => $csId ? 'paid_and_activated' : 'paid_only',
+                        'cs_id' => $csId,
+                    ];
+                }
+
+                Log::info('PaymentService: markGroupPaid completed', [
+                    'group_code' => $groupCode,
+                    'total_amount' => $totalAmount,
+                    'total_expected' => $totalExpected,
+                    'delta' => $delta,
+                    'order_count' => count($results),
+                    'source' => $source,
+                ]);
+
+                return [
+                    'ok' => true,
+                    'status' => 'group_paid',
+                    'group_code' => $groupCode,
+                    'count' => count($results),
+                    'orders' => $results,
+                    'total_expected' => $totalExpected,
+                    'delta' => $delta,
+                ];
+            });
+        } catch (\Throwable $e) {
+            Log::error('PaymentService: markGroupPaid transaction failed — rolled back', [
+                'group_code' => $groupCode,
+                'source' => $source,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [
+                'ok' => false,
+                'status' => 'transaction_failed',
+                'group_code' => $groupCode,
+                'count' => 0,
+                'orders' => [],
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
      * Hybrid:
      *   - PendingOrder.customer_service_id != null → activate CS pending.
      *   - Còn lại → tạo CS active mới nếu đủ data structured.

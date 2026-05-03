@@ -909,6 +909,57 @@
             font-weight: 600;
         }
 
+        /* ====================== GROUP BANNER ====================== */
+        .group-banner {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border-radius: var(--radius-xl);
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow-indigo);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: fadeInUp 0.5s ease;
+        }
+        .group-banner-icon {
+            width: 48px; height: 48px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            backdrop-filter: blur(10px);
+        }
+        .group-banner-text { flex: 1; }
+        .group-banner-text .title {
+            font-size: 1.05rem;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 0.2rem;
+        }
+        .group-banner-text .subtitle {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+        .group-banner-code {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.85rem;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+        }
+        @media (max-width: 480px) {
+            .group-banner { padding: 1rem; flex-wrap: wrap; }
+            .group-banner-code { width: 100%; text-align: center; }
+        }
+
         /* ====================== EMPTY STATE ====================== */
         .empty-state {
             text-align: center;
@@ -1325,6 +1376,7 @@
             function displayResults(data) {
                 const customer = data.customer;
                 const services = data.services || [];
+                const groupCode = data.group_code || null;
 
                 const initials = customer.name.split(' ')
                     .map(n => n[0])
@@ -1333,7 +1385,22 @@
                     .substring(0, 2)
                     .toUpperCase();
 
-                let html = `
+                // Group banner — nếu khách search bằng GR-XXX, hiện banner trên cùng
+                let html = '';
+                if (groupCode) {
+                    html += `
+                        <div class="group-banner">
+                            <div class="group-banner-icon"><i class="fas fa-shopping-cart"></i></div>
+                            <div class="group-banner-text">
+                                <div class="title">Lô đơn — ${services.length} dịch vụ mua cùng lúc</div>
+                                <div class="subtitle">Khách hàng đã thanh toán 1 lần cho tất cả ${services.length} dịch vụ trong lô này.</div>
+                            </div>
+                            <div class="group-banner-code">${escapeHtml(groupCode)}</div>
+                        </div>
+                    `;
+                }
+
+                html += `
                     <div class="customer-card">
                         <div class="customer-grid">
                             <div class="customer-left">

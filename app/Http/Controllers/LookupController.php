@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\Customer;
 use App\Models\CustomerService;
 use App\Models\HomeSettings;
+use App\Models\PendingOrder;
 use App\Models\ServiceCategory;
 use App\Models\ServicePackage;
 
@@ -17,6 +18,7 @@ class LookupController extends Controller
         $customer = null;
         $services = collect();
         $singleService = null; // Khi tra cứu theo mã đơn → chỉ 1 dịch vụ
+        $groupCode = null;     // Khi tra cứu theo mã lô (GR-XXX) → N dịch vụ cùng lô
         $code = $request->get('code');
 
         // Stats + categories cho trang chủ — cache 1 giờ vì ít đổi.
@@ -46,25 +48,33 @@ class LookupController extends Controller
         if ($code) {
             $code = trim($code);
 
-            // 1) Thử match mã đơn DH-YYMMDD-XXX trước (cả format có/không dấu gạch)
-            $singleService = $this->findServiceByOrderCode($code);
-            if ($singleService) {
-                $customer = $singleService->customer;
-                $services = collect([$singleService]);
+            // 1) Thử match mã LÔ GR-YYMMDD-XXX trước (lô đơn nhiều dịch vụ)
+            $groupResult = $this->findServicesByGroupCode($code);
+            if ($groupResult) {
+                $customer = $groupResult['customer'];
+                $services = $groupResult['services'];
+                $groupCode = $groupResult['group_code'];
             } else {
-                // 2) Tìm theo mã KH / email / phone, fallback tên Zalo
-                $customer = $this->findCustomer($code);
+                // 2) Thử match mã đơn DH-YYMMDD-XXX (cả format có/không dấu gạch)
+                $singleService = $this->findServiceByOrderCode($code);
+                if ($singleService) {
+                    $customer = $singleService->customer;
+                    $services = collect([$singleService]);
+                } else {
+                    // 3) Tìm theo mã KH / email / phone, fallback tên Zalo
+                    $customer = $this->findCustomer($code);
 
-                if ($customer) {
-                    $services = $customer->customerServices()
-                        ->with('servicePackage.category')
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+                    if ($customer) {
+                        $services = $customer->customerServices()
+                            ->with('servicePackage.category')
+                            ->orderBy('created_at', 'desc')
+                            ->get();
+                    }
                 }
             }
         }
 
-        return view('lookup.index', compact('customer', 'services', 'singleService', 'code', 'stats', 'categories'));
+        return view('lookup.index', compact('customer', 'services', 'singleService', 'groupCode', 'code', 'stats', 'categories'));
     }
 
     public function search(Request $request)
@@ -75,27 +85,36 @@ class LookupController extends Controller
             ]);
 
             $code = trim($request->input('code'));
+            $groupCode = null;
 
-            // 1) Thử match mã đơn trước
-            $singleService = $this->findServiceByOrderCode($code);
-            if ($singleService && $singleService->customer) {
-                $customer = $singleService->customer;
-                $services = collect([$singleService]);
+            // 1) Thử match mã LÔ GR-XXX trước (lô nhiều đơn)
+            $groupResult = $this->findServicesByGroupCode($code);
+            if ($groupResult) {
+                $customer = $groupResult['customer'];
+                $services = $groupResult['services'];
+                $groupCode = $groupResult['group_code'];
             } else {
-                // 2) Tìm theo mã KH / email / phone, fallback tên Zalo
-                $customer = $this->findCustomer($code);
+                // 2) Thử match mã đơn DH-XXX
+                $singleService = $this->findServiceByOrderCode($code);
+                if ($singleService && $singleService->customer) {
+                    $customer = $singleService->customer;
+                    $services = collect([$singleService]);
+                } else {
+                    // 3) Tìm theo mã KH / email / phone, fallback tên Zalo
+                    $customer = $this->findCustomer($code);
 
-                if (!$customer) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Không tìm thấy thông tin. Vui lòng kiểm tra lại mã đơn (DH-XXX), mã khách hàng (KUN/CTV), tên Zalo, email hoặc số điện thoại.'
-                    ], 404);
+                    if (!$customer) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Không tìm thấy thông tin. Vui lòng kiểm tra lại mã đơn (DH-XXX), mã lô (GR-XXX), mã khách hàng (KUN/CTV), tên Zalo, email hoặc số điện thoại.'
+                        ], 404);
+                    }
+
+                    $services = $customer->customerServices()
+                        ->with('servicePackage.category')
+                        ->orderBy('created_at', 'desc')
+                        ->get();
                 }
-
-                $services = $customer->customerServices()
-                    ->with('servicePackage.category')
-                    ->orderBy('created_at', 'desc')
-                    ->get();
             }
 
             return response()->json([
@@ -109,6 +128,7 @@ class LookupController extends Controller
                         'customer_code' => $customer->customer_code,
                         'created_at' => $customer->created_at->format('d/m/Y'),
                     ],
+                    'group_code' => $groupCode, // null nếu không phải search by lô
                     'services' => $services->map(function ($service) {
                         return [
                             'id' => $service->id,
@@ -129,6 +149,51 @@ class LookupController extends Controller
                 'message' => 'Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.'
             ], 500);
         }
+    }
+
+    /**
+     * Tìm tất cả CustomerService thuộc 1 mã LÔ GR-yymmdd-XXX. Chấp nhận format
+     * có/không dấu gạch (vd "GR-260503-001" hoặc "GR260503001").
+     *
+     * Logic: tìm tất cả PendingOrder có group_code → lấy các customer_service_id
+     * đã link → query CustomerService. Trả null nếu không match.
+     *
+     * @return array{customer: Customer, services: \Illuminate\Support\Collection, group_code: string}|null
+     */
+    private function findServicesByGroupCode(string $code): ?array
+    {
+        $upper = strtoupper(trim($code));
+        if (!preg_match('/^GR[-\s]?\d/i', $upper)) {
+            return null;
+        }
+        $stripped = str_replace(['-', ' '], '', $upper);
+
+        $orders = PendingOrder::where('group_code', $upper)
+            ->orWhereRaw('UPPER(REPLACE(group_code, "-", "")) = ?', [$stripped])
+            ->with('customer', 'customerService.servicePackage.category')
+            ->orderBy('order_code')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return null;
+        }
+
+        $customer = $orders->first()->customer;
+        if (!$customer) {
+            return null;
+        }
+
+        // Lấy CS đã link với từng PO trong lô (chỉ lấy CS đã active sau khi paid)
+        $services = $orders->pluck('customerService')->filter()->values();
+
+        // Group code chuẩn (sau khi normalize) để view banner show
+        $groupCode = $orders->first()->group_code;
+
+        return [
+            'customer' => $customer,
+            'services' => $services,
+            'group_code' => $groupCode,
+        ];
     }
 
     /**
