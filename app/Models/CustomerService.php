@@ -91,6 +91,9 @@ class CustomerService extends Model
         'cost_price',
         'price',
         'internal_notes',
+        'refund_amount',
+        'refunded_at',
+        'refund_reason',
         'reminder_sent',
         'reminder_sent_at',
         'reminder_count',
@@ -109,9 +112,11 @@ class CustomerService extends Model
     protected $casts = [
         'activated_at' => 'datetime',
         'expires_at' => 'datetime',
+        'refunded_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
         'reminder_sent' => 'boolean',
         'reminder_count' => 'integer',
+        'refund_amount' => 'integer',
         // Casts cho các trường mới
         'password_expires_at' => 'datetime',
         'two_factor_updated_at' => 'datetime',

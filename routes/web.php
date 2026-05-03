@@ -140,6 +140,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
     // ===== THÙNG RÁC =====
     Route::get('customer-services/{customerService}/audit', [CustomerServiceController::class, 'audit'])
         ->name('customer-services.audit');
+
+    // Refund (tính + xác nhận hoàn tiền cho đơn lỗi)
+    Route::get('customer-services/{customerService}/refund', [\App\Http\Controllers\Admin\RefundController::class, 'preview'])
+        ->name('customer-services.refund');
+    Route::post('customer-services/{customerService}/refund', [\App\Http\Controllers\Admin\RefundController::class, 'confirm'])
+        ->name('customer-services.refund.confirm');
     Route::get('customer-services/trash', [CustomerServiceController::class, 'trash'])
         ->name('customer-services.trash');
     Route::post('customer-services/trash/{id}/restore', [CustomerServiceController::class, 'restore'])
