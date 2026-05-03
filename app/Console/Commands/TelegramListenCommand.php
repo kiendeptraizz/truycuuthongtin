@@ -203,13 +203,20 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Auto-detect mã đơn DH-yymmdd-XXX (có/không dấu gạch) → show chi tiết +
+        // menu hành động (refund/warranty). User không phải gõ /dh prefix.
+        if (preg_match('/^DH[-\s]?\d{6}[-\s]?\d{3}$/i', $text)) {
+            $this->sendOrderDetails($chatId, $text);
+            return;
+        }
+
         // Text root khác — KHÔNG auto-start tạo đơn nữa (trước đây gõ số tiền sẽ
         // tự bắt đầu flow → user vô tình gõ "260503001" liền bị tạo KH rác).
         // Giờ chỉ nudge user dùng nút menu cho rõ ý đồ.
         $this->bot->sendMessage(
             $chatId,
             "🤔 Bot không hiểu yêu cầu này.\n\n"
-                . "💡 Bấm <b>📝 Tạo đơn</b> để bắt đầu đơn mới, hoặc <b>❓ Hướng dẫn</b> để xem các chức năng.",
+                . "💡 Bấm <b>📝 Tạo đơn</b> để bắt đầu, gõ thẳng <b>mã đơn</b> (vd <code>DH-260502-025</code>) để xem chi tiết, hoặc bấm <b>❓ Hướng dẫn</b>.",
             $this->mainMenuMarkup()
         );
     }
@@ -338,6 +345,18 @@ class TelegramListenCommand extends Command
             }
             $this->bot->sendMessage($chatId, "❌ Không tìm thấy đơn <code>{$code}</code>");
             return;
+        }
+
+        // ƯU TIÊN: nếu PO đã có CS link (đơn đã activate thành dịch vụ) → show CS view
+        // để có menu refund + warranty. View PO chỉ phù hợp cho đơn pending.
+        if ($order->customer_service_id) {
+            $cs = \App\Models\CustomerService::with(['customer', 'servicePackage.category'])
+                ->find($order->customer_service_id);
+            if ($cs) {
+                $this->sendCustomerServiceDetails($chatId, $cs);
+                return;
+            }
+            // CS bị xoá đâu rồi (orphan) → fall through render PO view
         }
 
         $statusEmoji = match ($order->status) {
@@ -2233,11 +2252,12 @@ class TelegramListenCommand extends Command
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
-            . "/dh DH-XXX-XXX — xem chi tiết 1 đơn\n"
+            . "/dh DH-XXX-XXX — xem chi tiết 1 đơn (hoặc gõ thẳng mã đơn)\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
-            . "<i>📝 Để tạo đơn mới, bấm nút <b>📝 Tạo đơn</b>.</i>";
+            . "<i>📝 Để tạo đơn mới, bấm nút <b>📝 Tạo đơn</b>.</i>\n"
+            . "<i>🔍 Gõ thẳng <code>DH-XXX-XXX</code> để xem chi tiết + menu hành động (refund / bảo hành).</i>";
     }
 
     /**
