@@ -40,7 +40,26 @@ class TelegramBotService
             throw new \RuntimeException('Telegram bot token chưa cấu hình.');
         }
         $url = "https://api.telegram.org/bot{$this->token}/{$method}";
-        $resp = Http::timeout(60)->retry(2, 500)->post($url, $params);
+
+        // Timeout config tối ưu cho UX:
+        //   - getUpdates (long polling): cần timeout dài (~30s) để đợi update
+        //   - sendMessage / sendPhoto / etc: cần timeout NGẮN để fail-fast khi
+        //     external slow (VietQR API chậm làm Telegram fetch URL slow → trả 400).
+        // Trước đây dùng timeout(60)+retry(2,500) cho TẤT CẢ → 1 sendPhoto fail
+        // có thể block 60+ giây → Pay2S webhook timeout → Pay2S retry → spiral.
+        $isLongPoll = $method === 'getUpdates';
+        $timeout = $isLongPoll ? 35 : 10;
+        $connectTimeout = 3;
+
+        $client = Http::timeout($timeout)->connectTimeout($connectTimeout);
+        // Retry chỉ cho long-poll (transient network issue khi đợi update lâu).
+        // sendMessage/sendPhoto KHÔNG retry — chấp nhận fail nhanh để upstream
+        // (sendPhotoSafe / webhook handler) có thể fallback gracefully.
+        if ($isLongPoll) {
+            $client = $client->retry(2, 500);
+        }
+
+        $resp = $client->post($url, $params);
 
         if (!$resp->successful()) {
             Log::warning("Telegram API failed: {$method}", ['response' => $resp->body()]);
