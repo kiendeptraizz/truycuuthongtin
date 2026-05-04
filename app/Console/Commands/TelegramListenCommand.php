@@ -933,10 +933,13 @@ class TelegramListenCommand extends Command
         // Hybrid: tạo CustomerService pending NGAY (chưa active)
         $this->tryCreatePendingCustomerService($order, $data);
 
-        $caption = $this->buildCaption($order, $data);
-        $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
-
+        // ClearState TRƯỚC sendPhoto: nếu sendPhoto fail (VietQR down, Telegram
+        // 400 wrong content...), state vẫn được clear → user không bị stuck
+        // ở bước cuối với đơn đã tạo trong DB.
         $this->clearState($chatId);
+
+        $caption = $this->buildCaption($order, $data);
+        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), $caption);
     }
 
     /**
@@ -1022,7 +1025,7 @@ class TelegramListenCommand extends Command
             . "\n\n──────\n\n"
             . $tail;
 
-        $this->bot->sendPhoto($chatId, $qrUrl, $caption);
+        $this->sendPhotoSafe($chatId, $qrUrl, $caption);
         $this->bot->sendMessage(
             $chatId,
             "✅ Đã tạo lô <code>{$groupCode}</code> gồm " . count($drafts) . " đơn. Đợi khách CK 1 lần là bot tự active cả lô.",
@@ -1268,7 +1271,7 @@ class TelegramListenCommand extends Command
             $caption .= "\n📝 " . e($order->note);
         }
 
-        $this->bot->sendPhoto($chatId, $order->qrCodeUrl(), $caption);
+        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), $caption);
     }
 
     /**
@@ -1841,7 +1844,7 @@ class TelegramListenCommand extends Command
             . "👤 <b>Chủ TK:</b> {$accName}\n\n"
             . "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
-        $this->bot->sendPhoto($chatId, $qrUrl, $caption);
+        $this->sendPhotoSafe($chatId, $qrUrl, $caption);
         $this->bot->sendMessage(
             $chatId,
             "✅ Đã gửi QR. Bấm <b>⚡ QR nhanh</b> để tạo tiếp.",
@@ -2173,37 +2176,81 @@ class TelegramListenCommand extends Command
         Cache::forget("tg_state_{$chatId}");
     }
 
+    /**
+     * Gửi ảnh qua Telegram. Nếu Telegram fail fetch URL ảnh (vd VietQR API tạm
+     * down trả HTML/JSON error → Telegram báo "wrong type of the web page
+     * content" 400) → fallback sendMessage với caption + link URL clickable
+     * để user vẫn nhận được info đơn + có thể tap link mở QR thủ công.
+     *
+     * Tránh bug: 1 lần sendPhoto fail làm crash whole flow finalizeOrder →
+     * không clearState → user stuck ở bước cuối + đơn vẫn được tạo trong DB
+     * nhưng không có cách biết.
+     */
+    private function sendPhotoSafe(int|string $chatId, string $url, string $caption = '', array $extras = []): void
+    {
+        try {
+            $this->bot->sendPhoto($chatId, $url, $caption, $extras);
+        } catch (\Throwable $e) {
+            Log::warning('Telegram: sendPhoto failed → fallback text+link', [
+                'chat_id' => $chatId,
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+            $linkLine = "\n\n📷 <a href=\"" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "\">📥 Mở ảnh QR (Telegram không tải được — tap link)</a>";
+            try {
+                $this->bot->sendMessage($chatId, $caption . $linkLine, $extras);
+            } catch (\Throwable $e2) {
+                Log::error('Telegram: fallback sendMessage cũng fail', [
+                    'chat_id' => $chatId,
+                    'error' => $e2->getMessage(),
+                ]);
+                // Last resort plain message
+                $this->bot->sendMessage($chatId, "✅ Đã tạo đơn nhưng Telegram không gửi được QR. Vào /admin/pending-orders để xem chi tiết.");
+            }
+        }
+    }
+
     private function sendListPending(int|string $chatId): void
     {
-        $orders = PendingOrder::where('status', 'pending')
-            ->whereDate('created_at', today())
+        // Show TẤT CẢ đơn pending (không filter ngày — đồng bộ với web
+        // /admin/pending-orders mặc định không filter date). Trước đây chỉ
+        // show today → user confused vì web 3 đơn còn bot 1 đơn.
+        $pendingQuery = PendingOrder::where('status', 'pending');
+        $totalPending = (clone $pendingQuery)->count();
+
+        $orders = $pendingQuery
             ->orderByDesc('id')
             ->limit(10)
             ->get();
 
         if ($orders->isEmpty()) {
-            $this->bot->sendMessage($chatId, "📭 Hôm nay chưa có đơn pending nào.");
+            $this->bot->sendMessage($chatId, "📭 Không có đơn pending nào.");
             return;
         }
 
         // Header tổng hợp + tổng tiền
         $total = 0;
         foreach ($orders as $o) $total += $o->amount;
-        $this->bot->sendMessage(
-            $chatId,
-            "📋 <b>Đơn pending hôm nay (" . $orders->count() . "):</b>\n\n"
-                . "💵 Tổng: <b>" . formatShortAmount($total) . "</b> ("
-                . number_format($total, 0, ',', '.') . "đ)"
-        );
+        $header = "📋 <b>Đơn pending ({$totalPending}):</b>";
+        if ($totalPending > 10) {
+            $header .= "\n<i>Hiện 10 đơn mới nhất — còn " . ($totalPending - 10) . " đơn cũ. Vào /admin/pending-orders để xem hết.</i>";
+        }
+        $header .= "\n\n💵 Tổng " . $orders->count() . " đơn: <b>" . formatShortAmount($total) . "</b> ("
+                . number_format($total, 0, ',', '.') . "đ)";
+        $this->bot->sendMessage($chatId, $header);
 
         // Mỗi đơn 1 message kèm inline button — tránh nhồi vào 1 message text dài
         // không có cách click huỷ từng đơn riêng
         foreach ($orders as $o) {
+            // Đơn từ ngày khác → show ngày luôn (vì giờ list không filter today)
+            $timeLabel = $o->created_at->isToday()
+                ? $o->created_at->format('H:i')
+                : $o->created_at->format('H:i d/m');
             $line = sprintf(
                 "• <b>%s</b>\n💵 %s · 🕐 %s%s",
                 $o->order_code,
                 formatShortAmount($o->amount),
-                $o->created_at->format('H:i'),
+                $timeLabel,
                 $o->note ? "\n📝 " . e($o->note) : ''
             );
             // Layer paid status hiển thị nếu có (đơn đã CK nhưng chưa fill)
