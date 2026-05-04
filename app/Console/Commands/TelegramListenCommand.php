@@ -148,7 +148,7 @@ class TelegramListenCommand extends Command
         $lc = strtolower($text);
         if (in_array($lc, ['/huy', '/huỷ', 'huy', 'huỷ'], true) || $lc === '/cancel') {
             if ($this->getState($chatId)) {
-                $this->clearState($chatId);
+                $this->clearStateAndPurge($chatId);
                 $this->bot->sendMessage($chatId, "❌ Đã huỷ. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
                 return;
             }
@@ -176,7 +176,7 @@ class TelegramListenCommand extends Command
             $allowedInConversation = ['/skip', '/full', '/huy', '/huỷ', '/cancel', '/lai', '/lại', '/back'];
             if (!in_array($cmdLc, $allowedInConversation, true)) {
                 $stepLabel = $this->stepLabel($state['step'] ?? '');
-                $this->clearState($chatId);
+                $this->clearStateAndPurge($chatId);
                 $this->bot->sendMessage(
                     $chatId,
                     "⚠️ Đã huỷ phiên đang dở (bước <i>{$stepLabel}</i>) vì bạn dùng lệnh khác.\n"
@@ -188,6 +188,13 @@ class TelegramListenCommand extends Command
 
         // Đang trong conversation? → tiếp tục
         if ($state) {
+            // Track user message_id để xoá sau khi finalize (chat sạch sau mỗi đơn)
+            $userMsgId = $message['message_id'] ?? null;
+            if ($userMsgId) {
+                $this->trackMessageId($chatId, (int) $userMsgId);
+                // Reload state để $state['data']['_track_msgs'] mới được nhận
+                $state = $this->getState($chatId) ?? $state;
+            }
             $this->handleConversationStep($chatId, $userId, $text, $state);
             return;
         }
@@ -508,7 +515,7 @@ class TelegramListenCommand extends Command
             case 'awaiting_amount':
                 $amount = parseShortAmount($text);
                 if ($amount <= 0) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Số tiền không hợp lệ.\n"
                             . "Gõ vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>",
@@ -540,7 +547,7 @@ class TelegramListenCommand extends Command
             case 'awaiting_quick_qr':
                 $amount = parseShortAmount($text);
                 if ($amount <= 0) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Số tiền không hợp lệ.\n"
                             . "Gõ vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>",
@@ -548,14 +555,14 @@ class TelegramListenCommand extends Command
                     );
                     return;
                 }
-                $this->clearState($chatId);
+                $this->clearStateAndPurge($chatId);
                 $this->sendQuickQr($chatId, $amount);
                 return;
 
             case 'warranty_email':
                 $email = trim($text);
                 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Email không hợp lệ. Gõ lại email TK mới hoặc bấm <b>⏭ Bỏ qua</b>.",
                         ['reply_markup' => json_encode([
@@ -569,7 +576,7 @@ class TelegramListenCommand extends Command
                 $data = $state['data'] ?? [];
                 $data['replacement_email'] = $email;
                 $this->setState($chatId, ['step' => 'warranty_password', 'data' => $data]);
-                $this->bot->sendMessage(
+                $this->sendAndTrack(
                     $chatId,
                     "🔑 Nhập <b>mật khẩu TK mới</b> (gõ <code>-</code> nếu chưa có hoặc giữ pass cũ):"
                 );
@@ -586,7 +593,7 @@ class TelegramListenCommand extends Command
             case 'warranty_extend':
                 $days = (int) preg_replace('/\D/', '', $text);
                 if ($days < 0 || $days > 3650) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Số ngày phải từ 0 đến 3650. Gõ lại hoặc bấm <b>⏭ Bỏ qua</b>.",
                         ['reply_markup' => json_encode([
@@ -606,18 +613,20 @@ class TelegramListenCommand extends Command
             case 'warranty_note':
                 $note = trim($text);
                 if (mb_strlen($note) < 3) {
-                    $this->bot->sendMessage($chatId, "❌ Ghi chú quá ngắn (≥ 3 ký tự). Gõ lại:");
+                    $this->sendAndTrack($chatId, "❌ Ghi chú quá ngắn (≥ 3 ký tự). Gõ lại:");
                     return;
                 }
                 $data = $state['data'] ?? [];
-                $this->finalizeWarranty($chatId, $data, $note);
+                // Purge prompt/reply messages của warranty flow trước khi finalize gửi summary
+                $this->purgeTrackedMessages($chatId, $data);
                 $this->clearState($chatId);
+                $this->finalizeWarranty($chatId, $data, $note);
                 return;
 
             case 'awaiting_multi_count':
                 $count = (int) preg_replace('/\D/', '', $text);
                 if ($count < 2 || $count > 5) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Số đơn phải từ 2 đến 5. Gõ lại số (vd <code>2</code> hoặc <code>3</code>):",
                         $this->navMarkup(false)
@@ -636,7 +645,7 @@ class TelegramListenCommand extends Command
                     ],
                 ];
                 $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => $newData]);
-                $this->bot->sendMessage(
+                $this->sendAndTrack(
                     $chatId,
                     "🛒 <b>Bắt đầu lô {$count} đơn</b>\n\n"
                         . "📦 <b>Đơn 1/{$count}:</b> Gõ số tiền\n"
@@ -648,7 +657,7 @@ class TelegramListenCommand extends Command
             case 'customer_name':
                 $input = trim($text);
                 if (mb_strlen($input) < 2) {
-                    $this->bot->sendMessage($chatId, "❌ Quá ngắn. Gõ lại tên hoặc mã khách hàng:");
+                    $this->sendAndTrack($chatId, "❌ Quá ngắn. Gõ lại tên hoặc mã khách hàng:");
                     return;
                 }
 
@@ -658,7 +667,7 @@ class TelegramListenCommand extends Command
                     $code = strtoupper($input);
                     $customer = \App\Models\Customer::where('customer_code', $code)->first();
                     if (!$customer) {
-                        $this->bot->sendMessage(
+                        $this->sendAndTrack(
                             $chatId,
                             "❌ Không tìm thấy KH với mã <code>{$code}</code>.\n\n"
                                 . "Gõ <b>tên đầy đủ</b> để tạo KH mới hoặc tìm theo tên, hoặc /huy để huỷ."
@@ -672,7 +681,7 @@ class TelegramListenCommand extends Command
                         $customer = $this->findOrCreateCustomer($input);
                     } catch (\Throwable $e) {
                         Log::error('Telegram: findOrCreateCustomer failed', ['name' => $input, 'error' => $e->getMessage()]);
-                        $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                        $this->sendAndTrack($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
                         return;
                     }
                 }
@@ -697,14 +706,14 @@ class TelegramListenCommand extends Command
                 }
 
                 $this->setState($chatId, ['step' => 'duration', 'data' => $data]);
-                $this->bot->sendMessage($chatId, $headLine);
+                $this->sendAndTrack($chatId, $headLine);
                 $this->promptDuration($chatId);
                 return;
 
             case 'duration':
                 $dur = $this->parseDuration(trim($text));
                 if (!$dur) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Sai format thời hạn.\n"
                             . "Gõ vd: <code>1m</code> (tháng), <code>25d</code> (ngày), <code>1y</code> (năm)."
@@ -723,7 +732,7 @@ class TelegramListenCommand extends Command
             case 'email':
                 $email = trim($text);
                 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $this->bot->sendMessage($chatId, "❌ Email không hợp lệ. Gõ lại:");
+                    $this->sendAndTrack($chatId, "❌ Email không hợp lệ. Gõ lại:");
                     return;
                 }
                 $data['email'] = $email;
@@ -734,7 +743,7 @@ class TelegramListenCommand extends Command
             case 'service_package':
                 $kw = trim($text);
                 if (mb_strlen($kw) < 1) {
-                    $this->bot->sendMessage($chatId, "❌ Gõ keyword tìm gói dịch vụ:");
+                    $this->sendAndTrack($chatId, "❌ Gõ keyword tìm gói dịch vụ:");
                     return;
                 }
 
@@ -746,7 +755,7 @@ class TelegramListenCommand extends Command
                     ->get();
 
                 if ($packages->isEmpty()) {
-                    $this->bot->sendMessage(
+                    $this->sendAndTrack(
                         $chatId,
                         "❌ Không tìm thấy gói nào khớp <b>'{$kw}'</b>.\n"
                             . "<i>Gõ keyword khác (ngắn hơn, vd <code>claude</code> thay vì <code>claude pro</code>)</i>"
@@ -775,7 +784,7 @@ class TelegramListenCommand extends Command
                     ['text' => '❌ Huỷ', 'callback_data' => 'cancel'],
                 ];
 
-                $this->bot->sendMessage(
+                $this->sendAndTrack(
                     $chatId,
                     "🔍 Tìm thấy <b>" . $packages->count() . "</b> gói khớp <code>{$kw}</code>. Click để chọn:",
                     ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
@@ -789,7 +798,7 @@ class TelegramListenCommand extends Command
                 if (in_array($lcInput, ['/skip', 'skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
                     $data['family_email'] = null;
                 } elseif ($input === '') {
-                    $this->bot->sendMessage($chatId, "❌ Trống. Gõ mã/email/số hoặc /skip:");
+                    $this->sendAndTrack($chatId, "❌ Trống. Gõ mã/email/số hoặc /skip:");
                     return;
                 } else {
                     // Cho phép bất cứ định dạng gì: email, số, text, code...
@@ -817,7 +826,7 @@ class TelegramListenCommand extends Command
                     // Parse Xd / Xm / Xy
                     $w = $this->parseDuration($input);
                     if (!$w) {
-                        $this->bot->sendMessage(
+                        $this->sendAndTrack(
                             $chatId,
                             "❌ Sai format bảo hành.\n"
                                 . "Gõ vd: <code>30d</code> (30 ngày), <code>1m</code> (1 tháng), <code>1y</code> (1 năm), /full (full thời hạn) hoặc /skip:",
@@ -843,7 +852,7 @@ class TelegramListenCommand extends Command
                 } else {
                     $profit = parseShortAmount($input);
                     if ($profit < 0) {
-                        $this->bot->sendMessage(
+                        $this->sendAndTrack(
                             $chatId,
                             "❌ Sai format. Gõ vd: <code>50k</code>, <code>200k</code>, <code>1.5tr</code>, hoặc /skip:",
                             $this->navMarkup()
@@ -859,7 +868,7 @@ class TelegramListenCommand extends Command
 
             default:
                 // State lạ — clear và yêu cầu start lại
-                $this->clearState($chatId);
+                $this->clearStateAndPurge($chatId);
                 $this->bot->sendMessage($chatId, "⚠️ Phiên đã hết. Gõ số tiền để bắt đầu đơn mới.");
         }
     }
@@ -890,9 +899,13 @@ class TelegramListenCommand extends Command
             // Còn đơn để tạo → reset state về 'awaiting_amount' với customer giữ nguyên
             if ($multi['index'] < $multi['count']) {
                 $next = $multi['index'] + 1;
-                $newData = ['_multi' => $multi];
+                // Giữ _track_msgs để xoá hết khi finalize lô (cuối cùng)
+                $newData = [
+                    '_multi' => $multi,
+                    '_track_msgs' => $data['_track_msgs'] ?? [],
+                ];
                 $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => $newData]);
-                $this->bot->sendMessage(
+                $this->sendAndTrack(
                     $chatId,
                     "✅ Đã lưu đơn {$multi['index']}/{$multi['count']}.\n\n"
                         . "📦 <b>Đơn {$next}/{$multi['count']}:</b> Gõ số tiền\n"
@@ -902,9 +915,11 @@ class TelegramListenCommand extends Command
                 return;
             }
 
-            // Đơn cuối → tạo lô
-            $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
+            // Đơn cuối → tạo lô. Purge tracked messages TRƯỚC khi gửi caption + QR.
+            $trackedIds = $data['_track_msgs'] ?? [];
+            $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedIds]);
             $this->clearState($chatId);
+            $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
             return;
         }
 
@@ -926,16 +941,16 @@ class TelegramListenCommand extends Command
         } catch (\Throwable $e) {
             Log::error('Telegram: finalizeOrder failed', ['error' => $e->getMessage(), 'data' => $data]);
             $this->bot->sendMessage($chatId, "❌ Lỗi tạo đơn: " . $e->getMessage());
-            $this->clearState($chatId);
+            $this->clearStateAndPurge($chatId);
             return;
         }
 
         // Hybrid: tạo CustomerService pending NGAY (chưa active)
         $this->tryCreatePendingCustomerService($order, $data);
 
-        // ClearState TRƯỚC sendPhoto: nếu sendPhoto fail (VietQR down, Telegram
-        // 400 wrong content...), state vẫn được clear → user không bị stuck
-        // ở bước cuối với đơn đã tạo trong DB.
+        // Purge prompts/replies TRƯỚC khi clearState + gửi caption.
+        // ClearState để các message tiếp theo (caption + QR) không bị track.
+        $this->purgeTrackedMessages($chatId, $data);
         $this->clearState($chatId);
 
         $caption = $this->buildCaption($order, $data);
@@ -1122,7 +1137,7 @@ class TelegramListenCommand extends Command
         // Click "❌ Huỷ đơn" — clear state, kết thúc phiên
         if ($cbData === 'cancel') {
             if ($state) {
-                $this->clearState($chatId);
+                $this->clearStateAndPurge($chatId);
             }
             $this->bot->sendMessage($chatId, "❌ Đã huỷ đơn. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
             return;
@@ -1567,7 +1582,7 @@ class TelegramListenCommand extends Command
             ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
         ];
 
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "📦 <b>Bước 4/7:</b> Chọn gói dịch vụ\n\n"
                 . "<b>2 cách:</b>\n"
@@ -1635,7 +1650,7 @@ class TelegramListenCommand extends Command
             ['text' => '❌ Huỷ', 'callback_data' => 'cancel'],
         ];
 
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "📦 <b>{$cat->name}</b> — {$total} gói (trang {$page}/{$totalPages})\n"
                 . "<i>Click 1 gói để chọn, hoặc gõ keyword để search:</i>",
@@ -1655,7 +1670,7 @@ class TelegramListenCommand extends Command
 
         $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
 
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "✅ Đã chọn: <b>{$pkg->name}</b>\n"
                 . "<i>Loại: {$pkg->account_type} · Danh mục: " . ($pkg->category?->name ?? '—') . "</i>"
@@ -1694,7 +1709,7 @@ class TelegramListenCommand extends Command
         $idx = array_search($current, self::STEP_ORDER, true);
         if ($idx === false || $idx === 0) {
             // Bước đầu hoặc state lạ — clear hết
-            $this->clearState($chatId);
+            $this->clearStateAndPurge($chatId);
             $this->bot->sendMessage($chatId, "↩ Đã huỷ phiên. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
             return;
         }
@@ -1775,7 +1790,7 @@ class TelegramListenCommand extends Command
     private function promptAmount(int|string $chatId): void
     {
         $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => []]);
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "💰 <b>Bước 0/7:</b> Số tiền đơn hàng?\n"
                 . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>",
@@ -1811,7 +1826,7 @@ class TelegramListenCommand extends Command
             'step' => 'awaiting_multi_count',
             'data' => [],
         ]);
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "🛒 <b>Đơn nhiều dịch vụ</b> — Khách mua nhiều DV cùng lúc, CK 1 lần.\n\n"
                 . "Số đơn cần tạo? (2 đến 5 đơn)\n"
@@ -1964,7 +1979,7 @@ class TelegramListenCommand extends Command
     private function promptCustomerName(int|string $chatId, array $data): void
     {
         $amount = (int) ($data['amount'] ?? 0);
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "💰 Đơn <b>" . formatShortAmount($amount) . "</b>\n\n"
                 . "👤 <b>Bước 1/7:</b> Tên hoặc mã khách hàng?\n"
@@ -1976,7 +1991,7 @@ class TelegramListenCommand extends Command
 
     private function promptDuration(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "⏰ <b>Bước 2/7:</b> Thời hạn tài khoản?\n"
                 . "<i>Vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm)</i>",
@@ -1986,7 +2001,7 @@ class TelegramListenCommand extends Command
 
     private function promptEmail(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "📧 <b>Bước 3/7:</b> Email tài khoản?\n"
                 . "<i>Vd: <code>huatungthang@gmail.com</code></i>",
@@ -1996,7 +2011,7 @@ class TelegramListenCommand extends Command
 
     private function promptFamilyEmail(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "👥 <b>Bước 5/7:</b> Mã nhóm - gia đình?\n"
                 . "<i>Có thể là email / số / mã / text bất kỳ.</i>\n"
@@ -2008,7 +2023,7 @@ class TelegramListenCommand extends Command
 
     private function promptWarranty(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "🛡 <b>Bước 6/7:</b> Bảo hành?\n"
                 . "<i>Vd: <code>30d</code> (30 ngày), <code>1m</code> (1 tháng), <code>1y</code> (1 năm)</i>\n\n"
@@ -2020,7 +2035,7 @@ class TelegramListenCommand extends Command
 
     private function promptProfit(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        $this->sendAndTrack(
             $chatId,
             "💵 <b>Bước 7/7:</b> Lợi nhuận của đơn?\n"
                 . "<i>Vd: <code>50k</code>, <code>200k</code>, <code>1.5tr</code></i>\n\n"
@@ -2174,6 +2189,77 @@ class TelegramListenCommand extends Command
     private function clearState(int|string $chatId): void
     {
         Cache::forget("tg_state_{$chatId}");
+    }
+
+    /**
+     * Xoá tất cả tracked messages của state hiện tại + clear state.
+     * Dùng khi user huỷ flow (/huy / cancel callback / step lạ) hoặc finalize.
+     */
+    private function clearStateAndPurge(int|string $chatId): void
+    {
+        $state = $this->getState($chatId);
+        if ($state) {
+            $this->purgeTrackedMessages($chatId, $state['data'] ?? []);
+        }
+        $this->clearState($chatId);
+    }
+
+    // ========================================================================
+    // MESSAGE TRACKING — track message_id để xoá sau khi finalize đơn
+    // (giúp chat sạch sau mỗi lần tạo đơn xong)
+    // ========================================================================
+
+    /**
+     * Gửi message và lưu message_id vào state (nếu đang trong conversation)
+     * để xoá sau khi finalize. Dùng thay $this->bot->sendMessage cho các
+     * prompt/status trong flow tạo đơn.
+     */
+    private function sendAndTrack(int|string $chatId, string $text, array $extras = []): array
+    {
+        $resp = $this->bot->sendMessage($chatId, $text, $extras);
+        $msgId = $resp['result']['message_id'] ?? null;
+        if ($msgId !== null) {
+            $this->trackMessageId($chatId, (int) $msgId);
+        }
+        return $resp;
+    }
+
+    /**
+     * Push message_id vào state['data']['_track_msgs']. Skip nếu không có
+     * state (message ngoài conversation — không cần xoá).
+     */
+    private function trackMessageId(int|string $chatId, int $msgId): void
+    {
+        $state = $this->getState($chatId);
+        if (!$state) return;
+        $data = $state['data'] ?? [];
+        $data['_track_msgs'] = $data['_track_msgs'] ?? [];
+        $data['_track_msgs'][] = $msgId;
+        $this->setState($chatId, [
+            'step' => $state['step'] ?? null,
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * Xoá tất cả message đã track (prompt bot + reply user) sau khi finalize.
+     * Telegram cho phép bot delete message trong 48 giờ (kể cả của user trong
+     * private chat). Lỗi delete (msg quá cũ/đã xoá) → ignore silently.
+     */
+    private function purgeTrackedMessages(int|string $chatId, array $data): void
+    {
+        $ids = $data['_track_msgs'] ?? [];
+        if (empty($ids)) return;
+        foreach ($ids as $id) {
+            try {
+                $this->bot->call('deleteMessage', [
+                    'chat_id' => $chatId,
+                    'message_id' => (int) $id,
+                ]);
+            } catch (\Throwable $e) {
+                // ignore — msg cũ > 48h hoặc đã xoá
+            }
+        }
     }
 
     /**
