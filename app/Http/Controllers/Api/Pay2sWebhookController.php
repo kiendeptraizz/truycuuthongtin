@@ -8,6 +8,7 @@ use App\Services\PaymentService;
 use App\Services\TelegramBotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class Pay2sWebhookController extends Controller
@@ -132,6 +133,8 @@ class Pay2sWebhookController extends Controller
         // PRIORITY 2: Match order_code linh hoạt: "DH-260502-001", "DH260502001", "DH 260502 001"
         if (!preg_match('/DH[-\s]?(\d{6})[-\s]?(\d{3})/i', $content, $m)) {
             Log::info('Pay2S webhook: no order_code or group_code in content', ['content' => $content]);
+            // Cảnh báo admin — khách CK rồi nhưng content thiếu mã đơn → cần mark thủ công
+            $this->sendUnmatchedNotification($bot, $bankTxId, $amount, $content, 'no_code', null);
             return ['ok' => true, 'matched' => false, 'content' => $content];
         }
         $orderCode = sprintf('DH-%s-%s', $m[1], $m[2]);
@@ -139,6 +142,8 @@ class Pay2sWebhookController extends Controller
         $order = PendingOrder::where('order_code', $orderCode)->first();
         if (!$order) {
             Log::warning('Pay2S webhook: order_code not found', ['order_code' => $orderCode]);
+            // Cảnh báo admin — khách gõ mã sai (typo) → cần mark thủ công đúng đơn
+            $this->sendUnmatchedNotification($bot, $bankTxId, $amount, $content, 'order_not_found', $orderCode);
             return ['ok' => true, 'matched' => false, 'order_code' => $orderCode];
         }
 
@@ -312,6 +317,61 @@ class Pay2sWebhookController extends Controller
             }
         } catch (\Throwable $e) {
             Log::error('Pay2S webhook: Telegram noti failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Cảnh báo admin khi Pay2S nhận giao dịch nhưng KHÔNG match được đơn hàng:
+     *   - reason='no_code': content CK không có mã đơn (DH-XXX/GR-XXX). Khách quên ghi.
+     *   - reason='order_not_found': content có mã DH-XXX nhưng không tồn tại trong DB
+     *     (khách gõ sai số / mã đơn cũ đã xoá).
+     *
+     * Idempotent qua Cache key 'pay2s_unmatched_<bankTxId>' TTL 1h — Pay2S retry
+     * 2-3 lần với cùng tx, chỉ gửi noti 1 lần.
+     */
+    private function sendUnmatchedNotification(
+        TelegramBotService $bot,
+        string $bankTxId,
+        int $amount,
+        string $content,
+        string $reason,
+        ?string $attemptedOrderCode
+    ): void {
+        try {
+            // Idempotent — chặn duplicate noti khi Pay2S retry
+            if ($bankTxId !== '') {
+                $cacheKey = "pay2s_unmatched_{$bankTxId}";
+                if (Cache::has($cacheKey)) {
+                    return;
+                }
+                Cache::put($cacheKey, true, now()->addHour());
+            }
+
+            $reasonLine = match ($reason) {
+                'no_code' => "❌ <b>Lý do:</b> Khách CK <b>không ghi mã đơn</b> trong nội dung.",
+                'order_not_found' => "❌ <b>Lý do:</b> Mã <code>{$attemptedOrderCode}</code> KHÔNG tồn tại trong hệ thống (khách gõ sai?).",
+                default => "❌ <b>Lý do:</b> Không match đơn nào.",
+            };
+
+            $pendingUrl = rtrim(config('app.url'), '/') . '/admin/pending-orders';
+
+            $msg = "⚠️ <b>CK KHÔNG MATCH ĐƠN — Cần mark thủ công!</b>\n\n"
+                . "💵 <b>Số tiền:</b> " . formatShortAmount($amount) . " (" . number_format($amount, 0, ',', '.') . "đ)\n"
+                . "📝 <b>Nội dung CK:</b> <code>" . e(mb_substr($content, 0, 200)) . "</code>\n"
+                . "🆔 <b>Bank TX:</b> <code>" . e($bankTxId) . "</code>\n\n"
+                . $reasonLine . "\n\n"
+                . "🔗 <a href=\"{$pendingUrl}\">Vào /admin/pending-orders để mark thủ công</a>\n"
+                . "<i>Hoặc trong bot: 📋 Đơn pending → bấm 💳 Đã trả trên đơn tương ứng.</i>";
+
+            $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
+            foreach ($adminIds as $chatId) {
+                $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: sendUnmatchedNotification failed', [
+                'bank_tx' => $bankTxId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }
