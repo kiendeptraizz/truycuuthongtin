@@ -74,15 +74,31 @@
 
     <!-- Existing Customer Selection Mode -->
     <div class="existing-customer-mode" id="{{ $id }}_existing_mode">
-        <!-- Search Input -->
+        <!-- Search Input + Dropdown Wrapper (position-relative để dropdown absolute anchor đúng) -->
         <div class="position-relative mb-2">
             <input type="text"
                    class="form-control @error($name) is-invalid @enderror"
                    id="{{ $searchId }}"
                    placeholder="{{ $placeholder }}"
                    autocomplete="off">
-            <div class="position-absolute top-50 end-0 translate-middle-y me-3">
+            <div class="position-absolute top-50 end-0 translate-middle-y me-3" style="pointer-events: none;">
                 <i class="fas fa-search text-muted"></i>
+            </div>
+
+            {{-- Dropdown nằm IN wrapper này để position:absolute top:100% anchor đúng dưới input --}}
+            <div class="dropdown-menu w-100 shadow-sm"
+                 id="{{ $dropdownId }}"
+                 style="max-height: 300px; overflow-y: auto; display: none;">
+                <div class="px-3 py-2 text-muted small border-bottom">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Nhập để tìm kiếm hoặc chọn từ danh sách bên dưới
+                </div>
+                {{-- AJAX search results — render bởi JS từ /admin/customers-search-api --}}
+                <div id="{{ $resultsId }}">
+                    <div class="px-3 py-3 text-muted text-center small">
+                        <i class="fas fa-spinner fa-spin me-1"></i> Đang tải khách hàng...
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -149,22 +165,9 @@
         @endforeach
     </select>
     
-    <!-- Search Results Dropdown -->
-    <div class="dropdown-menu w-100 shadow-sm" 
-         id="{{ $dropdownId }}" 
-         style="max-height: 300px; overflow-y: auto; display: none;">
-        <div class="px-3 py-2 text-muted small border-bottom">
-            <i class="fas fa-info-circle me-1"></i>
-            Nhập để tìm kiếm hoặc chọn từ danh sách bên dưới
-        </div>
-        {{-- AJAX search results — render bởi JS từ /admin/customers-search-api --}}
-        <div id="{{ $resultsId }}">
-            <div class="px-3 py-3 text-muted text-center small">
-                <i class="fas fa-spinner fa-spin me-1"></i> Đang tải khách hàng...
-            </div>
-        </div>
-    </div>
-    
+    {{-- Old dropdown (sibling) đã được move vào trong existing-customer-mode wrapper
+         để position:absolute anchor đúng dưới input. --}}
+
     <!-- Selected Customer Display -->
     <div class="mt-2 d-none" id="{{ $displayId }}">
         <div class="alert alert-success d-flex align-items-center">
@@ -247,15 +250,25 @@
 @push('styles')
 <style>
 /* Customer Search Selector Styles */
+/* QUAN TRỌNG: parent phải position relative để dropdown absolute anchor đúng
+   ngay dưới input, không bị float ra ngoài viewport. */
+.customer-search-selector {
+    position: relative;
+}
 .customer-search-selector .dropdown-menu {
     position: absolute;
     top: 100%;
     left: 0;
+    right: 0;
     z-index: 1050;
     border: 1px solid #dee2e6;
     border-radius: 0.375rem;
     background-color: #fff;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    width: 100%;
+}
+.customer-search-selector .dropdown-menu.show {
+    display: block !important;
 }
 
 .customer-search-selector .dropdown-item {
