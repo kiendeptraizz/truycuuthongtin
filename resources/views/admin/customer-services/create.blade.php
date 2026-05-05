@@ -186,45 +186,9 @@
                                 <div class="form-text" id="duration_calculated_text">Thời hạn: 30 ngày</div>
                             </div>
 
-                            <div class="col-md-4 mb-3">
-                                <label for="cost_price" class="form-label">
-                                    <i class="fas fa-dollar-sign me-1"></i>
-                                    Giá nhập (VNĐ) <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                    class="form-control @error('cost_price') is-invalid @enderror"
-                                    id="cost_price"
-                                    name="cost_price"
-                                    value="{{ old('cost_price') }}"
-                                    data-currency="VND"
-                                    data-show-currency="false"
-                                    placeholder="0"
-                                    required>
-                                @error('cost_price')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                                <div class="form-text">Giá vốn mua từ nhà cung cấp</div>
-                            </div>
-
-                            <div class="col-md-4 mb-3">
-                                <label for="price" class="form-label">
-                                    <i class="fas fa-tag me-1"></i>
-                                    Giá bán (VNĐ) <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                    class="form-control @error('price') is-invalid @enderror"
-                                    id="price"
-                                    name="price"
-                                    value="{{ old('price') }}"
-                                    data-currency="VND"
-                                    data-show-currency="false"
-                                    placeholder="0"
-                                    required>
-                                @error('price')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                                <div class="form-text">Giá bán cho khách hàng</div>
-                            </div>
+                            {{-- Đã bỏ Giá nhập (cost_price) + Giá bán (price) — đồng bộ với form
+                                 /admin/customers/{id}/assign-service. Hệ thống chỉ tính profit
+                                 (lợi nhuận tuyệt đối), không tracking revenue per-service. --}}
 
                             {{-- Bảo hành — input-group số + select đơn vị (giống Thời hạn tùy chỉnh) --}}
                             <div class="col-md-6 mb-3">

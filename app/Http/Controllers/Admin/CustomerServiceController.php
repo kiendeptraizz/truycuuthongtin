@@ -282,8 +282,10 @@ class CustomerServiceController extends Controller
                 'warranty_days' => 'nullable|integer|min:0',
                 'order_amount' => 'nullable|string',
                 'family_code' => 'nullable|string|max:100',
-                'cost_price' => 'required|string',
-                'price' => 'required|string',
+                // cost_price + price: đã bỏ khỏi form (đồng bộ assign.blade.php).
+                // Hệ thống profit-only — KHÔNG track revenue per-service. Default 0.
+                'cost_price' => 'nullable|string',
+                'price' => 'nullable|string',
                 'internal_notes' => 'nullable|string',
                 'profit_amount' => 'nullable|numeric|min:0',
                 'profit_notes' => 'nullable|string|max:1000',
@@ -296,9 +298,9 @@ class CustomerServiceController extends Controller
             throw $e;
         }
 
-        // Parse currency inputs
-        $costPrice = parseCurrency($request->cost_price);
-        $price = parseCurrency($request->price);
+        // Parse currency inputs (default 0 nếu không có — hệ thống profit-only)
+        $costPrice = $request->filled('cost_price') ? parseCurrency($request->cost_price) : 0;
+        $price = $request->filled('price') ? parseCurrency($request->price) : 0;
         $orderAmount = $request->filled('order_amount') ? parseCurrency($request->order_amount) : null;
 
         // Tạo dịch vụ khách hàng
