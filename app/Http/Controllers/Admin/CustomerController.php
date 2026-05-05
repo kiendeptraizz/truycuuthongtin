@@ -229,4 +229,38 @@ class CustomerController extends Controller
             'code' => strtoupper($code)
         ]);
     }
+
+    /**
+     * AJAX search endpoint cho customer-search-selector component.
+     *
+     * Query khớp `customer_code`, `name`, `email`, `phone` (LIKE %q%). Trả top
+     * 30 records sắp xếp ưu tiên: exact code match → recent created.
+     * Dùng thay cho preload 800+ customers vào DOM (chậm, không scale).
+     */
+    public function searchApi(\Illuminate\Http\Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+
+        $query = Customer::query();
+        if ($q !== '') {
+            $query->where(function ($w) use ($q) {
+                $w->where('customer_code', 'LIKE', "%{$q}%")
+                    ->orWhere('name', 'LIKE', "%{$q}%")
+                    ->orWhere('email', 'LIKE', "%{$q}%")
+                    ->orWhere('phone', 'LIKE', "%{$q}%");
+            });
+        }
+
+        $customers = $query
+            ->orderByRaw('CASE WHEN UPPER(customer_code) = UPPER(?) THEN 0 ELSE 1 END', [$q])
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get(['id', 'customer_code', 'name', 'email', 'phone']);
+
+        return response()->json([
+            'data' => $customers,
+            'count' => $customers->count(),
+            'query' => $q,
+        ]);
+    }
 }

@@ -157,31 +157,11 @@
             <i class="fas fa-info-circle me-1"></i>
             Nhập để tìm kiếm hoặc chọn từ danh sách bên dưới
         </div>
+        {{-- AJAX search results — render bởi JS từ /admin/customers-search-api --}}
         <div id="{{ $resultsId }}">
-            @foreach($customers as $customer)
-                <a class="dropdown-item customer-option" 
-                   href="#" 
-                   data-customer-id="{{ $customer->id }}"
-                   data-customer-name="{{ $customer->name }}"
-                   data-customer-code="{{ $customer->customer_code }}"
-                   data-customer-email="{{ $customer->email ?? '' }}"
-                   data-search="{{ strtolower($customer->name . ' ' . $customer->customer_code . ' ' . ($customer->email ?? '')) }}">
-                    <div class="d-flex align-items-center">
-                        <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
-                            <i class="fas fa-user"></i>
-                        </div>
-                        <div>
-                            <div class="fw-bold">{{ $customer->name }}</div>
-                            <small class="text-muted">
-                                {{ $customer->customer_code }}
-                                @if($customer->email)
-                                    • {{ $customer->email }}
-                                @endif
-                            </small>
-                        </div>
-                    </div>
-                </a>
-            @endforeach
+            <div class="px-3 py-3 text-muted text-center small">
+                <i class="fas fa-spinner fa-spin me-1"></i> Đang tải khách hàng...
+            </div>
         </div>
     </div>
     
@@ -578,7 +558,77 @@ function initCustomerSearchSelector(baseId, options = {}) {
         }
     }
     
+    // ====== AJAX search ======
+    const SEARCH_API_URL = "{{ route('admin.customers.search-api') }}";
+    let searchAbortController = null;
+    let searchDebounceTimer = null;
+    let lastResults = [];
+
+    function fetchCustomers(query) {
+        if (searchAbortController) {
+            try { searchAbortController.abort(); } catch (e) {}
+        }
+        searchAbortController = new AbortController();
+        if (customerResults) {
+            customerResults.innerHTML = '<div class="px-3 py-3 text-muted text-center small"><i class="fas fa-spinner fa-spin me-1"></i> Đang tìm kiếm...</div>';
+        }
+        const url = SEARCH_API_URL + '?q=' + encodeURIComponent(query);
+        fetch(url, { signal: searchAbortController.signal, headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(json => {
+                lastResults = json.data || [];
+                renderResults(lastResults, query);
+            })
+            .catch(err => {
+                if (err && err.name === 'AbortError') return;
+                console.error('Customer search failed:', err);
+                if (customerResults) {
+                    customerResults.innerHTML = '<div class="px-3 py-3 text-danger text-center small">Lỗi tải khách hàng. Vui lòng thử lại.</div>';
+                }
+            });
+    }
+
+    function renderResults(customers, query) {
+        if (!customerResults) return;
+        if (!customers || customers.length === 0) {
+            customerResults.innerHTML = '<div class="px-3 py-3 text-muted text-center small">Không tìm thấy khách hàng nào' + (query ? ' khớp với "' + escapeHtml(query) + '"' : '') + '</div>';
+            return;
+        }
+        customerResults.innerHTML = customers.map(c => {
+            const name = escapeHtml(c.name || '');
+            const code = escapeHtml(c.customer_code || '');
+            const email = escapeHtml(c.email || '');
+            const phone = escapeHtml(c.phone || '');
+            const meta = [code, email, phone].filter(Boolean).join(' • ');
+            return '<a class="dropdown-item customer-option" href="#" '
+                + 'data-customer-id="' + c.id + '" '
+                + 'data-customer-name="' + name + '" '
+                + 'data-customer-code="' + code + '" '
+                + 'data-customer-email="' + email + '">'
+                + '<div class="d-flex align-items-center">'
+                + '<div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"><i class="fas fa-user"></i></div>'
+                + '<div><div class="fw-bold">' + name + '</div>'
+                + '<small class="text-muted">' + meta + '</small></div></div></a>';
+        }).join('');
+    }
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     function showAllCustomers() {
+        clearTimeout(searchDebounceTimer);
+        fetchCustomers('');
+    }
+
+    function searchCustomers(query) {
+        clearTimeout(searchDebounceTimer);
+        // Debounce 300ms — tránh spam request mỗi keystroke
+        searchDebounceTimer = setTimeout(() => fetchCustomers(query), 300);
+    }
+
+    function _legacyShowAllClientSide() {
         if (customerResults) {
             customerResults.querySelectorAll('.customer-option').forEach(option => {
                 option.classList.remove('d-none');
@@ -586,13 +636,12 @@ function initCustomerSearchSelector(baseId, options = {}) {
         }
     }
     
-    function searchCustomers(query) {
+    function _legacySearchClientSide(query) {
         if (customerResults) {
             customerResults.querySelectorAll('.customer-option').forEach(option => {
                 const searchText = option.dataset.search;
                 if (searchText.includes(query)) {
                     option.classList.remove('d-none');
-                    // Highlight matching text
                     highlightMatch(option, query);
                 } else {
                     option.classList.add('d-none');

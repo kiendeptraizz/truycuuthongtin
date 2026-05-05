@@ -93,6 +93,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
     Route::resource('customers', CustomerController::class);
     Route::get('customers/check-code/{code}', [CustomerController::class, 'checkCustomerCode'])
         ->name('customers.check-code');
+    Route::get('customers-search-api', [CustomerController::class, 'searchApi'])
+        ->name('customers.search-api');
 
     // ========================================================================
     // 🛡️ QUẢN LÝ BACKUP
