@@ -250,24 +250,25 @@
 @push('styles')
 <style>
 /* Customer Search Selector Styles */
-/* QUAN TRỌNG: parent phải position relative để dropdown absolute anchor đúng
-   ngay dưới input, không bị float ra ngoài viewport. */
 .customer-search-selector {
     position: relative;
 }
+/* Dropdown dùng position:static để LUÔN nằm ngay dưới input dạng block —
+   không bị floating sai vị trí (issue gặp với position:absolute trước đó).
+   Trade-off: đẩy form xuống khi dropdown mở, nhưng đảm bảo visible 100%. */
 .customer-search-selector .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 1050;
+    position: static;
+    margin-top: 0.5rem;
+    width: 100%;
     border: 1px solid #dee2e6;
     border-radius: 0.375rem;
     background-color: #fff;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    width: 100%;
+    transform: none !important;
+    inset: auto !important;
 }
-.customer-search-selector .dropdown-menu.show {
+.customer-search-selector .dropdown-menu.show,
+.customer-search-selector .dropdown-menu[style*="display: block"] {
     display: block !important;
 }
 
