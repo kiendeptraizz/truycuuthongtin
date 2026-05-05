@@ -385,7 +385,7 @@ class TelegramListenCommand extends Command
         };
 
         $lines = [
-            "📋 <b>{$order->order_code}</b>",
+            "📋 <code>{$order->order_code}</code>",
             "{$statusEmoji} Trạng thái: <b>{$statusLabel}</b>",
             "💵 Số tiền: <b>" . formatShortAmount((int) $order->amount) . "</b>",
             "🕐 Tạo lúc: " . $order->created_at->format('H:i d/m/Y'),
@@ -447,7 +447,7 @@ class TelegramListenCommand extends Command
         };
 
         $lines = [
-            "📋 <b>{$cs->order_code}</b> (dịch vụ KH #{$cs->id})",
+            "📋 <code>{$cs->order_code}</code> (dịch vụ KH #{$cs->id})",
             "{$statusEmoji} Trạng thái: <b>{$statusLabel}</b>",
         ];
         if ($cs->customer) {
@@ -1083,7 +1083,7 @@ class TelegramListenCommand extends Command
         $blocks = collect($result['orders'])->map(function ($item) {
             $order = $item['order'];
             $draft = $item['draft'];
-            $lines = ["✅ <b>{$order->order_code}</b>"];
+            $lines = ["✅ <code>{$order->order_code}</code>"];
             $lines = array_merge($lines, $this->buildOrderDetailsLines($draft));
             return implode("\n", $lines);
         })->implode("\n\n──────\n\n");
@@ -1932,7 +1932,7 @@ class TelegramListenCommand extends Command
         $this->purgeTrackedMessages($chatId, $data);
         $this->clearState($chatId);
 
-        $caption = "✅ <b>{$order->order_code}</b> <i>(đơn nhanh)</i>\n\n"
+        $caption = "✅ <code>{$order->order_code}</code> <i>(đơn nhanh)</i>\n\n"
             . "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>" . e($data['customer_name']) . "</b>\n"
             . "💵 Giá đơn: <b>" . formatShortAmount((int) $data['amount']) . "</b>\n\n"
             . "<i>⏳ Đơn đang chờ fill chi tiết (gói / email / thời hạn / bảo hành / lợi nhuận). "
@@ -2197,7 +2197,7 @@ class TelegramListenCommand extends Command
         $tail = "\n\n<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
         $lines = [
-            "✅ <b>{$order->order_code}</b>",
+            "✅ <code>{$order->order_code}</code>",
             '',
             "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>{$data['customer_name']}</b>",
         ];
