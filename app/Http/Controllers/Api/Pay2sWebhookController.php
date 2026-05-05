@@ -220,7 +220,7 @@ class Pay2sWebhookController extends Controller
                 . "💵 Tổng tiền nhận: <b>" . formatShortAmount($amount) . "</b>"
                 . $deltaNote
                 . "\n\n"
-                . "🔗 <a href=\"{$lookupUrl}\">Theo dõi và xem chi tiết các đơn tại đây</a>";
+                . "🔗 Link theo dõi đơn hàng:\n{$lookupUrl}";
 
             $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
             foreach ($adminIds as $chatId) {
@@ -310,7 +310,7 @@ class Pay2sWebhookController extends Controller
                 . "💵 Số tiền: <b>" . formatShortAmount($amount) . "</b>"
                 . $deltaNote
                 . "\n\n"
-                . "🔗 <a href=\"{$lookupUrl}\">Theo dõi và xem chi tiết đơn hàng tại đây</a>";
+                . "🔗 Link theo dõi đơn hàng:\n{$lookupUrl}";
 
             foreach ($adminIds as $chatId) {
                 $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
