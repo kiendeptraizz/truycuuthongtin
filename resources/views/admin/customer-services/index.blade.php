@@ -632,44 +632,13 @@
                                                     </a>
                                                 </div>
 
-                                                @php
-                                                $isExpiringSoon = $service->isExpiringSoon();
-                                                $isExpired = $service->expires_at && $service->expires_at->startOfDay()->isPast();
-                                                @endphp
-
                                                 <div class="btn-group">
-                                                    @if($isExpiringSoon)
-                                                    @if(!$service->reminder_sent || $service->needsReminderAgain())
-                                                    <button class="btn btn-sm btn-outline-warning"
-                                                        onclick="markReminded({{ $service->id }})"
-                                                        title="Đánh dấu đã nhắc nhở">
-                                                        <i class="fas fa-bell"></i>
-                                                    </button>
-                                                    @endif
-
-                                                    @if($service->reminder_sent)
-                                                    <button class="btn btn-sm btn-outline-secondary"
-                                                        onclick="resetReminder({{ $service->id }})"
-                                                        title="Reset trạng thái nhắc nhở">
-                                                        <i class="fas fa-sync-alt"></i>
-                                                    </button>
-                                                    @endif
-                                                    @elseif($isExpired)
-                                                    @if(!$service->reminder_sent || $service->needsReminderAgain())
-                                                    <button class="btn btn-sm btn-outline-danger"
-                                                        onclick="markReminded({{ $service->id }})"
-                                                        title="Đánh dấu đã nhắc nhở (Đã hết hạn)">
-                                                        <i class="fas fa-bell-slash"></i>
-                                                    </button>
-                                                    @endif
-
-                                                    @if($service->reminder_sent)
-                                                    <button class="btn btn-sm btn-outline-secondary"
-                                                        onclick="resetReminder({{ $service->id }})"
-                                                        title="Reset trạng thái nhắc nhở">
-                                                        <i class="fas fa-sync-alt"></i>
-                                                    </button>
-                                                    @endif
+                                                    @if($service->customer_id)
+                                                    <a href="{{ route('admin.customers.assign-service', $service->customer_id) }}"
+                                                        class="btn btn-sm btn-outline-success"
+                                                        title="Gán thêm dịch vụ cho {{ $service->customer->name ?? 'khách' }}">
+                                                        <i class="fas fa-plus"></i>
+                                                    </a>
                                                     @endif
 
                                                     <button class="btn btn-sm btn-outline-danger"
