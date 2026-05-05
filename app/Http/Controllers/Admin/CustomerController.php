@@ -237,6 +237,31 @@ class CustomerController extends Controller
      * 30 records sắp xếp ưu tiên: exact code match → recent created.
      * Dùng thay cho preload 800+ customers vào DOM (chậm, không scale).
      */
+    /**
+     * Tạo KH mới chỉ với tên (auto sinh customer_code KUN/CTV).
+     * Dùng cho component customer-search-selector — nút "+ Thêm KH mới" trong
+     * form gán dịch vụ. KHÔNG cần email/phone/note → user không phải fill nhiều
+     * trường lằng nhằng. Email/phone có thể edit sau qua /admin/customers/{id}/edit.
+     */
+    public function quickCreate(\Illuminate\Http\Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:255',
+        ]);
+
+        $customer = Customer::createSafe([
+            'name' => trim($data['name']),
+        ]);
+
+        return response()->json([
+            'id' => $customer->id,
+            'customer_code' => $customer->customer_code,
+            'name' => $customer->name,
+            'email' => null,
+            'phone' => null,
+        ]);
+    }
+
     public function searchApi(\Illuminate\Http\Request $request)
     {
         $q = trim((string) $request->get('q', ''));

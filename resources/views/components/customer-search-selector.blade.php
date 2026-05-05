@@ -74,17 +74,54 @@
 
     <!-- Existing Customer Selection Mode -->
     <div class="existing-customer-mode" id="{{ $id }}_existing_mode">
-        <!-- Search Input + Dropdown Wrapper (position-relative để dropdown absolute anchor đúng) -->
-        <div class="position-relative mb-2">
-            <input type="text"
-                   class="form-control @error($name) is-invalid @enderror"
-                   id="{{ $searchId }}"
-                   placeholder="{{ $placeholder }}"
-                   autocomplete="off">
-            <div class="position-absolute top-50 end-0 translate-middle-y me-3" style="pointer-events: none;">
-                <i class="fas fa-search text-muted"></i>
+        <!-- Search Input + nút Thêm KH mới -->
+        <div class="d-flex gap-2 mb-2">
+            <div class="position-relative flex-grow-1">
+                <input type="text"
+                       class="form-control @error($name) is-invalid @enderror"
+                       id="{{ $searchId }}"
+                       placeholder="{{ $placeholder }}"
+                       autocomplete="off">
+                <div class="position-absolute top-50 end-0 translate-middle-y me-3" style="pointer-events: none;">
+                    <i class="fas fa-search text-muted"></i>
+                </div>
             </div>
+            <button type="button"
+                    class="btn btn-success flex-shrink-0"
+                    id="{{ $id }}_quick_create_toggle"
+                    title="Thêm khách hàng mới (chỉ cần tên — tự sinh mã KH)">
+                <i class="fas fa-user-plus"></i>
+                <span class="d-none d-md-inline ms-1">Thêm KH mới</span>
+            </button>
+        </div>
 
+        <!-- Inline form thêm KH mới (collapsible) -->
+        <div class="customer-quick-create-form mb-2 d-none" id="{{ $id }}_quick_create_form">
+            <div class="card border-success bg-light">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="fas fa-user-plus text-success me-2"></i>
+                        <strong class="me-auto">Thêm khách hàng mới</strong>
+                        <button type="button" class="btn-close btn-sm" id="{{ $id }}_quick_create_cancel" aria-label="Đóng"></button>
+                    </div>
+                    <div class="text-muted small mb-2">
+                        Chỉ cần nhập tên — bot tự sinh mã KH (KUN/CTV). Email/SĐT có thể bổ sung sau.
+                    </div>
+                    <div class="d-flex gap-2">
+                        <input type="text"
+                               class="form-control"
+                               id="{{ $id }}_quick_create_name"
+                               placeholder="Tên khách hàng (vd: Nguyễn Văn A)"
+                               autocomplete="off">
+                        <button type="button"
+                                class="btn btn-success flex-shrink-0"
+                                id="{{ $id }}_quick_create_submit">
+                            <i class="fas fa-check me-1"></i>Tạo
+                        </button>
+                    </div>
+                    <div class="text-danger small mt-2 d-none" id="{{ $id }}_quick_create_error"></div>
+                </div>
+            </div>
         </div>
 
         {{-- Results panel custom (KHÔNG dùng class dropdown-menu để tránh Bootstrap JS auto-dispose) --}}
@@ -494,6 +531,120 @@ function initCustomerSearchSelector(baseId, options = {}) {
             showAllCustomers();
         }
     });
+
+    // ====== Quick create KH mới ======
+    const quickToggleBtn = document.getElementById(baseId + '_quick_create_toggle');
+    const quickForm = document.getElementById(baseId + '_quick_create_form');
+    const quickCancelBtn = document.getElementById(baseId + '_quick_create_cancel');
+    const quickNameInput = document.getElementById(baseId + '_quick_create_name');
+    const quickSubmitBtn = document.getElementById(baseId + '_quick_create_submit');
+    const quickErrorBox = document.getElementById(baseId + '_quick_create_error');
+    const QUICK_CREATE_URL = "{{ route('admin.customers.quick-create') }}";
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    function showQuickError(msg) {
+        if (quickErrorBox) {
+            quickErrorBox.textContent = msg;
+            quickErrorBox.classList.remove('d-none');
+        }
+    }
+    function clearQuickError() {
+        if (quickErrorBox) {
+            quickErrorBox.textContent = '';
+            quickErrorBox.classList.add('d-none');
+        }
+    }
+
+    if (quickToggleBtn && quickForm) {
+        quickToggleBtn.addEventListener('click', function() {
+            quickForm.classList.toggle('d-none');
+            if (!quickForm.classList.contains('d-none')) {
+                clearQuickError();
+                if (quickNameInput) {
+                    quickNameInput.value = '';
+                    quickNameInput.focus();
+                }
+            }
+        });
+    }
+
+    if (quickCancelBtn && quickForm) {
+        quickCancelBtn.addEventListener('click', function() {
+            quickForm.classList.add('d-none');
+            clearQuickError();
+        });
+    }
+
+    if (quickSubmitBtn && quickNameInput) {
+        const submitQuickCreate = function() {
+            const name = quickNameInput.value.trim();
+            if (name.length < 2) {
+                showQuickError('Tên phải có ít nhất 2 ký tự.');
+                quickNameInput.focus();
+                return;
+            }
+            clearQuickError();
+            quickSubmitBtn.disabled = true;
+            quickSubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch(QUICK_CREATE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ name: name }),
+            })
+            .then(r => r.ok ? r.json() : r.json().then(err => Promise.reject(err)))
+            .then(customer => {
+                // Tạo option mới trong hidden select để form submit work
+                let opt = customerSelect.querySelector('option[value="' + customer.id + '"]');
+                if (!opt) {
+                    opt = document.createElement('option');
+                    opt.value = customer.id;
+                    opt.dataset.name = customer.name;
+                    opt.dataset.code = customer.customer_code;
+                    opt.dataset.email = customer.email || '';
+                    opt.textContent = customer.name + ' (' + customer.customer_code + ')';
+                    customerSelect.appendChild(opt);
+                }
+                customerSelect.value = customer.id;
+
+                // Build pseudo customer-result-item element để selectCustomer() reuse
+                const fakeEl = document.createElement('div');
+                fakeEl.dataset.customerId = customer.id;
+                fakeEl.dataset.customerName = customer.name;
+                fakeEl.dataset.customerCode = customer.customer_code;
+                fakeEl.dataset.customerEmail = customer.email || '';
+                selectCustomer(fakeEl);
+
+                // Đóng form quick create
+                quickForm.classList.add('d-none');
+                quickNameInput.value = '';
+            })
+            .catch(err => {
+                console.error('quickCreate failed:', err);
+                const msg = err && err.errors && err.errors.name
+                    ? err.errors.name[0]
+                    : (err && err.message ? err.message : 'Lỗi tạo khách hàng. Vui lòng thử lại.');
+                showQuickError(msg);
+            })
+            .finally(() => {
+                quickSubmitBtn.disabled = false;
+                quickSubmitBtn.innerHTML = '<i class="fas fa-check me-1"></i>Tạo';
+            });
+        };
+
+        quickSubmitBtn.addEventListener('click', submitQuickCreate);
+        quickNameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitQuickCreate();
+            }
+        });
+    }
     
     // Hide dropdown when clicking outside
     document.addEventListener('click', function(e) {

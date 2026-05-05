@@ -95,6 +95,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
         ->name('customers.check-code');
     Route::get('customers-search-api', [CustomerController::class, 'searchApi'])
         ->name('customers.search-api');
+    Route::post('customers-quick-create', [CustomerController::class, 'quickCreate'])
+        ->name('customers.quick-create');
 
     // ========================================================================
     // 🛡️ QUẢN LÝ BACKUP
