@@ -85,19 +85,20 @@
                 <i class="fas fa-search text-muted"></i>
             </div>
 
-            {{-- Dropdown nằm IN wrapper này để position:absolute top:100% anchor đúng dưới input --}}
-            <div class="dropdown-menu w-100 shadow-sm"
-                 id="{{ $dropdownId }}"
-                 style="max-height: 300px; overflow-y: auto; display: none;">
-                <div class="px-3 py-2 text-muted small border-bottom">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Nhập để tìm kiếm hoặc chọn từ danh sách bên dưới
-                </div>
-                {{-- AJAX search results — render bởi JS từ /admin/customers-search-api --}}
-                <div id="{{ $resultsId }}">
-                    <div class="px-3 py-3 text-muted text-center small">
-                        <i class="fas fa-spinner fa-spin me-1"></i> Đang tải khách hàng...
-                    </div>
+        </div>
+
+        {{-- Results panel custom (KHÔNG dùng class dropdown-menu để tránh Bootstrap JS auto-dispose) --}}
+        <div class="customer-results-panel"
+             id="{{ $dropdownId }}"
+             style="display: none;">
+            <div class="customer-results-header">
+                <i class="fas fa-info-circle me-1"></i>
+                Nhập để tìm kiếm hoặc chọn từ danh sách bên dưới
+            </div>
+            {{-- AJAX search results — render bởi JS từ /admin/customers-search-api --}}
+            <div id="{{ $resultsId }}" class="customer-results-list">
+                <div class="customer-results-empty">
+                    <i class="fas fa-spinner fa-spin me-1"></i> Đang tải khách hàng...
                 </div>
             </div>
         </div>
@@ -249,42 +250,58 @@
 
 @push('styles')
 <style>
-/* Customer Search Selector Styles */
-.customer-search-selector {
-    position: relative;
-}
-/* Dropdown dùng position:static để LUÔN nằm ngay dưới input dạng block —
-   không bị floating sai vị trí (issue gặp với position:absolute trước đó).
-   Trade-off: đẩy form xuống khi dropdown mở, nhưng đảm bảo visible 100%. */
-.customer-search-selector .dropdown-menu {
-    position: static;
+/* Customer Search Selector — custom classes (KHÔNG dùng Bootstrap dropdown-*
+   để tránh Bootstrap JS auto-init/dispose can thiệp). */
+
+/* Results panel — block-level, đẩy form xuống dưới khi mở */
+.customer-search-selector .customer-results-panel {
     margin-top: 0.5rem;
     width: 100%;
+    max-height: 350px;
+    overflow-y: auto;
     border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     background-color: #fff;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    transform: none !important;
-    inset: auto !important;
-}
-.customer-search-selector .dropdown-menu.show,
-.customer-search-selector .dropdown-menu[style*="display: block"] {
-    display: block !important;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
 }
 
-.customer-search-selector .dropdown-item {
+.customer-search-selector .customer-results-header {
+    padding: 0.6rem 1rem;
+    color: #6c757d;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8f9fa;
+}
+
+.customer-search-selector .customer-results-empty {
+    padding: 1.25rem;
+    color: #6c757d;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.customer-search-selector .customer-result-item {
+    display: block;
     padding: 0.75rem 1rem;
-    border: none;
-    transition: all 0.2s ease;
+    border-bottom: 1px solid #f1f3f5;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    color: inherit;
+    text-decoration: none;
 }
 
-.customer-search-selector .dropdown-item:hover,
-.customer-search-selector .dropdown-item.active {
-    background-color: #f8f9fa;
-    color: #495057;
+.customer-search-selector .customer-result-item:last-child {
+    border-bottom: none;
 }
 
-.customer-search-selector .dropdown-item .avatar-sm {
+.customer-search-selector .customer-result-item:hover,
+.customer-search-selector .customer-result-item.active {
+    background-color: #eef2ff;
+    color: #1f2937;
+    text-decoration: none;
+}
+
+.customer-search-selector .customer-result-item .avatar-sm {
     width: 40px;
     height: 40px;
     font-size: 16px;
@@ -358,15 +375,13 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .customer-search-selector .dropdown-menu {
-        max-height: 250px;
+    .customer-search-selector .customer-results-panel {
+        max-height: 280px;
     }
-    
-    .customer-search-selector .dropdown-item {
-        padding: 0.5rem;
+    .customer-search-selector .customer-result-item {
+        padding: 0.5rem 0.75rem;
     }
-    
-    .customer-search-selector .dropdown-item .avatar-sm {
+    .customer-search-selector .customer-result-item .avatar-sm {
         width: 32px;
         height: 32px;
         font-size: 14px;
@@ -504,7 +519,7 @@ function initCustomerSearchSelector(baseId, options = {}) {
     if (customerResults) {
         customerResults.addEventListener('click', function(e) {
             e.preventDefault();
-            const customerOption = e.target.closest('.customer-option');
+            const customerOption = e.target.closest('.customer-result-item');
             if (customerOption) {
                 selectCustomer(customerOption);
             }
@@ -522,8 +537,8 @@ function initCustomerSearchSelector(baseId, options = {}) {
     customerSearch.addEventListener('keydown', function(e) {
         if (!customerResults) return;
         
-        const visibleOptions = customerResults.querySelectorAll('.customer-option:not(.d-none)');
-        const activeOption = customerResults.querySelector('.customer-option.active');
+        const visibleOptions = customerResults.querySelectorAll('.customer-result-item:not(.d-none)');
+        const activeOption = customerResults.querySelector('.customer-result-item.active');
         let activeIndex = Array.from(visibleOptions).indexOf(activeOption);
         
         switch(e.key) {
@@ -603,9 +618,12 @@ function initCustomerSearchSelector(baseId, options = {}) {
     }
 
     function renderResults(customers, query) {
-        if (!customerResults) return;
+        if (!customerResults) {
+            console.error('[customer-search] customerResults element null — id:', resultsId);
+            return;
+        }
         if (!customers || customers.length === 0) {
-            customerResults.innerHTML = '<div class="px-3 py-3 text-muted text-center small">Không tìm thấy khách hàng nào' + (query ? ' khớp với "' + escapeHtml(query) + '"' : '') + '</div>';
+            customerResults.innerHTML = '<div class="customer-results-empty">Không tìm thấy khách hàng nào' + (query ? ' khớp với "' + escapeHtml(query) + '"' : '') + '</div>';
             return;
         }
         customerResults.innerHTML = customers.map(c => {
@@ -614,7 +632,7 @@ function initCustomerSearchSelector(baseId, options = {}) {
             const email = escapeHtml(c.email || '');
             const phone = escapeHtml(c.phone || '');
             const meta = [code, email, phone].filter(Boolean).join(' • ');
-            return '<a class="dropdown-item customer-option" href="#" '
+            return '<a class="customer-result-item" href="#" '
                 + 'data-customer-id="' + c.id + '" '
                 + 'data-customer-name="' + name + '" '
                 + 'data-customer-code="' + code + '" '
@@ -644,7 +662,7 @@ function initCustomerSearchSelector(baseId, options = {}) {
 
     function _legacyShowAllClientSide() {
         if (customerResults) {
-            customerResults.querySelectorAll('.customer-option').forEach(option => {
+            customerResults.querySelectorAll('.customer-result-item').forEach(option => {
                 option.classList.remove('d-none');
             });
         }
@@ -652,7 +670,7 @@ function initCustomerSearchSelector(baseId, options = {}) {
     
     function _legacySearchClientSide(query) {
         if (customerResults) {
-            customerResults.querySelectorAll('.customer-option').forEach(option => {
+            customerResults.querySelectorAll('.customer-result-item').forEach(option => {
                 const searchText = option.dataset.search;
                 if (searchText.includes(query)) {
                     option.classList.remove('d-none');
@@ -675,7 +693,7 @@ function initCustomerSearchSelector(baseId, options = {}) {
     
     function setActiveOption(option) {
         if (customerResults) {
-            customerResults.querySelectorAll('.customer-option').forEach(opt => {
+            customerResults.querySelectorAll('.customer-result-item').forEach(opt => {
                 opt.classList.remove('active', 'bg-light');
             });
             option.classList.add('active', 'bg-light');
