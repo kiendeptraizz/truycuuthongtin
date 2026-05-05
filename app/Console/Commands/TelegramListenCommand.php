@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
  * Bot xử lý:
  *   - Bấm nút "📝 Tạo đơn" → bot hỏi 7 bước (amount → tên KH → ...) → tạo PendingOrder + QR
  *   - Bấm nút "🛒 Đơn nhiều DV" → flow lô đơn nhiều dịch vụ cùng lúc (mã lô GR-XXX)
- *   - Bấm nút "⚡ QR nhanh" → chỉ hỏi số tiền, gửi QR (KHÔNG tạo đơn, KHÔNG lưu DB)
+ *   - Bấm nút "⚡ Tạo đơn nhanh" → chỉ hỏi số tiền + tên/mã KH → tạo PendingOrder pending (chờ fill)
  *   - /start, /help — hướng dẫn
  *   - /list — 10 đơn pending hôm nay
  *   - /dh DH-XXX — xem chi tiết 1 đơn + menu hành động (refund / bảo hành)
@@ -45,7 +45,7 @@ class TelegramListenCommand extends Command
     private const BTN_PENDING = '📋 Đơn pending';
     private const BTN_STATS = '📊 Thống kê';
     private const BTN_EXPIRING = '⏰ Hết hạn';
-    private const BTN_QUICK_QR = '⚡ QR nhanh';
+    private const BTN_QUICK_ORDER = '⚡ Tạo đơn nhanh';
     private const BTN_HELP = '❓ Hướng dẫn';
 
     public function handle(): int
@@ -246,8 +246,8 @@ class TelegramListenCommand extends Command
             case self::BTN_EXPIRING:
                 $this->sendExpirations($chatId);
                 return true;
-            case self::BTN_QUICK_QR:
-                $this->promptQuickQr($chatId);
+            case self::BTN_QUICK_ORDER:
+                $this->promptQuickOrder($chatId);
                 return true;
             case self::BTN_MULTI_ORDER:
                 $this->promptMultiCount($chatId);
@@ -276,7 +276,7 @@ class TelegramListenCommand extends Command
                         . "📋 <b>Đơn pending</b> — list đơn chưa thanh toán hôm nay\n"
                         . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
                         . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
-                        . "⚡ <b>QR nhanh</b> — gửi QR cho 1 số tiền (KHÔNG lưu, KHÔNG tạo đơn)\n"
+                        . "⚡ <b>Tạo đơn nhanh</b> — chỉ hỏi số tiền + KH (gói/email/... fill sau qua web)\n"
                         . "❓ <b>Hướng dẫn</b> — chi tiết các tính năng",
                     $this->mainMenuMarkup()
                 );
@@ -544,7 +544,7 @@ class TelegramListenCommand extends Command
                 $this->promptCustomerName($chatId, $newData);
                 return;
 
-            case 'awaiting_quick_qr':
+            case 'quick_order_amount':
                 $amount = parseShortAmount($text);
                 if ($amount <= 0) {
                     $this->sendAndTrack(
@@ -555,8 +555,64 @@ class TelegramListenCommand extends Command
                     );
                     return;
                 }
-                $this->clearStateAndPurge($chatId);
-                $this->sendQuickQr($chatId, $amount);
+                $data['amount'] = $amount;
+                $this->setState($chatId, ['step' => 'quick_order_customer', 'data' => $data]);
+                $this->sendAndTrack(
+                    $chatId,
+                    "⚡ <b>Tạo đơn nhanh</b> — Bước 2/2: Tên hoặc mã khách hàng?\n"
+                        . "• Gõ <i>tên</i> (vd: <code>Nguyễn Văn A</code>) — KH mới sẽ tự tạo mã KUN\n"
+                        . "• Hoặc gõ <i>mã KH</i> (vd: <code>KUN98473</code>) — chọn KH cũ trong DB",
+                    $this->navMarkup(true)
+                );
+                return;
+
+            case 'quick_order_customer':
+                $input = trim($text);
+                if (mb_strlen($input) < 2) {
+                    $this->sendAndTrack($chatId, "❌ Quá ngắn. Gõ lại tên hoặc mã khách hàng:");
+                    return;
+                }
+
+                $matchedByCode = false;
+                if (preg_match('/^(KUN|CTV)\d+$/i', $input)) {
+                    $code = strtoupper($input);
+                    $customer = \App\Models\Customer::where('customer_code', $code)->first();
+                    if (!$customer) {
+                        $this->sendAndTrack(
+                            $chatId,
+                            "❌ Không tìm thấy KH với mã <code>{$code}</code>.\n\n"
+                                . "Gõ <b>tên đầy đủ</b> để tạo KH mới hoặc tìm theo tên, hoặc /huy để huỷ."
+                        );
+                        return;
+                    }
+                    $matchedByCode = true;
+                } else {
+                    try {
+                        $customer = $this->findOrCreateCustomer($input);
+                    } catch (\Throwable $e) {
+                        Log::error('Telegram quick order: findOrCreateCustomer failed', [
+                            'name' => $input,
+                            'error' => $e->getMessage(),
+                        ]);
+                        $this->sendAndTrack($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                        return;
+                    }
+                }
+
+                $data['customer_id'] = $customer->id;
+                $data['customer_code'] = $customer->customer_code;
+                $data['customer_name'] = $customer->name;
+
+                if ($matchedByCode) {
+                    $headLine = "✅ Tìm thấy KH theo mã: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                } elseif ($customer->wasRecentlyCreated) {
+                    $headLine = "✅ Đã tạo KH mới: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                } else {
+                    $headLine = "✅ Tìm thấy KH cũ: <code>{$customer->customer_code}</code> — <b>{$customer->name}</b>";
+                }
+
+                $this->sendAndTrack($chatId, $headLine);
+                $this->finalizeQuickOrder($chatId, $userId, $data);
                 return;
 
             case 'warranty_email':
@@ -1773,7 +1829,7 @@ class TelegramListenCommand extends Command
         $keyboard = [
             [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_MULTI_ORDER]],
             [['text' => self::BTN_PENDING], ['text' => self::BTN_STATS]],
-            [['text' => self::BTN_EXPIRING], ['text' => self::BTN_QUICK_QR]],
+            [['text' => self::BTN_EXPIRING], ['text' => self::BTN_QUICK_ORDER]],
             [['text' => self::BTN_HELP]],
         ];
         return ['reply_markup' => json_encode([
@@ -1799,18 +1855,19 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * "⚡ QR nhanh" — chỉ hỏi số tiền rồi gửi QR. KHÔNG tạo PendingOrder, không
-     * lưu DB, không cần fill thông tin gì. Dùng cho trường hợp khách CK lẻ tẻ
-     * mà admin không cần track (vd tip, phí phụ, thanh toán nhanh).
+     * "⚡ Tạo đơn nhanh" — flow 2 bước (số tiền + tên/mã KH) → tạo PendingOrder
+     * pending push lên web "đơn chờ fill". Admin fill chi tiết (gói/email/duration/
+     * warranty/profit) sau qua /admin/pending-orders. Ngắn hơn flow đầy đủ 7 bước
+     * nhưng vẫn track được đơn + Pay2S match được mã đơn.
      */
-    private function promptQuickQr(int|string $chatId): void
+    private function promptQuickOrder(int|string $chatId): void
     {
-        $this->setState($chatId, ['step' => 'awaiting_quick_qr', 'data' => []]);
-        $this->bot->sendMessage(
+        $this->setState($chatId, ['step' => 'quick_order_amount', 'data' => []]);
+        $this->sendAndTrack(
             $chatId,
-            "⚡ <b>QR nhanh</b> — Nhập số tiền\n\n"
-                . "<i>Bot sẽ gửi QR ngay. KHÔNG lưu vào hệ thống, KHÔNG tạo đơn.</i>\n\n"
-                . "Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>\n\n"
+            "⚡ <b>Tạo đơn nhanh</b> — Bước 1/2: Số tiền đơn hàng?\n"
+                . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>\n\n"
+                . "<i>Đơn sẽ được tạo + push lên web chờ fill chi tiết (gói/email/...) sau.</i>\n\n"
                 . "Gõ /huy để huỷ.",
             $this->navMarkup(false)
         );
@@ -1839,32 +1896,50 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * Gửi QR cho 1 số tiền (không lưu trữ). Caption theo template user yêu cầu —
-     * không show order_code vì không có đơn nào.
+     * Finalize đơn nhanh — tạo PendingOrder với amount + customer_id (chưa có
+     * gói/email/duration/warranty/profit — admin fill sau qua web).
+     * Status = 'pending', sẽ xuất hiện trong /admin/pending-orders + bot /list.
      */
-    private function sendQuickQr(int|string $chatId, int $amount): void
+    private function finalizeQuickOrder(int|string $chatId, string $userId, array $data): void
     {
-        // KHÔNG truyền addInfo → nội dung CK trong app banking sẽ trống,
-        // khách tự điền nếu cần. Phù hợp với yêu cầu "không cần thông tin gì".
-        $qrUrl = $this->qr->buildQrUrl($amount);
+        $note = sprintf(
+            "Đơn nhanh từ bot — chờ fill chi tiết. KH: %s (%s)",
+            $data['customer_name'] ?? '?',
+            $data['customer_code'] ?? '?'
+        );
 
-        $bankShort = $this->qr->bankShortName();
-        $accNumber = $this->qr->accountNumber();
-        $accName = $this->qr->accountName();
+        try {
+            $order = PendingOrderController::createOrder([
+                'amount' => $data['amount'],
+                'note' => $note,
+                'customer_id' => $data['customer_id'] ?? null,
+                // KHÔNG có service_package_id, account_email, family_code,
+                // duration_days, warranty_days, profit_amount — admin fill sau.
+                'created_via' => 'telegram',
+                'telegram_chat_id' => (string) $chatId,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Telegram: finalizeQuickOrder failed', [
+                'error' => $e->getMessage(),
+                'data' => $data,
+            ]);
+            $this->sendAndTrack($chatId, "❌ Lỗi tạo đơn nhanh: " . $e->getMessage());
+            $this->clearStateAndPurge($chatId);
+            return;
+        }
 
-        $caption = "💵 <b>Số tiền:</b> " . formatShortAmount($amount)
-            . " (<code>" . number_format($amount, 0, ',', '.') . "đ</code>)\n"
-            . "🏦 <b>Ngân hàng:</b> {$bankShort}\n"
-            . "💳 <b>Số TK:</b> <code>{$accNumber}</code>\n"
-            . "👤 <b>Chủ TK:</b> {$accName}\n\n"
+        // Purge messages bước 1/2 + 2/2 + headline trước khi gửi caption + QR
+        $this->purgeTrackedMessages($chatId, $data);
+        $this->clearState($chatId);
+
+        $caption = "✅ <b>{$order->order_code}</b> <i>(đơn nhanh)</i>\n\n"
+            . "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>" . e($data['customer_name']) . "</b>\n"
+            . "💵 Giá đơn: <b>" . formatShortAmount((int) $data['amount']) . "</b>\n\n"
+            . "<i>⏳ Đơn đang chờ fill chi tiết (gói / email / thời hạn / bảo hành / lợi nhuận). "
+            . "Vào <code>/admin/pending-orders</code> để fill.</i>\n\n"
             . "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
-        $this->sendPhotoSafe($chatId, $qrUrl, $caption);
-        $this->bot->sendMessage(
-            $chatId,
-            "✅ Đã gửi QR. Bấm <b>⚡ QR nhanh</b> để tạo tiếp.",
-            $this->mainMenuMarkup()
-        );
+        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), $caption);
     }
 
     /**
@@ -2391,7 +2466,7 @@ class TelegramListenCommand extends Command
             . "📊 <b>Thống kê</b> — profit hôm nay + tháng, doanh thu, đơn paid/pending/cancelled, KH mới.\n\n"
             . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
-            . "⚡ <b>QR nhanh</b> — Nhập 1 số tiền → bot gửi QR ngay. KHÔNG tạo PendingOrder, KHÔNG lưu DB. Dùng cho thanh toán lẻ tẻ không cần track (tip, phí phụ, refund...).\n\n"
+            . "⚡ <b>Tạo đơn nhanh</b> — Flow ngắn 2 bước (số tiền + tên/mã KH) → tạo PendingOrder pending. Bot gửi QR ngay với mã đơn DH-XXX để khách CK. Admin fill chi tiết (gói/email/duration/...) sau qua <code>/admin/pending-orders</code>. Tiện cho lúc bận hoặc khách cần QR ngay.\n\n"
             . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc + CK 1 lần. Bot hỏi tên KH 1 lần + thông tin từng đơn → sinh mã lô <code>GR-XXX</code> + 1 QR tổng. Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
@@ -2440,7 +2515,8 @@ class TelegramListenCommand extends Command
     {
         return match ($step) {
             'awaiting_amount' => 'số tiền',
-            'awaiting_quick_qr' => 'số tiền (QR nhanh)',
+            'quick_order_amount' => 'số tiền (đơn nhanh)',
+            'quick_order_customer' => 'tên/mã khách hàng (đơn nhanh)',
             'awaiting_multi_count' => 'số đơn (lô đa dịch vụ)',
             'customer_name' => 'tên hoặc mã khách hàng',
             'duration' => 'thời hạn',
