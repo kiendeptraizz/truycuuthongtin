@@ -97,7 +97,7 @@
     <div class="card mb-3">
         <div class="card-body">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Trạng thái</label>
                     <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Đang chờ fill</option>
@@ -106,15 +106,50 @@
                         <option value="all" {{ $status === 'all' ? 'selected' : '' }}>Tất cả</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label small">Thanh toán</label>
+                    <select name="paid" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="all" {{ ($paidFilter ?? 'all') === 'all' ? 'selected' : '' }}>Tất cả</option>
+                        <option value="paid" {{ ($paidFilter ?? '') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
+                        <option value="unpaid" {{ ($paidFilter ?? '') === 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Nguồn</label>
+                    <select name="source" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="all" {{ ($source ?? 'all') === 'all' ? 'selected' : '' }}>Tất cả</option>
+                        <option value="telegram" {{ ($source ?? '') === 'telegram' ? 'selected' : '' }}>Telegram</option>
+                        <option value="web" {{ ($source ?? '') === 'web' ? 'selected' : '' }}>Web</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small">Ngày tạo</label>
                     <input type="date" name="date" value="{{ request('date') }}" class="form-control form-control-sm" onchange="this.form.submit()">
                 </div>
-                @if(request('date') || $status !== 'pending')
-                    <div class="col-auto">
-                        <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-sm btn-outline-secondary">Xoá lọc</a>
-                    </div>
-                @endif
+                <div class="col-md-2">
+                    <label class="form-label small">Mã đơn</label>
+                    <input type="text" name="code" value="{{ $code ?? '' }}" class="form-control form-control-sm" placeholder="DH-260506-001">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">
+                        <i class="fas fa-user me-1"></i>Khách hàng
+                    </label>
+                    <input type="text" name="customer" value="{{ $customerSearch ?? '' }}" class="form-control form-control-sm" placeholder="Mã KUN/CTV hoặc tên...">
+                </div>
+                <div class="col-12 d-flex gap-2 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-filter me-1"></i>Lọc
+                    </button>
+                    @if(request('date') || $status !== 'pending' || ($paidFilter ?? 'all') !== 'all' || ($source ?? 'all') !== 'all' || !empty($code) || !empty($customerSearch))
+                        <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Xoá lọc
+                        </a>
+                        <span class="ms-auto small text-muted align-self-center">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Tìm thấy <strong>{{ $orders->total() }}</strong> đơn khớp filter
+                        </span>
+                    @endif
+                </div>
             </form>
         </div>
     </div>
@@ -135,8 +170,9 @@
                             <tr>
                                 <th>Mã đơn</th>
                                 <th>Số tiền</th>
-                                <th class="d-none d-lg-table-cell">Ghi chú</th>
-                                <th class="d-none d-md-table-cell">Nguồn</th>
+                                <th class="d-none d-md-table-cell">Khách hàng</th>
+                                <th class="d-none d-xl-table-cell">Ghi chú</th>
+                                <th class="d-none d-lg-table-cell">Nguồn</th>
                                 <th class="d-none d-md-table-cell">Tạo lúc</th>
                                 <th>Trạng thái</th>
                                 <th>Thanh toán</th>
@@ -152,14 +188,28 @@
                                         {{ formatShortAmount($order->amount) }}
                                     </span>
                                 </td>
-                                <td class="d-none d-lg-table-cell">
+                                {{-- Cột Khách hàng — direct customer_id ưu tiên, fallback customerService.customer --}}
+                                <td class="d-none d-md-table-cell">
+                                    @php
+                                        $kh = $order->customer ?? $order->customerService?->customer;
+                                    @endphp
+                                    @if($kh)
+                                        <div>
+                                            <code class="text-primary small">{{ $kh->customer_code }}</code>
+                                        </div>
+                                        <small class="text-muted">{{ $kh->name }}</small>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+                                <td class="d-none d-xl-table-cell">
                                     @if($order->note)
                                         <small>{{ $order->note }}</small>
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
                                 </td>
-                                <td class="d-none d-md-table-cell">
+                                <td class="d-none d-lg-table-cell">
                                     @if($order->created_via === 'telegram')
                                         <span class="badge bg-info"><i class="fab fa-telegram me-1"></i>Telegram</span>
                                     @else

@@ -20,7 +20,7 @@ class PendingOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $query = PendingOrder::with(['customerService.customer', 'creator'])
+        $query = PendingOrder::with(['customer', 'customerService.customer', 'creator'])
             ->orderByDesc('created_at');
 
         // Filter status
@@ -34,7 +34,45 @@ class PendingOrderController extends Controller
             $query->whereDate('created_at', $request->date);
         }
 
-        $orders = $query->paginate(30);
+        // Filter theo mã/tên khách hàng — match qua direct customer_id hoặc CS link.
+        // Hữu ích để biết 1 KH còn bao nhiêu đơn pending.
+        $customerSearch = trim((string) $request->get('customer', ''));
+        if ($customerSearch !== '') {
+            $query->where(function ($q) use ($customerSearch) {
+                // Match qua direct customer_id (đơn nhanh / đơn đầy đủ qua bot)
+                $q->whereHas('customer', function ($cq) use ($customerSearch) {
+                    $cq->where('customer_code', 'LIKE', "%{$customerSearch}%")
+                        ->orWhere('name', 'LIKE', "%{$customerSearch}%");
+                })
+                // Match qua customerService.customer (đơn cũ link qua CS)
+                ->orWhereHas('customerService.customer', function ($cq) use ($customerSearch) {
+                    $cq->where('customer_code', 'LIKE', "%{$customerSearch}%")
+                        ->orWhere('name', 'LIKE', "%{$customerSearch}%");
+                });
+            });
+        }
+
+        // Filter theo trạng thái thanh toán (paid / unpaid / all)
+        $paidFilter = $request->get('paid', 'all');
+        if ($paidFilter === 'paid') {
+            $query->whereNotNull('paid_at');
+        } elseif ($paidFilter === 'unpaid') {
+            $query->whereNull('paid_at');
+        }
+
+        // Filter theo nguồn (telegram / web / all)
+        $source = $request->get('source', 'all');
+        if (in_array($source, ['telegram', 'web'], true)) {
+            $query->where('created_via', $source);
+        }
+
+        // Search theo mã đơn (DH-yymmdd-XXX)
+        $code = trim((string) $request->get('code', ''));
+        if ($code !== '') {
+            $query->where('order_code', 'LIKE', "%" . strtoupper($code) . "%");
+        }
+
+        $orders = $query->paginate(30)->withQueryString();
 
         $stats = [
             'pending' => PendingOrder::where('status', 'pending')->count(),
@@ -42,7 +80,7 @@ class PendingOrderController extends Controller
             'today_amount' => PendingOrder::whereDate('created_at', today())->sum('amount'),
         ];
 
-        return view('admin.pending-orders.index', compact('orders', 'stats', 'status'));
+        return view('admin.pending-orders.index', compact('orders', 'stats', 'status', 'customerSearch', 'paidFilter', 'source', 'code'));
     }
 
     public function store(Request $request)
