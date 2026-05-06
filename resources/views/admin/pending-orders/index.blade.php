@@ -30,6 +30,25 @@
     }
     .qr-thumb:hover { border-color: #667eea; transform: scale(1.05); }
     #qrModalImg { max-width: 100%; height: auto; }
+
+    /* Sticky cột Thao tác bên phải — luôn visible khi scroll ngang trên màn hình hẹp
+       (split-screen với Zalo, mobile). Action buttons (Đã trả/Fill/Huỷ) luôn thao tác được. */
+    .table-responsive { position: relative; }
+    .action-cell-sticky {
+        position: sticky;
+        right: 0;
+        background: #ffffff;
+        z-index: 2;
+        box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.08);
+        white-space: nowrap;
+    }
+    thead .action-cell-sticky {
+        background: #f8f9fa; /* match table-light bg */
+    }
+    /* Đảm bảo các nút trong cột action không bị wrap, click dễ */
+    .action-cell-sticky .btn {
+        white-space: nowrap;
+    }
 </style>
 @endpush
 
@@ -116,13 +135,13 @@
                             <tr>
                                 <th>Mã đơn</th>
                                 <th>Số tiền</th>
-                                <th>Ghi chú</th>
-                                <th>Nguồn</th>
-                                <th>Tạo lúc</th>
+                                <th class="d-none d-lg-table-cell">Ghi chú</th>
+                                <th class="d-none d-md-table-cell">Nguồn</th>
+                                <th class="d-none d-md-table-cell">Tạo lúc</th>
                                 <th>Trạng thái</th>
                                 <th>Thanh toán</th>
-                                <th class="text-center">QR</th>
-                                <th class="text-end">Thao tác</th>
+                                <th class="text-center d-none d-md-table-cell">QR</th>
+                                <th class="text-end action-cell-sticky">Thao tác</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -134,21 +153,21 @@
                                         {{ formatShortAmount($order->amount) }}
                                     </span>
                                 </td>
-                                <td>
+                                <td class="d-none d-lg-table-cell">
                                     @if($order->note)
                                         <small>{{ $order->note }}</small>
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="d-none d-md-table-cell">
                                     @if($order->created_via === 'telegram')
                                         <span class="badge bg-info"><i class="fab fa-telegram me-1"></i>Telegram</span>
                                     @else
                                         <span class="badge bg-secondary"><i class="fas fa-globe me-1"></i>Web</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td class="d-none d-md-table-cell">
                                     {{ $order->created_at->format('H:i') }}
                                     <br><small class="text-muted">{{ $order->created_at->format('d/m/Y') }}</small>
                                 </td>
@@ -181,14 +200,14 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td class="text-center">
+                                <td class="text-center d-none d-md-table-cell">
                                     <img src="{{ $order->qrCodeUrl() }}"
                                          alt="QR"
                                          class="qr-thumb"
                                          onclick="showQrModal('{{ $order->qrCodeUrl() }}', '{{ $order->order_code }}', '{{ formatShortAmount($order->amount) }}')"
                                          loading="lazy">
                                 </td>
-                                <td class="text-end">
+                                <td class="text-end action-cell-sticky">
                                     @if($order->status === 'pending')
                                         @if(!$order->paid_at)
                                             <form action="{{ route('admin.pending-orders.mark-paid', $order) }}"
