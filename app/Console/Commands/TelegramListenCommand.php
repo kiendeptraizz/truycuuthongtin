@@ -320,6 +320,14 @@ class TelegramListenCommand extends Command
                 $this->sendOrderDetails($chatId, $arg);
                 break;
 
+            case '/kh':
+                if (!$arg) {
+                    $this->bot->sendMessage($chatId, "Cú pháp: <code>/kh tên/mã/email/SĐT</code>\nVd: <code>/kh nguyen van a</code>, <code>/kh KUN12345</code>");
+                    break;
+                }
+                $this->sendCustomerSearchResults($chatId, $arg);
+                break;
+
             default:
                 $this->bot->sendMessage($chatId, "❓ Lệnh không nhận diện được. Gõ /help để xem hướng dẫn.");
         }
@@ -426,6 +434,113 @@ class TelegramListenCommand extends Command
         }
 
         $this->bot->sendMessage($chatId, implode("\n", $lines), $extras);
+    }
+
+    /**
+     * Search KH theo query (mã KUN/CTV / tên / email / SĐT) — reuse logic của
+     * CustomerController::searchApi.
+     */
+    private function sendCustomerSearchResults(int|string $chatId, string $query): void
+    {
+        $q = trim($query);
+        if (mb_strlen($q) < 2) {
+            $this->bot->sendMessage($chatId, "❌ Query quá ngắn (≥ 2 ký tự).");
+            return;
+        }
+
+        $customers = \App\Models\Customer::query()
+            ->where(function ($w) use ($q) {
+                $w->where('customer_code', 'LIKE', "%{$q}%")
+                    ->orWhere('name', 'LIKE', "%{$q}%")
+                    ->orWhere('email', 'LIKE', "%{$q}%")
+                    ->orWhere('phone', 'LIKE', "%{$q}%");
+            })
+            ->orderByRaw('CASE WHEN UPPER(customer_code) = UPPER(?) THEN 0 ELSE 1 END', [$q])
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'customer_code', 'name', 'email', 'phone']);
+
+        if ($customers->isEmpty()) {
+            $this->bot->sendMessage(
+                $chatId,
+                "🔍 Không tìm thấy KH nào khớp <code>" . e($q) . "</code>.\n"
+                    . "Thử query khác: tên, mã KUN/CTV, email hoặc SĐT."
+            );
+            return;
+        }
+
+        $lines = ["🔍 <b>Tìm thấy " . $customers->count() . " KH</b> khớp <code>" . e($q) . "</code>:"];
+        $buttons = [];
+        foreach ($customers as $c) {
+            $line = "• <code>{$c->customer_code}</code> — <b>" . e($c->name) . "</b>";
+            if ($c->phone) {
+                $line .= " · 📱" . e($c->phone);
+            }
+            if ($c->email) {
+                $line .= " · 📧" . e($c->email);
+            }
+            $lines[] = $line;
+            // Mỗi KH 1 button → click xem chi tiết + đơn gần nhất
+            $buttons[] = [[
+                'text' => "👤 {$c->customer_code} — " . mb_substr($c->name, 0, 30),
+                'callback_data' => "cust_{$c->id}",
+            ]];
+        }
+        if ($customers->count() === 10) {
+            $lines[] = "\n<i>Hiển thị 10 KH gần nhất. Search cụ thể hơn nếu cần.</i>";
+        }
+
+        $this->bot->sendMessage(
+            $chatId,
+            implode("\n", $lines),
+            ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
+        );
+    }
+
+    /**
+     * Click 1 KH từ kết quả /kh → hiện chi tiết KH + N đơn gần nhất.
+     */
+    private function handleCustomerDetailsCallback(int|string $chatId, int $customerId): void
+    {
+        $customer = \App\Models\Customer::with(['customerServices' => function ($q) {
+            $q->orderByDesc('created_at')->limit(5)->with('servicePackage');
+        }])->find($customerId);
+
+        if (!$customer) {
+            $this->bot->sendMessage($chatId, "❌ KH không tồn tại.");
+            return;
+        }
+
+        $lines = [
+            "👤 <b>" . e($customer->name) . "</b>",
+            "🆔 Mã: <code>{$customer->customer_code}</code>",
+        ];
+        if ($customer->phone) $lines[] = "📱 SĐT: <code>" . e($customer->phone) . "</code>";
+        if ($customer->email) $lines[] = "📧 Email: <code>" . e($customer->email) . "</code>";
+
+        $services = $customer->customerServices;
+        if ($services->isEmpty()) {
+            $lines[] = "\n📭 KH chưa có dịch vụ nào.";
+        } else {
+            $lines[] = "\n📋 <b>" . $services->count() . " đơn gần nhất:</b>";
+            foreach ($services as $cs) {
+                $statusIcon = match (true) {
+                    $cs->status === 'cancelled' && $cs->refunded_at => '↩️',
+                    $cs->status === 'cancelled' => '❌',
+                    $cs->status === 'active' => '✅',
+                    $cs->status === 'expired' => '⏰',
+                    $cs->status === 'pending' => '⏳',
+                    default => '❓',
+                };
+                $orderCode = $cs->order_code ? "<code>{$cs->order_code}</code>" : "#{$cs->id}";
+                $pkgName = $cs->servicePackage?->name ?? '?';
+                $expiry = $cs->expires_at ? $cs->expires_at->format('d/m/Y') : 'không hạn';
+                $lines[] = "{$statusIcon} {$orderCode} — " . e($pkgName) . " (HH: {$expiry})";
+            }
+            $lines[] = "\n<i>Gõ <code>/dh DH-...</code> để xem chi tiết 1 đơn.</i>";
+        }
+
+        $this->bot->sendMessage($chatId, implode("\n", $lines));
     }
 
     private function sendCustomerServiceDetails(int|string $chatId, \App\Models\CustomerService $cs): void
@@ -1284,6 +1399,12 @@ class TelegramListenCommand extends Command
         }
         if ($cbData === 'wr_skip_extend') {
             $this->handleWarrantySkipExtend($chatId);
+            return;
+        }
+
+        // Click 1 KH từ kết quả /kh → xem chi tiết + N đơn gần nhất
+        if (preg_match('/^cust_(\d+)$/', $cbData, $m)) {
+            $this->handleCustomerDetailsCallback($chatId, (int) $m[1]);
             return;
         }
 
@@ -2520,6 +2641,7 @@ class TelegramListenCommand extends Command
             . "/menu — hiện menu\n"
             . "/list — đơn pending hôm nay\n"
             . "/dh DH-XXX-XXX — xem chi tiết 1 đơn (hoặc gõ thẳng mã đơn)\n"
+            . "/kh tên/mã/email/SĐT — search KH (vd <code>/kh nguyen</code>, <code>/kh KUN12345</code>)\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
