@@ -282,13 +282,38 @@ class TelegramListenCommand extends Command
 
         switch ($cmd) {
             case '/start':
+                // Deep-link: /start DH-XXX-XXX hoặc /start KUN12345 (Telegram chỉ
+                // cho phép [a-zA-Z0-9_-] tối đa 64 ký tự trong start param). Format
+                // link: https://t.me/<bot_username>?start=DH-260501-001 — admin
+                // share link cho khách/nội bộ để mở trực tiếp đơn.
+                if ($arg !== '') {
+                    // Telegram chỉ cho phép [a-zA-Z0-9_-] trong start param. Nên
+                    // share link đôi lúc encode "DH-260501-001" thành "DH_260501_001"
+                    // (có client thay - thành _) → normalize cả 2 dạng.
+                    $up = strtoupper(trim($arg));
+                    // Mã đơn DH-yymmdd-XXX (có/không gạch hoặc gạch dưới)
+                    if (preg_match('/^DH[-_]?(\d{6})[-_]?(\d{3})$/i', $up, $m)) {
+                        $this->sendOrderDetails($chatId, "DH-{$m[1]}-{$m[2]}");
+                        break;
+                    }
+                    // Mã KH KUN12345
+                    if (preg_match('/^KUN\d{4,}$/i', $up)) {
+                        $this->sendCustomerSearchResults($chatId, $up);
+                        break;
+                    }
+                    // Param lạ → fall through gửi welcome + cảnh báo
+                    $this->bot->sendMessage(
+                        $chatId,
+                        "⚠️ Tham số <code>" . e($arg) . "</code> không hợp lệ (cần DH-XXX-XXX hoặc KUN12345). Hiển thị menu chính:"
+                    );
+                }
                 $this->bot->sendMessage(
                     $chatId,
                     "👋 <b>Chào admin!</b>\n\n"
                         . "Bot đã sẵn sàng. Bấm nút bên dưới để chọn chức năng:\n\n"
                         . "📝 <b>Tạo đơn</b> — bot sẽ hỏi 7 bước (tên KH, gói, ...)\n"
                         . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc, CK 1 lần (mã lô GR-XXX)\n"
-                        . "📋 <b>Đơn pending</b> — list đơn chưa thanh toán hôm nay\n"
+                        . "📋 <b>Đơn pending</b> — list 10 đơn chưa thanh toán mới nhất\n"
                         . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
                         . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
                         . "⚡ <b>Tạo đơn nhanh</b> — chỉ hỏi số tiền + KH (gói/email/... fill sau qua web)\n"
@@ -1653,7 +1678,9 @@ class TelegramListenCommand extends Command
             ],
         ]);
 
-        $this->bot->sendMessage(
+        // sendAndTrack để cleanup prompt khi finalize warranty (warranty_note step
+        // đã gọi purgeTrackedMessages — chat sạch sau mỗi phiên bảo hành).
+        $this->sendAndTrack(
             $chatId,
             "🛡 <b>BẢO HÀNH</b> — đơn <code>{$cs->order_code}</code>\n\n"
                 . "Email TK hiện tại: <code>" . e($cs->login_email ?? '—') . "</code>\n\n"
@@ -1693,7 +1720,8 @@ class TelegramListenCommand extends Command
 
     private function promptWarrantyExtend(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        // sendAndTrack — prompt sẽ bị xoá khi warranty_note finalize (chat sạch).
+        $this->sendAndTrack(
             $chatId,
             "<b>Bước 2/3:</b> Số ngày <b>gia hạn thêm</b> cho đơn (cộng vào ngày hết hạn hiện tại).\n"
                 . "<i>VD: <code>7</code> = thêm 7 ngày, <code>30</code> = thêm 30 ngày.</i>",
@@ -1707,7 +1735,8 @@ class TelegramListenCommand extends Command
 
     private function promptWarrantyNote(int|string $chatId): void
     {
-        $this->bot->sendMessage(
+        // sendAndTrack — prompt sẽ bị xoá khi warranty_note finalize (chat sạch).
+        $this->sendAndTrack(
             $chatId,
             "<b>Bước 3/3:</b> Nhập <b>ghi chú bảo hành</b> (lý do, mô tả lỗi, …)\n"
                 . "<i>VD: \"TK lỗi đăng nhập, đã đổi TK mới\" / \"Khách báo lỗi tạm, đã hỗ trợ qua Zalo\".</i>"
@@ -2656,7 +2685,7 @@ class TelegramListenCommand extends Command
             . "  5️⃣ Mã nhóm/gia đình — bất kỳ (hoặc /skip)\n"
             . "  6️⃣ Bảo hành — <code>30d</code>/<code>1m</code>/<code>1y</code>/ /full / /skip\n"
             . "  7️⃣ Lợi nhuận — <code>50k</code>/<code>200k</code>/ /skip\n\n"
-            . "📋 <b>Đơn pending</b> — list 10 đơn chưa thanh toán hôm nay + tổng tiền.\n\n"
+            . "📋 <b>Đơn pending</b> — list 10 đơn pending mới nhất (toàn bộ, không filter ngày) + tổng tiền.\n\n"
             . "📊 <b>Thống kê</b> — profit hôm nay + tháng, doanh thu, đơn paid/pending/cancelled, KH mới.\n\n"
             . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
@@ -2664,7 +2693,7 @@ class TelegramListenCommand extends Command
             . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc + CK 1 lần. Bot hỏi tên KH 1 lần + thông tin từng đơn → sinh mã lô <code>GR-XXX</code> + 1 QR tổng. Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
-            . "/list — đơn pending hôm nay\n"
+            . "/list — list 10 đơn pending mới nhất (toàn bộ)\n"
             . "/dh DH-XXX-XXX — xem chi tiết 1 đơn (hoặc gõ thẳng mã đơn)\n"
             . "/kh tên/mã/email/SĐT — search KH (vd <code>/kh nguyen</code>, <code>/kh KUN12345</code>)\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
