@@ -164,6 +164,12 @@
                                             Tháng
                                         </label>
                                     </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="duration_unit" id="duration_unit_years" value="years">
+                                        <label class="form-check-label" for="duration_unit_years">
+                                            Năm
+                                        </label>
+                                    </div>
                                 </div>
 
                                 <!-- Input nhập số -->
@@ -292,14 +298,19 @@
                                                     Số tiền lãi
                                                 </label>
                                                 <div class="input-group">
-                                                    <input type="number"
+                                                    {{-- type=text + data-currency thay vì type=number step=1000 — tránh
+                                                         browser native validation reject "450,000" (có dấu phẩy
+                                                         thousand-separator → không parse được multiple of 1000). --}}
+                                                    <input type="text"
                                                         class="form-control @error('profit_amount') is-invalid @enderror"
                                                         id="profit_amount"
                                                         name="profit_amount"
-                                                        min="0"
-                                                        step="1000"
-                                                        placeholder="Nhập số tiền lãi"
-                                                        value="{{ old('profit_amount') }}">
+                                                        placeholder="Vd: 100.000"
+                                                        value="{{ old('profit_amount') }}"
+                                                        inputmode="numeric"
+                                                        maxlength="20"
+                                                        data-currency="VND"
+                                                        data-show-currency="false">
                                                     <span class="input-group-text">VNĐ</span>
                                                 </div>
                                                 @error('profit_amount')
@@ -420,6 +431,10 @@
                         days = value * 30; // 1 tháng = 30 ngày
                         durationUnitLabel.textContent = 'tháng';
                         durationCalculatedText.textContent = `Thời hạn: ${value} tháng (${days} ngày)`;
+                    } else if (unit === 'years') {
+                        days = value * 365; // 1 năm = 365 ngày
+                        durationUnitLabel.textContent = 'năm';
+                        durationCalculatedText.textContent = `Thời hạn: ${value} năm (${days} ngày)`;
                     }
 
                     durationDaysHidden.value = days;
