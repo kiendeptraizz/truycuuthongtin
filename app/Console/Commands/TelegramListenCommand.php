@@ -69,7 +69,22 @@ class TelegramListenCommand extends Command
             try {
                 $resp = $this->bot->getUpdates($offset, 25);
                 if (!($resp['ok'] ?? false)) {
-                    $this->warn('getUpdates thất bại. Thử lại sau 5s...');
+                    $errCode = $resp['error_code'] ?? null;
+                    $desc = $resp['description'] ?? '?';
+                    // 409 Conflict — webhook gắn trở lại bởi instance khác hoặc test
+                    // → re-arm: deleteWebhook + tiếp tục poll, không cần restart bot.
+                    if ($errCode === 409) {
+                        Log::warning('Telegram getUpdates 409 — re-arm via deleteWebhook', ['desc' => $desc]);
+                        $this->warn('409 Conflict — gọi deleteWebhook để re-arm...');
+                        try {
+                            $this->bot->deleteWebhook();
+                        } catch (\Throwable $e) {
+                            $this->warn('deleteWebhook fail: ' . $e->getMessage());
+                        }
+                        sleep(2);
+                        continue;
+                    }
+                    $this->warn("getUpdates thất bại (code={$errCode}): {$desc}. Thử lại sau 5s...");
                     sleep(5);
                     continue;
                 }
@@ -1499,19 +1514,15 @@ class TelegramListenCommand extends Command
             $this->bot->sendMessage($chatId, "❌ Đơn không tồn tại.");
             return;
         }
-        if ($order->paid_at) {
-            $this->bot->sendMessage(
-                $chatId,
-                "⚠️ Đơn <code>{$order->order_code}</code> đã được đánh dấu thanh toán trước đó."
-            );
-            return;
-        }
         if ($order->status === 'cancelled') {
             $this->bot->sendMessage($chatId, "⚠️ Đơn <code>{$order->order_code}</code> đã huỷ — không thể mark paid.");
             return;
         }
 
-        // Delegate sang PaymentService — same logic với Pay2S webhook + admin web
+        // Race fix (P0.3): KHÔNG pre-check paid_at ngoài transaction. Double-click
+        // có thể qua check cùng lúc (cả 2 thấy paid_at=null) → 2 transaction race.
+        // Rely on PaymentService::markOrderPaid trả status='already_paid' khi
+        // lock thấy paid_at != null trong transaction (atomic).
         $payment = app(\App\Services\PaymentService::class);
         $bankTxId = "manual-bot-{$userId}-" . now()->timestamp;
         $rawPayload = json_encode([
@@ -1532,6 +1543,15 @@ class TelegramListenCommand extends Command
             $this->bot->sendMessage(
                 $chatId,
                 "❌ Lỗi đánh dấu thanh toán: " . ($result['error'] ?? $result['status'])
+            );
+            return;
+        }
+
+        // already_paid → click double, không gửi noti success thứ 2
+        if (($result['status'] ?? '') === 'already_paid') {
+            $this->bot->sendMessage(
+                $chatId,
+                "⚠️ Đơn <code>{$order->order_code}</code> đã được đánh dấu thanh toán trước đó."
             );
             return;
         }
