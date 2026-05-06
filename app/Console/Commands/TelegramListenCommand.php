@@ -786,12 +786,21 @@ class TelegramListenCommand extends Command
                 return;
 
             case 'email':
-                $email = trim($text);
-                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $this->sendAndTrack($chatId, "❌ Email không hợp lệ. Gõ lại:");
+                $emailInput = trim($text);
+                $lcEmail = strtolower($emailInput);
+                // Skip → email = null, chuyển bước tiếp theo
+                if (in_array($lcEmail, ['/skip', 'skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
+                    $data['email'] = null;
+                    $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
+                    $this->sendAndTrack($chatId, "⏭ Đã bỏ qua email — có thể bổ sung sau qua web.");
+                    $this->sendCategoryPicker($chatId);
                     return;
                 }
-                $data['email'] = $email;
+                if (!filter_var($emailInput, FILTER_VALIDATE_EMAIL)) {
+                    $this->sendAndTrack($chatId, "❌ Email không hợp lệ. Gõ lại hoặc /skip để bỏ qua:");
+                    return;
+                }
+                $data['email'] = $emailInput;
                 $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
                 $this->sendCategoryPicker($chatId);
                 return;
@@ -1275,6 +1284,19 @@ class TelegramListenCommand extends Command
         }
         if ($cbData === 'wr_skip_extend') {
             $this->handleWarrantySkipExtend($chatId);
+            return;
+        }
+
+        // Click "⏭ Bỏ qua email" trong flow tạo đơn (Bước 3/7)
+        if ($cbData === 'step_skip_email') {
+            $state = $this->getState($chatId);
+            if ($state && ($state['step'] ?? null) === 'email') {
+                $data = $state['data'] ?? [];
+                $data['email'] = null;
+                $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
+                $this->sendAndTrack($chatId, "⏭ Đã bỏ qua email — có thể bổ sung sau qua web.");
+                $this->sendCategoryPicker($chatId);
+            }
             return;
         }
 
@@ -2076,11 +2098,25 @@ class TelegramListenCommand extends Command
 
     private function promptEmail(int|string $chatId): void
     {
+        // Inline keyboard có nút "Bỏ qua" — TH email không có (vd dịch vụ
+        // không cần TK riêng / sẽ fill sau). Nút Bước trước/Huỷ giữ pattern.
+        $extras = ['reply_markup' => json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => '⏭ Bỏ qua email', 'callback_data' => 'step_skip_email'],
+                ],
+                [
+                    ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                    ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
+                ],
+            ],
+        ])];
         $this->sendAndTrack(
             $chatId,
             "📧 <b>Bước 3/7:</b> Email tài khoản?\n"
-                . "<i>Vd: <code>huatungthang@gmail.com</code></i>",
-            $this->navMarkup()
+                . "<i>Vd: <code>huatungthang@gmail.com</code></i>\n\n"
+                . "Gõ <code>/skip</code> hoặc bấm <b>⏭ Bỏ qua</b> nếu chưa có email.",
+            $extras
         );
     }
 
@@ -2224,8 +2260,13 @@ class TelegramListenCommand extends Command
         $lines = [
             "📌 Tên dịch vụ: <b>{$data['service_name']}</b>",
             "📌 Giá dịch vụ: <b>" . formatShortAmount($data['amount']) . "</b>",
-            "📌 Email tài khoản: <code>{$data['email']}</code>",
         ];
+        // Email optional — chỉ render dòng nếu có (admin có thể skip ở bước 3/7)
+        if (!empty($data['email'])) {
+            $lines[] = "📌 Email tài khoản: <code>{$data['email']}</code>";
+        } else {
+            $lines[] = "📌 Email tài khoản: <i>(chưa có — sẽ fill sau qua web)</i>";
+        }
 
         if (!empty($data['family_email'])) {
             // family_email giờ free-form (email/số/text) — escape HTML để tránh vỡ markup
