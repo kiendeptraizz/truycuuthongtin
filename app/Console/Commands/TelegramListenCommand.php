@@ -2165,14 +2165,21 @@ class TelegramListenCommand extends Command
         // Normalize giống mutator của Customer model: lowercase → title case từng từ
         $normalized = $this->normalizeVietnameseName($name);
 
-        $customer = \App\Models\Customer::where('name', $normalized)
-            ->orderBy('id') // ưu tiên KH cũ nhất nếu trùng tên
-            ->first();
-
-        if ($customer) {
-            return $customer;
-        }
-        return \App\Models\Customer::createSafe(['name' => $name]);
+        // Race fix: 2 user gõ cùng tên cùng lúc, cả 2 đều where().first() trả null,
+        // cả 2 đều create → 2 KH trùng tên. Lock theo tên-normalized (md5 vì lock
+        // key có giới hạn ký tự) để serialize concurrent calls. Block tối đa 8s
+        // rồi throw — caller (handleConversationStep) đã có try-catch.
+        $lockKey = 'customer_find_or_create:' . md5($normalized);
+        return Cache::lock($lockKey, 10)->block(8, function () use ($normalized, $name) {
+            $customer = \App\Models\Customer::where('name', $normalized)
+                ->orderBy('id') // ưu tiên KH cũ nhất nếu trùng tên
+                ->first();
+            if ($customer) {
+                return $customer;
+            }
+            // createSafe có retry UNIQUE customer_code (race khác — KUN code trùng).
+            return \App\Models\Customer::createSafe(['name' => $name]);
+        });
     }
 
     private function normalizeVietnameseName(string $name): string
