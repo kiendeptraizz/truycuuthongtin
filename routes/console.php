@@ -69,3 +69,11 @@ Schedule::command('bot:notify-expirations')
     ->dailyAt('09:00')
     ->timezone('Asia/Ho_Chi_Minh')
     ->withoutOverlapping();
+
+// Mỗi 30 phút check đơn pending stale > 30 phút chưa CK → nhắc admin.
+// Chỉ chạy trong giờ làm việc (8h-22h) để không spam ban đêm.
+Schedule::command('bot:notify-stale-pending')
+    ->everyThirtyMinutes()
+    ->between('8:00', '22:00')
+    ->timezone('Asia/Ho_Chi_Minh')
+    ->withoutOverlapping();
