@@ -140,7 +140,6 @@
                                 <th class="d-none d-md-table-cell">Tạo lúc</th>
                                 <th>Trạng thái</th>
                                 <th>Thanh toán</th>
-                                <th class="text-center d-none d-md-table-cell">QR</th>
                                 <th class="text-end action-cell-sticky">Thao tác</th>
                             </tr>
                         </thead>
@@ -200,14 +199,15 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td class="text-center d-none d-md-table-cell">
-                                    <img src="{{ $order->qrCodeUrl() }}"
-                                         alt="QR"
-                                         class="qr-thumb"
-                                         onclick="showQrModal('{{ $order->qrCodeUrl() }}', '{{ $order->order_code }}', '{{ formatShortAmount($order->amount) }}')"
-                                         loading="lazy">
-                                </td>
                                 <td class="text-end action-cell-sticky">
+                                    {{-- Nút "Xem QR" — luôn hiện cho mọi đơn (kể cả completed/cancelled) --}}
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-info"
+                                            title="Xem QR thanh toán"
+                                            onclick="showQrModal('{{ $order->qrCodeUrl() }}', '{{ $order->order_code }}', '{{ formatShortAmount($order->amount) }}')">
+                                        <i class="fas fa-qrcode"></i>
+                                        <span class="d-none d-xl-inline ms-1">QR</span>
+                                    </button>
                                     @if($order->status === 'pending')
                                         @if(!$order->paid_at)
                                             <form action="{{ route('admin.pending-orders.mark-paid', $order) }}"
