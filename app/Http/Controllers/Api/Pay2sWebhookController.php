@@ -42,12 +42,22 @@ class Pay2sWebhookController extends Controller
         }
 
         $payload = $request->all();
-        Log::info('Pay2S webhook received', ['payload' => $payload]);
 
         $transactions = $payload['transactions'] ?? [$payload];
         if (!is_array($transactions)) {
             $transactions = [$payload];
         }
+
+        // Log gọn — chỉ list (txid, amount, content) thay vì full payload (ảnh
+        // hưởng dung lượng log, chứa thông tin nhạy như checksum HMAC, account number).
+        Log::info('Pay2S webhook received', [
+            'count' => count($transactions),
+            'txs' => collect($transactions)->map(fn($tx) => [
+                'id' => $tx['id'] ?? $tx['transaction_id'] ?? null,
+                'amount' => $tx['transferAmount'] ?? $tx['amount'] ?? 0,
+                'content' => mb_substr((string) ($tx['content'] ?? ''), 0, 80),
+            ])->all(),
+        ]);
 
         $results = [];
         foreach ($transactions as $tx) {
@@ -222,8 +232,7 @@ class Pay2sWebhookController extends Controller
                 . "\n\n"
                 . "🔗 Link theo dõi đơn hàng:\n{$lookupUrl}";
 
-            $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
-            foreach ($adminIds as $chatId) {
+            foreach ($bot->adminIds() as $chatId) {
                 $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
             }
         } catch (\Throwable $e) {
@@ -290,7 +299,7 @@ class Pay2sWebhookController extends Controller
     {
         try {
             $order->loadMissing('customer');
-            $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
+            $adminIds = $bot->adminIds();
             $delta = $amount - (int) $order->amount;
             $deltaNote = $delta === 0
                 ? ''
@@ -363,8 +372,7 @@ class Pay2sWebhookController extends Controller
                 . "🔗 <a href=\"{$pendingUrl}\">Vào /admin/pending-orders để mark thủ công</a>\n"
                 . "<i>Hoặc trong bot: 📋 Đơn pending → bấm 💳 Đã trả trên đơn tương ứng.</i>";
 
-            $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
-            foreach ($adminIds as $chatId) {
+            foreach ($bot->adminIds() as $chatId) {
                 $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
             }
         } catch (\Throwable $e) {

@@ -29,8 +29,7 @@ class NotifyExpirationsCommand extends Command
             return 1;
         }
 
-        $adminIdsRaw = (string) env('TELEGRAM_ADMIN_IDS', '');
-        $adminIds = array_filter(array_map('trim', explode(',', $adminIdsRaw)));
+        $adminIds = $bot->adminIds();
 
         if (empty($adminIds)) {
             $this->warn('TELEGRAM_ADMIN_IDS rỗng. Không có ai để noti.');

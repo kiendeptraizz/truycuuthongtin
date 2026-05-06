@@ -185,7 +185,7 @@ if (!function_exists('parseShortAmount')) {
         // Chỉ trust is_numeric cho int/float thực sự, KHÔNG dùng cho string
         // (PHP coi '100.000' là numeric = 100, sẽ sai cho format VN)
         if (is_int($input) || is_float($input)) {
-            return (int) round((float) $input);
+            return parseShortAmountClamp((int) round((float) $input));
         }
 
         $s = strtolower(trim((string) $input));
@@ -195,17 +195,31 @@ if (!function_exists('parseShortAmount')) {
             if ($unit === '') {
                 // Không có đơn vị → bỏ tất cả dấu chấm/phẩy (đều là thousand separator vì VND không có decimal)
                 // Hỗ trợ "100.000", "100,000", "1.000.000"
-                return (int) round((float) str_replace(['.', ','], '', $m[1]));
+                return parseShortAmountClamp((int) round((float) str_replace(['.', ','], '', $m[1])));
             }
 
             // Có đơn vị → parse số thập phân (vd. "1.5tr", "1,5tr")
             $num = (float) str_replace(',', '.', $m[1]);
-            return match ($unit) {
+            $val = match ($unit) {
                 'k', 'nghìn', 'nghin' => (int) round($num * 1_000),
                 'tr', 'triệu', 'trieu', 'm' => (int) round($num * 1_000_000),
             };
+            return parseShortAmountClamp($val);
         }
-        return (int) round((float) parseCurrency($s));
+        return parseShortAmountClamp((int) round((float) parseCurrency($s)));
+    }
+}
+
+if (!function_exists('parseShortAmountClamp')) {
+    /**
+     * Clamp về [0, 500_000_000] đồng. Negative → 0; vượt 500tr → 0
+     * (return 0 thay vì cap để báo input sai). Caller check ≤ 0 để reject.
+     */
+    function parseShortAmountClamp(int $val): int
+    {
+        if ($val < 0) return 0;
+        if ($val > 500_000_000) return 0; // 500 triệu — phòng typo "100kkk" hoặc paste lỗi
+        return $val;
     }
 }
 

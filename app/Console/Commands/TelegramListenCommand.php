@@ -592,6 +592,11 @@ class TelegramListenCommand extends Command
         if ($cs->order_amount) {
             $lines[] = "💵 Số tiền: <b>" . formatShortAmount((int) $cs->order_amount) . "</b>";
         }
+        // Profit (nếu admin đã nhập trong Pay2S webhook hoặc bot bước 7)
+        $profit = $cs->relationLoaded('profit') ? $cs->profit : $cs->profit()->first();
+        if ($profit && $profit->profit_amount) {
+            $lines[] = "💎 Lợi nhuận: <b>" . formatShortAmount((int) $profit->profit_amount) . "</b>";
+        }
         if ($cs->activated_at) {
             $lines[] = "🟢 Kích hoạt: " . $cs->activated_at->format('d/m/Y');
         }

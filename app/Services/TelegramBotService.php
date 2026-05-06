@@ -34,6 +34,15 @@ class TelegramBotService
         return in_array((string) $userId, $this->adminIds, true);
     }
 
+    /**
+     * Trả list admin chat IDs (đã parse từ TELEGRAM_ADMIN_IDS env).
+     * DRY helper — thay 4 chỗ lặp `array_filter(array_map('trim', explode(',', env(...))))`.
+     */
+    public function adminIds(): array
+    {
+        return $this->adminIds;
+    }
+
     public function call(string $method, array $params = []): array
     {
         if (!$this->isConfigured()) {

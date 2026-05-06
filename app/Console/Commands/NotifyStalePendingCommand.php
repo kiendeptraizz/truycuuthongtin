@@ -34,7 +34,7 @@ class NotifyStalePendingCommand extends Command
             return 1;
         }
 
-        $adminIds = array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_ADMIN_IDS', ''))));
+        $adminIds = $bot->adminIds();
         if (empty($adminIds)) {
             $this->warn('TELEGRAM_ADMIN_IDS rỗng. Skip.');
             return 0;
