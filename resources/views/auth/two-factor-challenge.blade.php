@@ -62,6 +62,20 @@
                     Hoặc nhập 1 trong các <strong>mã khôi phục</strong> 10 ký tự nếu mất authenticator
                 </small>
             </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="trust_device" value="1"
+                       id="trustDevice" checked>
+                <label class="form-check-label small" for="trustDevice">
+                    <i class="fas fa-laptop me-1 text-success"></i>
+                    <strong>Tin tưởng thiết bị này 30 ngày</strong>
+                    <span class="text-muted d-block ms-3" style="font-size: 0.8rem;">
+                        Sẽ không hỏi mã xác thực mỗi lần đăng nhập trên trình duyệt này.
+                        Bỏ tick nếu là máy công cộng.
+                    </span>
+                </label>
+            </div>
+
             <button type="submit" class="btn btn-primary w-100 btn-lg">
                 <i class="fas fa-unlock me-1"></i>Xác thực
             </button>
