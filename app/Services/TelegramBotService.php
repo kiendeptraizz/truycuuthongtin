@@ -51,13 +51,21 @@ class TelegramBotService
         $url = "https://api.telegram.org/bot{$this->token}/{$method}";
 
         // Timeout config tối ưu cho UX:
-        //   - getUpdates (long polling): cần timeout dài (~30s) để đợi update
-        //   - sendMessage / sendPhoto / etc: cần timeout NGẮN để fail-fast khi
-        //     external slow (VietQR API chậm làm Telegram fetch URL slow → trả 400).
-        // Trước đây dùng timeout(60)+retry(2,500) cho TẤT CẢ → 1 sendPhoto fail
-        // có thể block 60+ giây → Pay2S webhook timeout → Pay2S retry → spiral.
+        //   - getUpdates (long polling): 35s — cần đợi update lâu
+        //   - sendPhoto: 30s — Telegram server cần fetch URL ảnh (VietQR/CDN)
+        //     + upload CDN → đôi khi 10-20s là bình thường. Trước đây 10s gây
+        //     fallback text+link liên tục dù VietQR + Telegram đều OK.
+        //   - sendMessage / deleteMessage / etc: 10s — text-only, fast.
+        // Lý do tách: trước đây timeout(60)+retry(2,500) cho TẤT CẢ → 1 fail
+        // có thể block 60+ giây → Pay2S webhook timeout → spiral. Giờ tách
+        // đúng theo nature của mỗi method.
         $isLongPoll = $method === 'getUpdates';
-        $timeout = $isLongPoll ? 35 : 10;
+        $isMediaUpload = in_array($method, ['sendPhoto', 'sendDocument', 'sendVideo', 'sendAudio'], true);
+        $timeout = match (true) {
+            $isLongPoll => 35,
+            $isMediaUpload => 30,
+            default => 10,
+        };
         $connectTimeout = 3;
 
         $client = Http::timeout($timeout)->connectTimeout($connectTimeout);
