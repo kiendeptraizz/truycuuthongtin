@@ -123,40 +123,58 @@
     .po-table tbody tr:hover {
         background-color: #f8fafc;
     }
-    /* Status strip indicator bên trái mỗi row — dùng pseudo-element absolute
-       (pattern chắc nhất, không bị Bootstrap .table override). */
+
+    /* ROW BACKGROUND TINT theo status — approach reliable nhất (Bootstrap .table
+       không override được tr background-color khi có !important). User nhìn 1
+       phát thấy ngay status từ tint của cả row. */
+    .po-table tbody tr.row-status-pending td,
+    .po-table tbody tr.row-status-pending th {
+        background-color: #fefce8 !important; /* vàng nhạt */
+    }
+    .po-table tbody tr.row-status-pending:hover td,
+    .po-table tbody tr.row-status-pending:hover th {
+        background-color: #fef9c3 !important;
+    }
+
+    .po-table tbody tr.row-status-completed td,
+    .po-table tbody tr.row-status-completed th {
+        background-color: #f0fdf4 !important; /* xanh nhạt */
+    }
+    .po-table tbody tr.row-status-completed:hover td,
+    .po-table tbody tr.row-status-completed:hover th {
+        background-color: #dcfce7 !important;
+    }
+
+    .po-table tbody tr.row-status-cancelled td,
+    .po-table tbody tr.row-status-cancelled th {
+        background-color: #f9fafb !important; /* xám nhạt */
+        opacity: 0.85;
+    }
+
+    .po-table tbody tr.row-status-urgent td,
+    .po-table tbody tr.row-status-urgent th {
+        background-color: #fee2e2 !important; /* đỏ nhạt nổi bật */
+        animation: pulse-urgent-bg 2s ease-in-out infinite;
+    }
+    .po-table tbody tr.row-status-urgent:hover td,
+    .po-table tbody tr.row-status-urgent:hover th {
+        background-color: #fecaca !important;
+    }
+    @keyframes pulse-urgent-bg {
+        0%, 100% { background-color: #fee2e2 !important; }
+        50%      { background-color: #fca5a5 !important; }
+    }
+
+    /* Status strip indicator bên trái (kết hợp với row tint cho rõ hơn) */
     .po-table tbody tr td:first-child {
         position: relative !important;
-        padding-left: 1rem !important;
+        padding-left: 1.25rem !important;
+        border-left: 5px solid transparent !important;
     }
-    .po-table tbody tr td:first-child::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 5px;
-        background-color: transparent;
-        z-index: 1;
-    }
-    .po-table tbody tr.row-status-pending td:first-child::before { background-color: #f59e0b; }
-    .po-table tbody tr.row-status-completed td:first-child::before { background-color: #10b981; }
-    .po-table tbody tr.row-status-cancelled td:first-child::before { background-color: #9ca3af; }
-    .po-table tbody tr.row-status-urgent td:first-child::before {
-        background-color: #ef4444;
-        animation: pulse-strip 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-strip {
-        0%, 100% { background-color: #ef4444; opacity: 1; }
-        50%      { background-color: #fca5a5; opacity: 0.6; }
-    }
-    /* Urgent row background tint */
-    .po-table tbody tr.row-status-urgent {
-        background-color: #fef2f2;
-    }
-    .po-table tbody tr.row-status-urgent:hover {
-        background-color: #fee2e2;
-    }
+    .po-table tbody tr.row-status-pending td:first-child { border-left-color: #f59e0b !important; }
+    .po-table tbody tr.row-status-completed td:first-child { border-left-color: #10b981 !important; }
+    .po-table tbody tr.row-status-cancelled td:first-child { border-left-color: #9ca3af !important; }
+    .po-table tbody tr.row-status-urgent td:first-child { border-left-color: #ef4444 !important; }
 
     /* Order code badge — monospace, click to copy */
     .order-code {
