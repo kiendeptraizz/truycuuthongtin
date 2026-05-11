@@ -123,21 +123,32 @@
     .po-table tbody tr:hover {
         background-color: #f8fafc;
     }
-    /* Status strip indicator bên trái mỗi row — dùng box-shadow inset thay vì
-       border-left để tránh Bootstrap .table override. Pattern reliable. */
+    /* Status strip indicator bên trái mỗi row — dùng pseudo-element absolute
+       (pattern chắc nhất, không bị Bootstrap .table override). */
     .po-table tbody tr td:first-child {
-        position: relative;
+        position: relative !important;
+        padding-left: 1rem !important;
     }
-    .po-table tbody tr.row-status-pending td:first-child { box-shadow: inset 4px 0 0 0 #f59e0b; }
-    .po-table tbody tr.row-status-completed td:first-child { box-shadow: inset 4px 0 0 0 #10b981; }
-    .po-table tbody tr.row-status-cancelled td:first-child { box-shadow: inset 4px 0 0 0 #9ca3af; }
-    .po-table tbody tr.row-status-urgent td:first-child {
-        box-shadow: inset 4px 0 0 0 #ef4444;
-        animation: pulse-strip 2s ease-in-out infinite;
+    .po-table tbody tr td:first-child::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background-color: transparent;
+        z-index: 1;
+    }
+    .po-table tbody tr.row-status-pending td:first-child::before { background-color: #f59e0b; }
+    .po-table tbody tr.row-status-completed td:first-child::before { background-color: #10b981; }
+    .po-table tbody tr.row-status-cancelled td:first-child::before { background-color: #9ca3af; }
+    .po-table tbody tr.row-status-urgent td:first-child::before {
+        background-color: #ef4444;
+        animation: pulse-strip 1.5s ease-in-out infinite;
     }
     @keyframes pulse-strip {
-        0%, 100% { box-shadow: inset 4px 0 0 0 #ef4444; }
-        50%      { box-shadow: inset 4px 0 0 0 #fca5a5; }
+        0%, 100% { background-color: #ef4444; opacity: 1; }
+        50%      { background-color: #fca5a5; opacity: 0.6; }
     }
     /* Urgent row background tint */
     .po-table tbody tr.row-status-urgent {
