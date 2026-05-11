@@ -31,6 +31,32 @@
     .qr-thumb:hover { border-color: #667eea; transform: scale(1.05); }
     #qrModalImg { max-width: 100%; height: auto; }
 
+    /* Đơn đã paid nhưng chưa fill → highlight vàng + animate left border */
+    tr.needs-fill-urgent {
+        background-color: #fff8e1 !important;
+        border-left: 4px solid #f59e0b;
+    }
+    tr.needs-fill-urgent:hover {
+        background-color: #fff3cd !important;
+    }
+    tr.needs-fill-urgent td:first-child {
+        position: relative;
+    }
+    tr.needs-fill-urgent td:first-child::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: #f59e0b;
+        animation: pulse-urgent 2s ease-in-out infinite;
+    }
+    @keyframes pulse-urgent {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
     /* Sticky cột Thao tác bên phải — luôn visible khi scroll ngang trên màn hình hẹp
        (split-screen với Zalo, mobile). Action buttons (Đã trả/Fill/Huỷ) luôn thao tác được. */
     .table-responsive { position: relative; }
@@ -181,7 +207,12 @@
                         </thead>
                         <tbody>
                         @foreach($orders as $order)
-                            <tr data-order-row="{{ $order->id }}">
+                            @php
+                                // Đơn pending + đã paid + chưa link CS → cần fill GẤP (cảnh báo)
+                                $needsFillUrgent = $order->status === 'pending' && $order->paid_at && !$order->customer_service_id;
+                            @endphp
+                            <tr data-order-row="{{ $order->id }}"
+                                class="{{ $needsFillUrgent ? 'table-warning needs-fill-urgent' : '' }}">
                                 <td><span class="order-code">{{ $order->order_code }}</span></td>
                                 <td>
                                     <span class="amount-badge" title="{{ number_format($order->amount, 0, ',', '.') }}đ">
@@ -222,7 +253,13 @@
                                 </td>
                                 <td>
                                     @if($order->status === 'pending')
-                                        <span class="badge bg-warning text-dark">Chờ fill</span>
+                                        @if($needsFillUrgent)
+                                            <span class="badge bg-danger" title="Đã thanh toán nhưng chưa fill xong — cần xử lý gấp!">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>Đã trả · Cần fill gấp!
+                                            </span>
+                                        @else
+                                            <span class="badge bg-warning text-dark">Chờ fill</span>
+                                        @endif
                                     @elseif($order->status === 'completed')
                                         <span class="badge bg-success">Đã fill</span>
                                         @if($order->customer_service_id)

@@ -175,8 +175,17 @@ class Pay2sWebhookController extends Controller
             ];
         }
 
-        // Telegram noti — ngoài transaction
-        $this->sendPaidNotification($bot, $order->refresh(), $amount);
+        // Telegram noti — ngoài transaction.
+        // Tách 2 nhánh:
+        //   - paid_and_activated: CS đã tạo → noti chuẩn (forward cho khách)
+        //   - paid_only: paid nhưng skip create CS do thiếu data (email/gói/...)
+        //     → noti CẢNH BÁO admin + link /fill (KHÔNG forward cho khách)
+        $order->refresh();
+        if ($result['status'] === 'paid_only' || !$order->customer_service_id) {
+            $this->sendNeedsFillNotification($bot, $order, $amount);
+        } else {
+            $this->sendPaidNotification($bot, $order, $amount);
+        }
 
         return [
             'ok' => true,
@@ -338,6 +347,55 @@ class Pay2sWebhookController extends Controller
      * Idempotent qua Cache key 'pay2s_unmatched_<bankTxId>' TTL 1h — Pay2S retry
      * 2-3 lần với cùng tx, chỉ gửi noti 1 lần.
      */
+    /**
+     * Noti CẢNH BÁO khi đơn được mark paid NHƯNG CS không tự tạo được vì
+     * thiếu data structured (email/gói/duration_days) — bot user đã bấm
+     * "Bỏ qua email" hoặc tạo qua flow "Tạo đơn nhanh" 2-step.
+     *
+     * Khác với sendPaidNotification (forward cho khách): noti này là cho ADMIN
+     * — yêu cầu vào /fill để điền thông tin còn thiếu.
+     */
+    private function sendNeedsFillNotification(TelegramBotService $bot, PendingOrder $order, int $amount): void
+    {
+        try {
+            $order->loadMissing('customer');
+
+            // Liệt kê field còn thiếu (tham chiếu logic PaymentService::tryAutoCreateCustomerService)
+            $missing = [];
+            if (empty($order->customer_id)) $missing[] = 'khách hàng';
+            if (empty($order->service_package_id)) $missing[] = 'gói dịch vụ';
+            if (empty($order->account_email)) $missing[] = 'email tài khoản';
+            if (empty($order->duration_days)) $missing[] = 'thời hạn (số ngày)';
+
+            $missingLine = empty($missing)
+                ? "<i>(không xác định)</i>"
+                : '<b>' . implode(', ', $missing) . '</b>';
+
+            $customerLine = $order->customer
+                ? "<code>{$order->customer->customer_code}</code> — <b>" . e($order->customer->name) . "</b>"
+                : "<i>(chưa gắn KH)</i>";
+
+            $fillUrl = rtrim(config('app.url'), '/') . '/admin/pending-orders/' . $order->id . '/fill';
+
+            $msg = "⚠️ <b>ĐÃ NHẬN TIỀN — CẦN FILL THÊM!</b>\n\n"
+                . "👤 Mã khách hàng: {$customerLine}\n"
+                . "📋 Mã đơn: <code>{$order->order_code}</code>\n"
+                . "💵 Số tiền: <b>" . formatShortAmount($amount) . "</b>\n\n"
+                . "❌ <b>Thiếu:</b> {$missingLine}\n\n"
+                . "🔗 Mở form fill để hoàn tất tạo dịch vụ:\n{$fillUrl}\n\n"
+                . "<i>Đơn đã thanh toán nhưng chưa tạo CS active vì thiếu thông tin (do bạn bấm 'Bỏ qua email' lúc tạo đơn, hoặc dùng 'Tạo đơn nhanh' 2-step). Bấm Fill để hoàn tất.</i>";
+
+            foreach ($bot->adminIds() as $chatId) {
+                $bot->sendMessage($chatId, $msg, ['disable_web_page_preview' => true]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Pay2S webhook: sendNeedsFillNotification failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function sendUnmatchedNotification(
         TelegramBotService $bot,
         string $bankTxId,
