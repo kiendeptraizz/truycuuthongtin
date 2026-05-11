@@ -855,9 +855,13 @@ class TelegramListenCommand extends Command
                     return;
                 }
                 $data = $state['data'] ?? [];
-                // Chỉ clearState — không purge để finalize warranty nhanh.
+                // Save tracked msgs trước clearState để purge async sau finalize warranty.
+                $trackedMsgs = $data['_track_msgs'] ?? [];
                 $this->clearState($chatId);
                 $this->finalizeWarranty($chatId, $data, $note);
+                if (!empty($trackedMsgs)) {
+                    $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
+                }
                 return;
 
             case 'awaiting_multi_count':
@@ -1161,9 +1165,14 @@ class TelegramListenCommand extends Command
                 return;
             }
 
-            // Đơn cuối → tạo lô. Chỉ clearState — không purge để finalize nhanh.
+            // Đơn cuối → tạo lô. Save tracked msgs trước clearState để purge
+            // async sau finalizeMultiOrder gửi xong QR + caption.
+            $trackedMsgs = $data['_track_msgs'] ?? [];
             $this->clearState($chatId);
             $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
+            if (!empty($trackedMsgs)) {
+                $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
+            }
             return;
         }
 
@@ -1191,6 +1200,9 @@ class TelegramListenCommand extends Command
 
         // Hybrid: tạo CustomerService pending NGAY (chưa active)
         $this->tryCreatePendingCustomerService($order, $data);
+
+        // Save tracked msgs trước clearState (để purge cuối)
+        $trackedMsgs = $data['_track_msgs'] ?? [];
         $this->clearState($chatId);
 
         // Speed up: gửi TEXT caption TRƯỚC (~0.5-1s, user thấy info đơn ngay),
@@ -1199,6 +1211,12 @@ class TelegramListenCommand extends Command
         $caption = $this->buildCaption($order, $data);
         $this->bot->sendMessage($chatId, $caption);
         $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), "📷 QR thanh toán <code>{$order->order_code}</code>");
+
+        // Async cleanup: SAU KHI đã gửi xong caption + QR, xóa 7 bước cũ.
+        // User đã thấy kết quả → không cảm giác chậm vì purge sau.
+        if (!empty($trackedMsgs)) {
+            $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
+        }
     }
 
     /**
@@ -1782,7 +1800,8 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Chỉ clearState — không purge để finalize nhanh.
+        // Save tracked msgs trước clearState để purge async sau khi gửi xong.
+        $trackedMsgs = $data['_track_msgs'] ?? [];
         $this->clearState($chatId);
 
         $caption = "✅ <code>{$order->order_code}</code> <i>(đơn nhanh)</i>\n\n"
@@ -1795,6 +1814,11 @@ class TelegramListenCommand extends Command
         // Speed up: gửi text caption TRƯỚC (instant), QR sau (Telegram fetch URL chậm).
         $this->bot->sendMessage($chatId, $caption);
         $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), "📷 QR thanh toán <code>{$order->order_code}</code>");
+
+        // Async cleanup: xóa 2 bước cũ SAU khi user đã thấy QR
+        if (!empty($trackedMsgs)) {
+            $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
+        }
     }
 
     private function promptCustomerName(int|string $chatId, array $data): void
