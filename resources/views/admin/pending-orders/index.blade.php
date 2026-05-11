@@ -4,77 +4,263 @@
 
 @push('styles')
 <style>
-    .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    /* ====== STATS CARDS ====== */
+    .po-stat-card {
+        background: #fff;
+        border-radius: 14px;
+        padding: 1.1rem 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+        border: 1px solid #f1f3f5;
+        position: relative;
+        overflow: hidden;
+        transition: transform .15s ease, box-shadow .15s ease;
     }
+    .po-stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .po-stat-card .icon-wrap {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 42px; height: 42px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.15rem;
+        opacity: 0.9;
+    }
+    .po-stat-card .stat-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6c757d;
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+    }
+    .po-stat-card .stat-value {
+        font-size: 1.85rem;
+        font-weight: 700;
+        line-height: 1.1;
+        color: #1a1a2e;
+    }
+    .po-stat-card .stat-sub {
+        font-size: 0.78rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .po-stat-card.variant-warning { border-top: 3px solid #f59e0b; }
+    .po-stat-card.variant-warning .icon-wrap { background: #fef3c7; color: #d97706; }
+    .po-stat-card.variant-danger { border-top: 3px solid #ef4444; }
+    .po-stat-card.variant-danger .icon-wrap { background: #fee2e2; color: #dc2626; }
+    .po-stat-card.variant-info { border-top: 3px solid #3b82f6; }
+    .po-stat-card.variant-info .icon-wrap { background: #dbeafe; color: #2563eb; }
+    .po-stat-card.variant-success { border-top: 3px solid #10b981; }
+    .po-stat-card.variant-success .icon-wrap { background: #d1fae5; color: #059669; }
+
+    /* Pulse animation cho card urgent */
+    .po-stat-card.variant-danger.has-urgent .icon-wrap {
+        animation: pulse-danger 2s ease-in-out infinite;
+    }
+    @keyframes pulse-danger {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+        50%      { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    }
+
+    /* ====== FILTER CARD ====== */
+    .filter-card {
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid #f1f3f5;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .filter-card .filter-header {
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid #f1f3f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .filter-card .filter-header .title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #495057;
+    }
+    .filter-card .active-count {
+        background: #2563eb;
+        color: white;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-weight: 700;
+        margin-left: 0.4rem;
+    }
+
+    /* ====== TABLE ====== */
+    .po-table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .po-table thead th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6c757d;
+        font-weight: 700;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        padding: 0.65rem 0.75rem;
+    }
+    .po-table tbody td {
+        padding: 0.875rem 0.75rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f3f5;
+    }
+    .po-table tbody tr {
+        transition: background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .po-table tbody tr:hover {
+        background-color: #f8fafc;
+    }
+    /* Status strip indicator bên trái mỗi row */
+    .po-table tbody tr td:first-child {
+        position: relative;
+        border-left: 4px solid transparent;
+    }
+    .po-table tbody tr.row-status-pending td:first-child { border-left-color: #f59e0b; }
+    .po-table tbody tr.row-status-completed td:first-child { border-left-color: #10b981; }
+    .po-table tbody tr.row-status-cancelled td:first-child { border-left-color: #9ca3af; }
+    .po-table tbody tr.row-status-urgent td:first-child {
+        border-left-color: #ef4444;
+        animation: pulse-strip 2s ease-in-out infinite;
+    }
+    @keyframes pulse-strip {
+        0%, 100% { border-left-color: #ef4444; }
+        50%      { border-left-color: #fca5a5; }
+    }
+    /* Urgent row background tint */
+    .po-table tbody tr.row-status-urgent {
+        background-color: #fef2f2;
+    }
+    .po-table tbody tr.row-status-urgent:hover {
+        background-color: #fee2e2;
+    }
+
+    /* Order code badge — monospace, click to copy */
     .order-code {
-        font-family: 'Courier New', monospace;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
         font-weight: 700;
         color: #1a1a2e;
+        background: #f1f5f9;
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        letter-spacing: -0.02em;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .order-code:hover {
+        background: #e0e7ff;
+        color: #4338ca;
     }
     .amount-badge {
         font-weight: 700;
         color: #16a34a;
+        font-size: 0.95rem;
     }
-    .qr-thumb {
-        width: 48px;
-        height: 48px;
-        cursor: pointer;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 4px;
-        background: white;
-    }
-    .qr-thumb:hover { border-color: #667eea; transform: scale(1.05); }
-    #qrModalImg { max-width: 100%; height: auto; }
 
-    /* Đơn đã paid nhưng chưa fill → highlight vàng + animate left border */
-    tr.needs-fill-urgent {
-        background-color: #fff8e1 !important;
-        border-left: 4px solid #f59e0b;
+    /* Status badges với icon */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
     }
-    tr.needs-fill-urgent:hover {
-        background-color: #fff3cd !important;
-    }
-    tr.needs-fill-urgent td:first-child {
-        position: relative;
-    }
-    tr.needs-fill-urgent td:first-child::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background: #f59e0b;
-        animation: pulse-urgent 2s ease-in-out infinite;
-    }
-    @keyframes pulse-urgent {
+    .status-badge.pending  { background: #fef3c7; color: #92400e; }
+    .status-badge.urgent   { background: #fee2e2; color: #b91c1c; animation: blink 1.4s ease-in-out infinite; }
+    .status-badge.completed { background: #d1fae5; color: #065f46; }
+    .status-badge.cancelled { background: #e5e7eb; color: #374151; }
+    .status-badge.paid      { background: #d1fae5; color: #065f46; }
+    .status-badge.unpaid    { background: #f3f4f6; color: #6b7280; }
+    @keyframes blink {
         0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
+        50% { opacity: 0.7; }
     }
 
-    /* Sticky cột Thao tác bên phải — luôn visible khi scroll ngang trên màn hình hẹp
-       (split-screen với Zalo, mobile). Action buttons (Đã trả/Fill/Huỷ) luôn thao tác được. */
+    /* Customer cell */
+    .customer-cell .code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        color: #4338ca;
+        font-weight: 600;
+    }
+    .customer-cell .name {
+        font-size: 0.85rem;
+        color: #374151;
+    }
+
+    /* Sticky cột Thao tác */
     .table-responsive { position: relative; }
     .action-cell-sticky {
         position: sticky;
         right: 0;
         background: #ffffff;
         z-index: 2;
-        box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.08);
+        box-shadow: -6px 0 10px -6px rgba(0,0,0,0.08);
         white-space: nowrap;
     }
-    thead .action-cell-sticky {
-        background: #f8f9fa; /* match table-light bg */
+    .po-table thead .action-cell-sticky {
+        background: #f8f9fa;
     }
-    /* Đảm bảo các nút trong cột action không bị wrap, click dễ */
+    .po-table tbody tr.row-status-urgent .action-cell-sticky {
+        background: #fef2f2;
+    }
+    .po-table tbody tr:hover .action-cell-sticky {
+        background: #f8fafc;
+    }
+    .po-table tbody tr.row-status-urgent:hover .action-cell-sticky {
+        background: #fee2e2;
+    }
     .action-cell-sticky .btn {
         white-space: nowrap;
     }
+
+    /* QR modal */
+    .qr-thumb {
+        width: 48px; height: 48px;
+        cursor: pointer;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 4px;
+        background: white;
+        transition: transform 0.15s ease;
+    }
+    .qr-thumb:hover { border-color: #6366f1; transform: scale(1.08); }
+    #qrModalImg { max-width: 100%; height: auto; }
+
+    /* Empty state */
+    .po-empty {
+        padding: 3.5rem 1rem;
+        text-align: center;
+    }
+    .po-empty .empty-icon {
+        width: 80px; height: 80px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        background: #f1f5f9;
+        display: flex; align-items: center; justify-content: center;
+        color: #94a3b8;
+        font-size: 2rem;
+    }
+    .po-empty h5 { color: #1e293b; margin-bottom: 0.4rem; }
+    .po-empty p { color: #64748b; max-width: 400px; margin: 0 auto 1rem; }
 </style>
 @endpush
 
@@ -97,34 +283,77 @@
         </div>
     @endif
 
-    {{-- Stats --}}
+    {{-- Stats — 4 cards with accent color + icon --}}
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="stat-card border-start border-4 border-warning">
-                <div class="text-muted small">Đang chờ fill</div>
-                <div class="h2 mb-0" data-stats-key="pending">{{ number_format($stats['pending']) }}</div>
+        <div class="col-6 col-lg-3">
+            <div class="po-stat-card variant-warning">
+                <div class="icon-wrap"><i class="fas fa-hourglass-half"></i></div>
+                <div class="stat-label">Đang chờ fill</div>
+                <div class="stat-value" data-stats-key="pending">{{ number_format($stats['pending']) }}</div>
+                <div class="stat-sub">Tổng đơn pending</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stat-card border-start border-4 border-info">
-                <div class="text-muted small">Đơn hôm nay</div>
-                <div class="h2 mb-0" data-stats-key="today">{{ number_format($stats['today']) }}</div>
+        <div class="col-6 col-lg-3">
+            <div class="po-stat-card variant-danger {{ ($stats['needs_fill_urgent'] ?? 0) > 0 ? 'has-urgent' : '' }}">
+                <div class="icon-wrap"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-label">Cần fill gấp</div>
+                <div class="stat-value">{{ number_format($stats['needs_fill_urgent'] ?? 0) }}</div>
+                <div class="stat-sub">Đã trả mà chưa fill xong</div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stat-card border-start border-4 border-success">
-                <div class="text-muted small">Tổng tiền hôm nay</div>
-                <div class="h2 mb-0" title="{{ number_format($stats['today_amount'], 0, ',', '.') }}đ">{{ formatShortAmount($stats['today_amount']) }}</div>
+        <div class="col-6 col-lg-3">
+            <div class="po-stat-card variant-info">
+                <div class="icon-wrap"><i class="fas fa-calendar-day"></i></div>
+                <div class="stat-label">Đơn hôm nay</div>
+                <div class="stat-value" data-stats-key="today">{{ number_format($stats['today']) }}</div>
+                <div class="stat-sub">{{ now()->format('d/m/Y') }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="po-stat-card variant-success">
+                <div class="icon-wrap"><i class="fas fa-money-bill-wave"></i></div>
+                <div class="stat-label">Tổng tiền hôm nay</div>
+                <div class="stat-value" title="{{ number_format($stats['today_amount'], 0, ',', '.') }}đ">{{ formatShortAmount($stats['today_amount']) }}</div>
+                <div class="stat-sub">Số tiền đã đặt đơn</div>
             </div>
         </div>
     </div>
 
     {{-- Filters --}}
-    <div class="card mb-3">
-        <div class="card-body">
+    @php
+        $activeFilters = collect([
+            $status !== 'pending' ? 'status' : null,
+            ($paidFilter ?? 'all') !== 'all' ? 'paid' : null,
+            ($source ?? 'all') !== 'all' ? 'source' : null,
+            request('date') ? 'date' : null,
+            !empty($code) ? 'code' : null,
+            !empty($customerSearch) ? 'customer' : null,
+        ])->filter()->count();
+    @endphp
+    <div class="filter-card mb-3">
+        <div class="filter-header">
+            <div class="title">
+                <i class="fas fa-filter me-1 text-primary"></i>Bộ lọc
+                @if($activeFilters > 0)
+                    <span class="active-count">{{ $activeFilters }} điều kiện</span>
+                @endif
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                @if($activeFilters > 0)
+                    <span class="small text-muted">
+                        <i class="fas fa-check-circle text-success me-1"></i>
+                        Tìm thấy <strong>{{ $orders->total() }}</strong> đơn
+                    </span>
+                    <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>Xoá lọc
+                    </a>
+                @endif
+            </div>
+        </div>
+        <div class="p-3">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small">Trạng thái</label>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">Trạng thái</label>
                     <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Đang chờ fill</option>
                         <option value="completed" {{ $status === 'completed' ? 'selected' : '' }}>Đã hoàn thành</option>
@@ -132,67 +361,63 @@
                         <option value="all" {{ $status === 'all' ? 'selected' : '' }}>Tất cả</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Thanh toán</label>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">Thanh toán</label>
                     <select name="paid" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="all" {{ ($paidFilter ?? 'all') === 'all' ? 'selected' : '' }}>Tất cả</option>
                         <option value="paid" {{ ($paidFilter ?? '') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
                         <option value="unpaid" {{ ($paidFilter ?? '') === 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Nguồn</label>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">Nguồn</label>
                     <select name="source" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="all" {{ ($source ?? 'all') === 'all' ? 'selected' : '' }}>Tất cả</option>
                         <option value="telegram" {{ ($source ?? '') === 'telegram' ? 'selected' : '' }}>Telegram</option>
                         <option value="web" {{ ($source ?? '') === 'web' ? 'selected' : '' }}>Web</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Ngày tạo</label>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">Ngày tạo</label>
                     <input type="date" name="date" value="{{ request('date') }}" class="form-control form-control-sm" onchange="this.form.submit()">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Mã đơn</label>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">Mã đơn</label>
                     <input type="text" name="code" value="{{ $code ?? '' }}" class="form-control form-control-sm" placeholder="DH-260506-001">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small">
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold">
                         <i class="fas fa-user me-1"></i>Khách hàng
                     </label>
-                    <input type="text" name="customer" value="{{ $customerSearch ?? '' }}" class="form-control form-control-sm" placeholder="Mã KUN/CTV hoặc tên...">
-                </div>
-                <div class="col-12 d-flex gap-2 mt-2">
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="fas fa-filter me-1"></i>Lọc
-                    </button>
-                    @if(request('date') || $status !== 'pending' || ($paidFilter ?? 'all') !== 'all' || ($source ?? 'all') !== 'all' || !empty($code) || !empty($customerSearch))
-                        <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-sm btn-outline-secondary">
-                            <i class="fas fa-times me-1"></i>Xoá lọc
-                        </a>
-                        <span class="ms-auto small text-muted align-self-center">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Tìm thấy <strong>{{ $orders->total() }}</strong> đơn khớp filter
-                        </span>
-                    @endif
+                    <input type="text" name="customer" value="{{ $customerSearch ?? '' }}" class="form-control form-control-sm" placeholder="KUN/CTV hoặc tên...">
                 </div>
             </form>
         </div>
     </div>
 
     {{-- Table --}}
-    <div class="card">
+    <div class="card border-0 shadow-sm" style="border-radius: 14px;">
         <div class="card-body p-0">
             @if($orders->count() === 0)
-                <div class="text-center py-5">
-                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">Không có đơn nào</h5>
-                    <p class="text-muted">Tạo đơn nhanh từ bot Telegram hoặc click "Tạo nhanh" ở trên.</p>
+                <div class="po-empty">
+                    <div class="empty-icon"><i class="fas fa-inbox"></i></div>
+                    <h5>Không có đơn nào khớp</h5>
+                    @if($activeFilters > 0)
+                        <p>Thử xoá bớt filter, hoặc kiểm tra mã đơn / mã KH đã gõ đúng chưa.</p>
+                        <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-times me-1"></i>Xoá tất cả filter
+                        </a>
+                    @else
+                        <p>Tạo đơn nhanh từ bot Telegram hoặc bấm <strong>"Tạo nhanh"</strong> ở góc phải.</p>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newOrderModal">
+                            <i class="fas fa-plus me-1"></i>Tạo đơn mới
+                        </button>
+                    @endif
                 </div>
             @else
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
+                    <table class="po-table table mb-0">
+                        <thead>
                             <tr>
                                 <th>Mã đơn</th>
                                 <th>Số tiền</th>
@@ -210,25 +435,27 @@
                             @php
                                 // Đơn pending + đã paid + chưa link CS → cần fill GẤP (cảnh báo)
                                 $needsFillUrgent = $order->status === 'pending' && $order->paid_at && !$order->customer_service_id;
+                                $rowClass = $needsFillUrgent ? 'row-status-urgent' : "row-status-{$order->status}";
                             @endphp
-                            <tr data-order-row="{{ $order->id }}"
-                                class="{{ $needsFillUrgent ? 'table-warning needs-fill-urgent' : '' }}">
-                                <td><span class="order-code">{{ $order->order_code }}</span></td>
+                            <tr data-order-row="{{ $order->id }}" class="{{ $rowClass }}">
+                                <td>
+                                    <span class="order-code" title="Click để copy" onclick="navigator.clipboard?.writeText('{{ $order->order_code }}')">
+                                        {{ $order->order_code }}
+                                    </span>
+                                </td>
                                 <td>
                                     <span class="amount-badge" title="{{ number_format($order->amount, 0, ',', '.') }}đ">
                                         {{ formatShortAmount($order->amount) }}
                                     </span>
                                 </td>
                                 {{-- Cột Khách hàng — direct customer_id ưu tiên, fallback customerService.customer --}}
-                                <td class="d-none d-md-table-cell">
+                                <td class="d-none d-md-table-cell customer-cell">
                                     @php
                                         $kh = $order->customer ?? $order->customerService?->customer;
                                     @endphp
                                     @if($kh)
-                                        <div>
-                                            <code class="text-primary small">{{ $kh->customer_code }}</code>
-                                        </div>
-                                        <small class="text-muted">{{ $kh->name }}</small>
+                                        <div class="code">{{ $kh->customer_code }}</div>
+                                        <div class="name">{{ $kh->name }}</div>
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
@@ -254,35 +481,43 @@
                                 <td>
                                     @if($order->status === 'pending')
                                         @if($needsFillUrgent)
-                                            <span class="badge bg-danger" title="Đã thanh toán nhưng chưa fill xong — cần xử lý gấp!">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>Đã trả · Cần fill gấp!
+                                            <span class="status-badge urgent" title="Đã thanh toán nhưng chưa fill — cần xử lý gấp!">
+                                                <i class="fas fa-exclamation-triangle"></i>Cần fill gấp
                                             </span>
                                         @else
-                                            <span class="badge bg-warning text-dark">Chờ fill</span>
+                                            <span class="status-badge pending">
+                                                <i class="fas fa-hourglass-half"></i>Chờ fill
+                                            </span>
                                         @endif
                                     @elseif($order->status === 'completed')
-                                        <span class="badge bg-success">Đã fill</span>
+                                        <span class="status-badge completed">
+                                            <i class="fas fa-check-circle"></i>Đã fill
+                                        </span>
                                         @if($order->customer_service_id)
-                                            <br><small><a href="{{ route('admin.customer-services.show', $order->customer_service_id) }}">→ DV #{{ $order->customer_service_id }}</a></small>
+                                            <br><a href="{{ route('admin.customer-services.show', $order->customer_service_id) }}" class="small text-decoration-none mt-1 d-inline-block">
+                                                <i class="fas fa-arrow-right me-1"></i>DV #{{ $order->customer_service_id }}
+                                            </a>
                                         @endif
                                     @else
-                                        <span class="badge bg-secondary">Huỷ</span>
+                                        <span class="status-badge cancelled">
+                                            <i class="fas fa-times-circle"></i>Đã huỷ
+                                        </span>
                                     @endif
                                 </td>
                                 <td>
                                     @if($order->paid_at)
-                                        <span class="badge bg-success" title="{{ $order->paid_at->format('d/m/Y H:i:s') }}">
-                                            <i class="fas fa-check-circle me-1"></i>Đã trả
+                                        <span class="status-badge paid" title="{{ $order->paid_at->format('d/m/Y H:i:s') }}">
+                                            <i class="fas fa-check-circle"></i>Đã trả
                                         </span>
                                         @if($order->paid_amount && $order->paid_amount != $order->amount)
-                                            <br><small class="text-danger">
+                                            <br><small class="text-danger fw-semibold mt-1 d-inline-block">
                                                 {{ formatShortAmount($order->paid_amount) }}
                                                 ({{ $order->paid_amount > $order->amount ? '+' : '' }}{{ formatShortAmount($order->paid_amount - $order->amount) }})
                                             </small>
                                         @endif
                                     @else
-                                        <span class="badge bg-light text-dark">
-                                            <i class="far fa-clock me-1"></i>Chưa trả
+                                        <span class="status-badge unpaid">
+                                            <i class="far fa-clock"></i>Chưa trả
                                         </span>
                                     @endif
                                 </td>

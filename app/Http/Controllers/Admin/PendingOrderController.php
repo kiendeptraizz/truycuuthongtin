@@ -76,6 +76,11 @@ class PendingOrderController extends Controller
 
         $stats = [
             'pending' => PendingOrder::where('status', 'pending')->count(),
+            // Đơn paid nhưng chưa fill xong (CS chưa active) — cần xử lý gấp
+            'needs_fill_urgent' => PendingOrder::where('status', 'pending')
+                ->whereNotNull('paid_at')
+                ->whereNull('customer_service_id')
+                ->count(),
             'today' => PendingOrder::whereDate('created_at', today())->count(),
             'today_amount' => PendingOrder::whereDate('created_at', today())->sum('amount'),
         ];
