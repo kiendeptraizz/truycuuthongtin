@@ -465,9 +465,24 @@
                                 // Đơn pending + đã paid + chưa link CS → cần fill GẤP (cảnh báo)
                                 $needsFillUrgent = $order->status === 'pending' && $order->paid_at && !$order->customer_service_id;
                                 $rowClass = $needsFillUrgent ? 'row-status-urgent' : "row-status-{$order->status}";
+                                // Inline style fallback — bypass mọi CSS cache để guarantee strip hiện
+                                $stripColor = match (true) {
+                                    $needsFillUrgent => '#ef4444',
+                                    $order->status === 'pending' => '#f59e0b',
+                                    $order->status === 'completed' => '#10b981',
+                                    $order->status === 'cancelled' => '#9ca3af',
+                                    default => 'transparent',
+                                };
+                                $rowBg = match (true) {
+                                    $needsFillUrgent => '#fee2e2',
+                                    $order->status === 'pending' => '#fefce8',
+                                    $order->status === 'completed' => '#f0fdf4',
+                                    $order->status === 'cancelled' => '#f9fafb',
+                                    default => 'transparent',
+                                };
                             @endphp
-                            <tr data-order-row="{{ $order->id }}" class="{{ $rowClass }}">
-                                <td>
+                            <tr data-order-row="{{ $order->id }}" class="{{ $rowClass }}" style="background-color: {{ $rowBg }};">
+                                <td style="border-left: 6px solid {{ $stripColor }}; padding-left: 16px; background-color: {{ $rowBg }};">
                                     <span class="order-code" title="Click để copy" onclick="navigator.clipboard?.writeText('{{ $order->order_code }}')">
                                         {{ $order->order_code }}
                                     </span>
