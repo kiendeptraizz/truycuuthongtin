@@ -1191,14 +1191,14 @@ class TelegramListenCommand extends Command
 
         // Hybrid: tạo CustomerService pending NGAY (chưa active)
         $this->tryCreatePendingCustomerService($order, $data);
-
-        // Chỉ clearState — KHÔNG purge để finalize nhanh (~10s tiết kiệm vs
-        // 14 deleteMessage calls). User OK với việc tin các bước cũ ở lại
-        // trong chat. Purge vẫn áp dụng ở cancel paths (clearStateAndPurge).
         $this->clearState($chatId);
 
+        // Speed up: gửi TEXT caption TRƯỚC (~0.5-1s, user thấy info đơn ngay),
+        // sau đó gửi QR với caption ngắn (sendPhoto Telegram fetch URL có thể
+        // mất 10-25s nhưng user không phải chờ thấy info nữa).
         $caption = $this->buildCaption($order, $data);
-        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), $caption);
+        $this->bot->sendMessage($chatId, $caption);
+        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), "📷 QR thanh toán <code>{$order->order_code}</code>");
     }
 
     /**
@@ -1284,7 +1284,10 @@ class TelegramListenCommand extends Command
             . "\n\n──────\n\n"
             . $tail;
 
-        $this->sendPhotoSafe($chatId, $qrUrl, $caption);
+        // Speed up: gửi text caption đầy đủ TRƯỚC (instant), sau đó gửi QR
+        // với caption ngắn (Telegram fetch URL có thể chậm).
+        $this->bot->sendMessage($chatId, $caption);
+        $this->sendPhotoSafe($chatId, $qrUrl, "📷 QR thanh toán lô <code>{$groupCode}</code>");
         $this->bot->sendMessage(
             $chatId,
             "✅ Đã tạo lô <code>{$groupCode}</code> gồm " . count($drafts) . " đơn. Đợi khách CK 1 lần là bot tự active cả lô.",
@@ -1789,7 +1792,9 @@ class TelegramListenCommand extends Command
             . "Vào <code>/admin/pending-orders</code> để fill.</i>\n\n"
             . "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
-        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), $caption);
+        // Speed up: gửi text caption TRƯỚC (instant), QR sau (Telegram fetch URL chậm).
+        $this->bot->sendMessage($chatId, $caption);
+        $this->sendPhotoSafe($chatId, $order->qrCodeUrl(), "📷 QR thanh toán <code>{$order->order_code}</code>");
     }
 
     private function promptCustomerName(int|string $chatId, array $data): void
