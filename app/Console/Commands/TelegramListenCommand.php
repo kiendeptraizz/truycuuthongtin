@@ -855,8 +855,7 @@ class TelegramListenCommand extends Command
                     return;
                 }
                 $data = $state['data'] ?? [];
-                // Purge prompt/reply messages của warranty flow trước khi finalize gửi summary
-                $this->purgeTrackedMessages($chatId, $data);
+                // Chỉ clearState — không purge để finalize warranty nhanh.
                 $this->clearState($chatId);
                 $this->finalizeWarranty($chatId, $data, $note);
                 return;
@@ -1162,9 +1161,7 @@ class TelegramListenCommand extends Command
                 return;
             }
 
-            // Đơn cuối → tạo lô. Purge tracked messages TRƯỚC khi gửi caption + QR.
-            $trackedIds = $data['_track_msgs'] ?? [];
-            $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedIds]);
+            // Đơn cuối → tạo lô. Chỉ clearState — không purge để finalize nhanh.
             $this->clearState($chatId);
             $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
             return;
@@ -1195,9 +1192,9 @@ class TelegramListenCommand extends Command
         // Hybrid: tạo CustomerService pending NGAY (chưa active)
         $this->tryCreatePendingCustomerService($order, $data);
 
-        // Purge prompts/replies TRƯỚC khi clearState + gửi caption.
-        // ClearState để các message tiếp theo (caption + QR) không bị track.
-        $this->purgeTrackedMessages($chatId, $data);
+        // Chỉ clearState — KHÔNG purge để finalize nhanh (~10s tiết kiệm vs
+        // 14 deleteMessage calls). User OK với việc tin các bước cũ ở lại
+        // trong chat. Purge vẫn áp dụng ở cancel paths (clearStateAndPurge).
         $this->clearState($chatId);
 
         $caption = $this->buildCaption($order, $data);
@@ -1782,8 +1779,7 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Purge messages bước 1/2 + 2/2 + headline trước khi gửi caption + QR
-        $this->purgeTrackedMessages($chatId, $data);
+        // Chỉ clearState — không purge để finalize nhanh.
         $this->clearState($chatId);
 
         $caption = "✅ <code>{$order->order_code}</code> <i>(đơn nhanh)</i>\n\n"
