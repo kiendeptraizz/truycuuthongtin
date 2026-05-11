@@ -123,21 +123,21 @@
     .po-table tbody tr:hover {
         background-color: #f8fafc;
     }
-    /* Status strip indicator bên trái mỗi row */
+    /* Status strip indicator bên trái mỗi row — dùng box-shadow inset thay vì
+       border-left để tránh Bootstrap .table override. Pattern reliable. */
     .po-table tbody tr td:first-child {
         position: relative;
-        border-left: 4px solid transparent;
     }
-    .po-table tbody tr.row-status-pending td:first-child { border-left-color: #f59e0b; }
-    .po-table tbody tr.row-status-completed td:first-child { border-left-color: #10b981; }
-    .po-table tbody tr.row-status-cancelled td:first-child { border-left-color: #9ca3af; }
+    .po-table tbody tr.row-status-pending td:first-child { box-shadow: inset 4px 0 0 0 #f59e0b; }
+    .po-table tbody tr.row-status-completed td:first-child { box-shadow: inset 4px 0 0 0 #10b981; }
+    .po-table tbody tr.row-status-cancelled td:first-child { box-shadow: inset 4px 0 0 0 #9ca3af; }
     .po-table tbody tr.row-status-urgent td:first-child {
-        border-left-color: #ef4444;
+        box-shadow: inset 4px 0 0 0 #ef4444;
         animation: pulse-strip 2s ease-in-out infinite;
     }
     @keyframes pulse-strip {
-        0%, 100% { border-left-color: #ef4444; }
-        50%      { border-left-color: #fca5a5; }
+        0%, 100% { box-shadow: inset 4px 0 0 0 #ef4444; }
+        50%      { box-shadow: inset 4px 0 0 0 #fca5a5; }
     }
     /* Urgent row background tint */
     .po-table tbody tr.row-status-urgent {
