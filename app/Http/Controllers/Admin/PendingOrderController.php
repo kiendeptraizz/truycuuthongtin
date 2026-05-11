@@ -154,6 +154,9 @@ class PendingOrderController extends Controller
                 ->with('warning', "Đơn {$pendingOrder->order_code} đã được xử lý.");
         }
 
+        // Eager load customer + servicePackage để view show "Đã pre-fill từ bot: KUN-XXX — Tên"
+        $pendingOrder->load(['customer', 'servicePackage']);
+
         $customers = Customer::orderBy('name')->limit(500)->get();
         $servicePackages = ServicePackage::with('category')->where('is_active', true)
             ->orderBy('name')->get();
@@ -178,6 +181,8 @@ class PendingOrderController extends Controller
             'activated_at' => 'required|date',
             'expires_at' => 'required|date|after:activated_at',
             'duration_days' => 'required|integer|min:1',
+            'family_code' => 'nullable|string|max:255',
+            'warranty_days' => 'nullable|integer|min:0',
             'profit_amount' => 'nullable|numeric|min:0',
             'profit_notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string',
@@ -195,6 +200,10 @@ class PendingOrderController extends Controller
                 'expires_at' => $validated['expires_at'],
                 'status' => 'active',
                 'duration_days' => $validated['duration_days'],
+                'family_code' => $validated['family_code'] ?? null,
+                'warranty_days' => $validated['warranty_days'] ?? null,
+                'order_amount' => $pendingOrder->amount,
+                'pending_order_id' => $pendingOrder->id,
                 'price' => 0, // theo cấu hình project: chỉ tính profit
                 'cost_price' => 0,
                 'internal_notes' => ($validated['internal_notes'] ?? '') . "\n\n📋 Tạo từ pending order {$pendingOrder->order_code} ({$pendingOrder->amount}đ)",

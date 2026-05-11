@@ -56,18 +56,36 @@
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
+                            @php
+                                // Pre-fill từ data bot đã gửi (nếu có). Bot lưu vào PendingOrder
+                                // các field: customer_id, service_package_id, account_email,
+                                // family_code, duration_days, warranty_days, profit_amount.
+                                $preCustomerId = old('customer_id', $pendingOrder->customer_id);
+                                $prePackageId = old('service_package_id', $pendingOrder->service_package_id);
+                                $preEmail = old('login_email', $pendingOrder->account_email);
+                                $preDurationDays = old('duration_days', $pendingOrder->duration_days ?? 30);
+                                $preProfitAmount = old('profit_amount', $pendingOrder->profit_amount ?? $pendingOrder->amount);
+                                $preFamilyCode = old('family_code', $pendingOrder->family_code);
+                                $preWarrantyDays = old('warranty_days', $pendingOrder->warranty_days);
+                                $preActivatedAt = old('activated_at', now()->format('Y-m-d'));
+                                $preExpiresAt = old('expires_at', now()->addDays((int) $preDurationDays)->format('Y-m-d'));
+                            @endphp
                             <div class="col-md-6">
                                 <label class="form-label">Khách hàng *</label>
                                 <select name="customer_id" class="form-select" required>
                                     <option value="">— Chọn khách hàng —</option>
                                     @foreach($customers as $c)
-                                        <option value="{{ $c->id }}" {{ old('customer_id') == $c->id ? 'selected' : '' }}>
+                                        <option value="{{ $c->id }}" {{ $preCustomerId == $c->id ? 'selected' : '' }}>
                                             {{ $c->name }} {{ $c->phone ? '· '.$c->phone : '' }} ({{ $c->customer_code }})
                                         </option>
                                     @endforeach
                                 </select>
                                 <small class="text-muted">
-                                    Không thấy khách? <a href="{{ route('admin.customers.create') }}" target="_blank">Tạo mới</a>
+                                    @if($pendingOrder->customer_id && $pendingOrder->customer)
+                                        <i class="fas fa-check-circle text-success me-1"></i>Đã pre-fill từ bot: <code>{{ $pendingOrder->customer->customer_code }}</code> — {{ $pendingOrder->customer->name }}
+                                    @else
+                                        Không thấy khách? <a href="{{ route('admin.customers.create') }}" target="_blank">Tạo mới</a>
+                                    @endif
                                 </small>
                             </div>
                             <div class="col-md-6">
@@ -75,15 +93,18 @@
                                 <select name="service_package_id" class="form-select" required>
                                     <option value="">— Chọn gói —</option>
                                     @foreach($servicePackages as $p)
-                                        <option value="{{ $p->id }}" {{ old('service_package_id') == $p->id ? 'selected' : '' }}>
+                                        <option value="{{ $p->id }}" {{ $prePackageId == $p->id ? 'selected' : '' }}>
                                             {{ $p->name }} ({{ $p->category?->name ?? 'N/A' }})
                                         </option>
                                     @endforeach
                                 </select>
+                                @if($pendingOrder->service_package_id && $pendingOrder->servicePackage)
+                                    <small class="text-success"><i class="fas fa-check-circle me-1"></i>Đã pre-fill: {{ $pendingOrder->servicePackage->name }}</small>
+                                @endif
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Email đăng nhập *</label>
-                                <input type="email" name="login_email" class="form-control" required value="{{ old('login_email') }}">
+                                <input type="email" name="login_email" class="form-control" required value="{{ $preEmail }}">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Mật khẩu (tuỳ chọn)</label>
@@ -92,23 +113,37 @@
                             <div class="col-md-4">
                                 <label class="form-label">Ngày kích hoạt *</label>
                                 <input type="date" name="activated_at" class="form-control" required
-                                       value="{{ old('activated_at', now()->format('Y-m-d')) }}">
+                                       value="{{ $preActivatedAt }}">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Ngày hết hạn *</label>
                                 <input type="date" name="expires_at" class="form-control" required
-                                       value="{{ old('expires_at', now()->addDays(30)->format('Y-m-d')) }}">
+                                       value="{{ $preExpiresAt }}">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Số ngày *</label>
                                 <input type="number" name="duration_days" class="form-control" required
-                                       value="{{ old('duration_days', 30) }}" min="1">
+                                       value="{{ $preDurationDays }}" min="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Mã nhóm - gia đình</label>
+                                <input type="text" name="family_code" class="form-control" value="{{ $preFamilyCode }}" placeholder="Vd: gd_abc@gmail.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Bảo hành (số ngày)</label>
+                                <input type="number" name="warranty_days" class="form-control" value="{{ $preWarrantyDays }}" min="0" placeholder="Để trống = không bảo hành">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Lợi nhuận (đ)</label>
                                 <input type="number" name="profit_amount" class="form-control"
-                                       value="{{ old('profit_amount', $pendingOrder->amount) }}" min="0" step="1000">
-                                <small class="text-muted">Mặc định = số tiền đơn ({{ formatShortAmount($pendingOrder->amount) }}). Sửa nếu khác.</small>
+                                       value="{{ $preProfitAmount }}" min="0" step="1000">
+                                <small class="text-muted">
+                                    @if($pendingOrder->profit_amount)
+                                        <i class="fas fa-check-circle text-success me-1"></i>Đã pre-fill từ bot: {{ formatShortAmount($pendingOrder->profit_amount) }}
+                                    @else
+                                        Mặc định = số tiền đơn ({{ formatShortAmount($pendingOrder->amount) }}). Sửa nếu khác.
+                                    @endif
+                                </small>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Ghi chú lợi nhuận</label>
