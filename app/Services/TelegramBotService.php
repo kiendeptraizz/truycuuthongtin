@@ -66,14 +66,22 @@ class TelegramBotService
             $isMediaUpload => 30,
             default => 10,
         };
-        $connectTimeout = 3;
+        // connectTimeout 10s thay vì 3s — VPS có thể có DNS resolve spike >3s
+        // (gặp lỗi "Resolving timed out after 3000 milliseconds" cho
+        // api.telegram.org). 10s đủ rộng cho spike mà vẫn fail-fast khi
+        // service thực sự down (vs 60s gây block lâu).
+        $connectTimeout = 10;
 
         $client = Http::timeout($timeout)->connectTimeout($connectTimeout);
-        // Retry chỉ cho long-poll (transient network issue khi đợi update lâu).
-        // sendMessage/sendPhoto KHÔNG retry — chấp nhận fail nhanh để upstream
-        // (sendPhotoSafe / webhook handler) có thể fallback gracefully.
+        // Retry strategy theo method:
+        // - Long-poll: 2 retry × 500ms (network transient)
+        // - sendMessage/etc: 1 retry × 1s (DNS spike / connection reset)
+        // - sendPhoto: KHÔNG retry (Telegram fetch URL có thể slow nhưng
+        //   sendPhotoSafe đã có fallback text+link)
         if ($isLongPoll) {
             $client = $client->retry(2, 500);
+        } elseif (!$isMediaUpload) {
+            $client = $client->retry(1, 1000);
         }
 
         $resp = $client->post($url, $params);
