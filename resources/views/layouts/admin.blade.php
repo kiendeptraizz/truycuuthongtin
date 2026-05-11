@@ -460,6 +460,9 @@
     <!-- AJAX Actions Helper (xoá/khôi phục không reload trang) -->
     <script src="{{ asset('js/admin-ajax-actions.js') }}?v={{ filemtime(public_path('js/admin-ajax-actions.js')) }}"></script>
 
+    <!-- Scroll Preserve (giữ vị trí scroll khi form submit/reload, không nhảy đầu trang) -->
+    <script src="{{ asset('js/admin-scroll-preserve.js') }}?v={{ filemtime(public_path('js/admin-scroll-preserve.js')) }}"></script>
+
     <!-- Page-specific scripts -->
     @yield('scripts')
 
