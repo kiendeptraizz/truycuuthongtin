@@ -387,7 +387,7 @@
                         <option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Đang chờ fill</option>
                         <option value="completed" {{ $status === 'completed' ? 'selected' : '' }}>Đã hoàn thành</option>
                         <option value="cancelled" {{ $status === 'cancelled' ? 'selected' : '' }}>Đã huỷ</option>
-                        <option value="all" {{ $status === 'all' ? 'selected' : '' }}>Tất cả</option>
+                        <option value="all" {{ $status === 'all' ? 'selected' : '' }}>Tất cả (trừ huỷ)</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-4 col-lg-2">

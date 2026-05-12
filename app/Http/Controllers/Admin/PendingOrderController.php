@@ -23,9 +23,12 @@ class PendingOrderController extends Controller
         $query = PendingOrder::with(['customer', 'customerService.customer', 'creator'])
             ->orderByDesc('created_at');
 
-        // Filter status
+        // Filter status — "all" mặc định EXCLUDE cancelled (đơn huỷ ít cần action,
+        // chỉ hiện khi user chọn explicit "Đã huỷ" hoặc xem riêng).
         $status = $request->get('status', 'pending');
-        if ($status !== 'all') {
+        if ($status === 'all') {
+            $query->where('status', '!=', 'cancelled');
+        } else {
             $query->where('status', $status);
         }
 
