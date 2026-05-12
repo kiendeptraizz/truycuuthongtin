@@ -755,8 +755,17 @@ class TelegramListenCommand extends Command
                     $chatId,
                     "⚡ <b>Tạo đơn nhanh</b> — Bước 2/2: Tên hoặc mã khách hàng?\n"
                         . "• Gõ <i>tên</i> (vd: <code>Nguyễn Văn A</code>) — KH mới sẽ tự tạo mã KUN\n"
-                        . "• Hoặc gõ <i>mã KH</i> (vd: <code>KUN98473</code>) — chọn KH cũ trong DB",
-                    $this->navMarkup(true)
+                        . "• Hoặc gõ <i>mã KH</i> (vd: <code>KUN98473</code>) — chọn KH cũ trong DB\n\n"
+                        . "Hoặc bấm <b>⏭ Bỏ qua KH</b> để sinh QR ngay (gắn KH sau qua web).",
+                    ['reply_markup' => json_encode([
+                        'inline_keyboard' => [
+                            [['text' => '⏭ Bỏ qua KH (sinh QR luôn)', 'callback_data' => 'quick_skip_customer']],
+                            [
+                                ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                                ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
+                            ],
+                        ],
+                    ])]
                 );
                 return;
 
@@ -1530,6 +1539,20 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Click "⏭ Bỏ qua KH" trong flow Tạo đơn nhanh (Bước 2/2)
+        if ($cbData === 'quick_skip_customer') {
+            $state = $this->getState($chatId);
+            if ($state && ($state['step'] ?? null) === 'quick_order_customer') {
+                $data = $state['data'] ?? [];
+                // Không có customer_id/code/name → finalize tạo đơn nhanh với KH null
+                $this->sendAndTrack($chatId, "⏭ Đã bỏ qua khách hàng — sinh QR ngay, gắn KH sau qua web.");
+                $this->finalizeQuickOrder($chatId, '', $data);
+            } else {
+                $this->bot->sendMessage($chatId, "ℹ️ Phiên đã hết hạn — bấm <b>⚡ Tạo đơn nhanh</b> lại.");
+            }
+            return;
+        }
+
         // Callback khác chưa hỗ trợ
         Log::info('Telegram callback_query unknown', ['data' => $cbData]);
     }
@@ -1786,11 +1809,14 @@ class TelegramListenCommand extends Command
      */
     private function finalizeQuickOrder(int|string $chatId, string $userId, array $data): void
     {
-        $note = sprintf(
-            "Đơn nhanh từ bot — chờ fill chi tiết. KH: %s (%s)",
-            $data['customer_name'] ?? '?',
-            $data['customer_code'] ?? '?'
-        );
+        $hasCustomer = !empty($data['customer_id']);
+        $note = $hasCustomer
+            ? sprintf(
+                "Đơn nhanh từ bot — chờ fill chi tiết. KH: %s (%s)",
+                $data['customer_name'] ?? '?',
+                $data['customer_code'] ?? '?'
+            )
+            : "Đơn nhanh từ bot — chưa gắn KH, chờ fill chi tiết qua web.";
 
         try {
             $order = PendingOrderController::createOrder([
@@ -1816,8 +1842,12 @@ class TelegramListenCommand extends Command
         $trackedMsgs = $data['_track_msgs'] ?? [];
         $this->clearState($chatId);
 
+        $customerLine = $hasCustomer
+            ? "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>" . e($data['customer_name']) . "</b>\n"
+            : "👤 <i>Chưa gắn khách hàng — fill sau qua web.</i>\n";
+
         $caption = "✅ <code>{$order->order_code}</code> <i>(đơn nhanh)</i>\n\n"
-            . "👤 Khách hàng: <code>{$data['customer_code']}</code> — <b>" . e($data['customer_name']) . "</b>\n"
+            . $customerLine
             . "💵 Giá đơn: <b>" . formatShortAmount((int) $data['amount']) . "</b>\n\n"
             . "<i>⏳ Đơn đang chờ fill chi tiết (gói / email / thời hạn / bảo hành / lợi nhuận). "
             . "Vào <code>/admin/pending-orders</code> để fill.</i>\n\n"

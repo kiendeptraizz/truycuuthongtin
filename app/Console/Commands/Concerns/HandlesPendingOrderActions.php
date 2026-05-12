@@ -131,15 +131,26 @@ trait HandlesPendingOrderActions
             return;
         }
 
-        $csNote = !empty($result['cs_id'])
-            ? "\n✅ Đã tạo/activate dịch vụ <b>#{$result['cs_id']}</b> cho khách."
-            : "\n⚠️ <i>Chưa đủ data structured — cần fill thủ công qua web</i>.";
-
-        $this->bot->sendMessage(
-            $chatId,
-            "💰 Đã đánh dấu đơn <code>{$order->order_code}</code> ("
-                . formatShortAmount((int) $order->amount) . ") là <b>đã thanh toán</b>.{$csNote}"
-        );
+        if (!empty($result['cs_id'])) {
+            // CS đã activate → reply success
+            $this->bot->sendMessage(
+                $chatId,
+                "💰 Đã đánh dấu đơn <code>{$order->order_code}</code> ("
+                    . formatShortAmount((int) $order->amount) . ") là <b>đã thanh toán</b>.\n"
+                    . "✅ Đã tạo/activate dịch vụ <b>#{$result['cs_id']}</b> cho khách."
+            );
+        } else {
+            // Chưa đủ data → reply kèm link fill rõ ràng
+            $fillUrl = rtrim(config('app.url'), '/') . '/admin/pending-orders/' . $order->id . '/fill';
+            $this->bot->sendMessage(
+                $chatId,
+                "💰 Đã đánh dấu đơn <code>{$order->order_code}</code> ("
+                    . formatShortAmount((int) $order->amount) . ") là <b>đã thanh toán</b>.\n\n"
+                    . "⚠️ <b>Chưa đủ data structured</b> — cần fill thủ công qua web.\n\n"
+                    . "🔗 Mở form fill ngay:\n{$fillUrl}",
+                ['disable_web_page_preview' => true]
+            );
+        }
     }
 
     private function sendListPending(int|string $chatId): void
