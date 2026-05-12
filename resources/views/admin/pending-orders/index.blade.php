@@ -412,13 +412,33 @@
                 </div>
                 <div class="col-6 col-md-4 col-lg-2">
                     <label class="form-label small fw-semibold">Mã đơn</label>
-                    <input type="text" name="code" value="{{ $code ?? '' }}" class="form-control form-control-sm" placeholder="DH-260506-001">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="code" value="{{ $code ?? '' }}" class="form-control" placeholder="DH-260506-001" autocomplete="off">
+                        <button type="submit" class="btn btn-primary" title="Tìm theo mã đơn"><i class="fas fa-search"></i></button>
+                    </div>
                 </div>
                 <div class="col-6 col-md-4 col-lg-2">
                     <label class="form-label small fw-semibold">
                         <i class="fas fa-user me-1"></i>Khách hàng
                     </label>
-                    <input type="text" name="customer" value="{{ $customerSearch ?? '' }}" class="form-control form-control-sm" placeholder="KUN/CTV hoặc tên...">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="customer" value="{{ $customerSearch ?? '' }}" class="form-control" placeholder="KUN/CTV hoặc tên..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary" title="Tìm theo khách hàng"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+                <div class="col-12 mt-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter me-1"></i>Áp dụng bộ lọc
+                    </button>
+                    @if($activeFilters > 0)
+                        <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times me-1"></i>Xoá tất cả
+                        </a>
+                    @endif
+                    <span class="ms-auto small text-muted align-self-center">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Gõ <kbd>Enter</kbd> trong ô tìm kiếm để áp dụng
+                    </span>
                 </div>
             </form>
         </div>
