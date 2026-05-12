@@ -84,17 +84,19 @@
                                 />
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Gói dịch vụ *</label>
-                                <select name="service_package_id" class="form-select" required>
-                                    <option value="">— Chọn gói —</option>
-                                    @foreach($servicePackages as $p)
-                                        <option value="{{ $p->id }}" {{ $prePackageId == $p->id ? 'selected' : '' }}>
-                                            {{ $p->name }} ({{ $p->category?->name ?? 'N/A' }})
-                                        </option>
-                                    @endforeach
-                                </select>
+                                <label class="form-label">
+                                    <i class="fas fa-box me-1 text-primary"></i>
+                                    Gói dịch vụ <span class="text-danger">*</span>
+                                </label>
+                                <x-service-package-selector
+                                    name="service_package_id"
+                                    :service-packages="$servicePackages"
+                                    :selected="$prePackageId"
+                                    :required="true"
+                                    placeholder="Gõ tên gói (vd: Claude, ChatGPT, Canva...)..."
+                                />
                                 @if($pendingOrder->service_package_id && $pendingOrder->servicePackage)
-                                    <small class="text-success"><i class="fas fa-check-circle me-1"></i>Đã pre-fill: {{ $pendingOrder->servicePackage->name }}</small>
+                                    <small class="text-success d-block mt-1"><i class="fas fa-check-circle me-1"></i>Đã pre-fill: {{ $pendingOrder->servicePackage->name }}</small>
                                 @endif
                             </div>
                             <div class="col-md-6">

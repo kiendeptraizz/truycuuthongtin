@@ -1,14 +1,14 @@
 {{--
-    Service Package Selector Component
-    
-    Props:
-    - $servicePackages: Collection of service packages
-    - $accountTypePriority: Array of account type priorities
+    Service Package Selector — REWRITE từ native select sang search dropdown.
+
+    Props (giữ backward compat):
+    - $servicePackages: Collection of service packages (with category relation)
+    - $accountTypePriority: Array of account type → priority (chỉ dùng để sort)
     - $name: Input name (default: 'service_package_id')
     - $id: Input id (default: 'service_package_id')
     - $required: Boolean (default: true)
     - $selected: Selected value (default: old value)
-    - $placeholder: Placeholder text (default: 'Chọn gói dịch vụ')
+    - $placeholder: Placeholder text
 --}}
 
 @props([
@@ -18,284 +18,244 @@
     'id' => 'service_package_id',
     'required' => true,
     'selected' => null,
-    'placeholder' => 'Chọn gói dịch vụ'
+    'placeholder' => 'Gõ tên gói / danh mục để tìm...',
 ])
 
 @php
-    $selected = $selected ?? old($name);
-    
-    // Define account type icons and colors
-    $accountTypeConfig = [
-        'Tài khoản dùng chung' => [
-            'icon' => '👥',
-            'color' => '#e74c3c',
-            'bg_color' => '#fdf2f2',
-            'description' => 'Nhiều người cùng sử dụng'
-        ],
-        'Tài khoản chính chủ' => [
-            'icon' => '👤',
-            'color' => '#3498db',
-            'bg_color' => '#f8f9fa',
-            'description' => 'Quyền sở hữu hoàn toàn'
-        ],
-        'Tài khoản add family' => [
-            'icon' => '👨‍👩‍👧‍👦',
-            'color' => '#f39c12',
-            'bg_color' => '#fef9e7',
-            'description' => 'Thêm vào gói gia đình'
-        ],
-        'Tài khoản cấp (dùng riêng)' => [
-            'icon' => '🔐',
-            'color' => '#9b59b6',
-            'bg_color' => '#f8f4fd',
-            'description' => 'Tài khoản phụ riêng biệt'
-        ]
+    $searchId = $id . '_search';
+    $dropdownId = $id . '_dropdown';
+    $resultsId = $id . '_results';
+    $selectedValue = $selected ?? old($name);
+    $selectedPackage = $selectedValue ? $servicePackages->firstWhere('id', $selectedValue) : null;
+
+    // Sort by account_type priority → name
+    $sortedPackages = $servicePackages->sortBy(function ($p) use ($accountTypePriority) {
+        $priority = $accountTypePriority[$p->account_type] ?? 999;
+        return [$priority, $p->name];
+    });
+
+    $accountTypeIcons = [
+        'Tài khoản dùng chung' => '👥',
+        'Tài khoản chính chủ' => '👤',
+        'Tài khoản add family' => '👨‍👩‍👧‍👦',
+        'Tài khoản cấp (dùng riêng)' => '🔐',
     ];
-    
-    // Group packages by account_type
-    $groupedPackages = $servicePackages->groupBy('account_type');
-    
-    // Sort groups by priority
-    $sortedGroups = collect();
-    foreach ($accountTypePriority as $accountType => $priority) {
-        if ($groupedPackages->has($accountType)) {
-            $sortedGroups->put($accountType, $groupedPackages->get($accountType));
-        }
-    }
-    
-    // Add any remaining groups not in priority list
-    foreach ($groupedPackages as $accountType => $packages) {
-        if (!$sortedGroups->has($accountType)) {
-            $sortedGroups->put($accountType, $packages);
-        }
-    }
 @endphp
 
-<div class="service-package-selector">
-    <select 
-        class="form-select @error($name) is-invalid @enderror" 
-        id="{{ $id }}" 
-        name="{{ $name }}" 
-        {{ $required ? 'required' : '' }}
-        data-bs-toggle="tooltip"
-        data-bs-placement="top"
-        title="Chọn gói dịch vụ phù hợp với nhu cầu">
-        
-        <option value="">{{ $placeholder }}</option>
-        
-        @foreach($sortedGroups as $accountType => $packages)
-            @php
-                $config = $accountTypeConfig[$accountType] ?? [
-                    'icon' => '📦',
-                    'color' => '#6c757d',
-                    'bg_color' => '#f8f9fa',
-                    'description' => ''
-                ];
-            @endphp
-            
-            <optgroup 
-                label="{{ $config['icon'] }} {{ $accountType }} ({{ $packages->count() }} gói)"
-                data-account-type="{{ $accountType }}"
-                style="background-color: {{ $config['bg_color'] }}; color: {{ $config['color'] }}; font-weight: bold;">
-                
-                @foreach($packages as $package)
-                    <option 
-                        value="{{ $package->id }}" 
-                        data-price="{{ $package->price }}"
-                        data-duration="{{ $package->default_duration_days }}"
-                        data-account-type="{{ $package->account_type }}"
-                        data-category="{{ $package->category->name ?? '' }}"
-                        style="padding-left: 20px; color: #333;"
-                        {{ $selected == $package->id ? 'selected' : '' }}>
-                        
-                        {{ $package->name }}
-                        @if($package->category)
-                            <small>({{ $package->category->name }})</small>
-                        @endif
-                        - {{ formatPrice($package->price) }}
-                        @if($package->default_duration_days)
-                            / {{ $package->default_duration_days }} ngày
-                        @endif
-                    </option>
+<div class="package-search-selector" data-component-id="{{ $id }}">
+    {{-- Search input wrapper --}}
+    <div class="position-relative">
+        <input type="text"
+               class="form-control @error($name) is-invalid @enderror"
+               id="{{ $searchId }}"
+               placeholder="{{ $placeholder }}"
+               autocomplete="off"
+               value="{{ $selectedPackage ? $selectedPackage->name . ' (' . ($selectedPackage->category?->name ?? 'N/A') . ')' : '' }}">
+        <div class="position-absolute top-50 end-0 translate-middle-y me-3" style="pointer-events: none;">
+            <i class="fas fa-search text-muted"></i>
+        </div>
+
+        {{-- Results panel — block-level (position:static safer) --}}
+        <div class="package-results-panel" id="{{ $dropdownId }}" style="display: none;">
+            <div class="package-results-header">
+                <i class="fas fa-info-circle me-1"></i>
+                <strong>{{ $sortedPackages->count() }}</strong> gói — gõ để lọc theo tên / danh mục / loại TK
+            </div>
+            <div id="{{ $resultsId }}" class="package-results-list">
+                @foreach($sortedPackages as $p)
+                    @php
+                        $catName = $p->category?->name ?? '';
+                        $accountType = $p->account_type ?? '';
+                        $icon = $accountTypeIcons[$accountType] ?? '📦';
+                        // Search key: name + category + account_type, lowercase + bỏ dấu cơ bản
+                        $searchKey = strtolower($p->name . ' ' . $catName . ' ' . $accountType);
+                    @endphp
+                    <a class="package-result-item"
+                       href="#"
+                       data-id="{{ $p->id }}"
+                       data-name="{{ $p->name }}"
+                       data-cat="{{ $catName }}"
+                       data-search="{{ $searchKey }}">
+                        <div class="d-flex align-items-center">
+                            <div class="package-icon">{{ $icon }}</div>
+                            <div class="flex-grow-1 ms-2">
+                                <div class="fw-bold">{{ $p->name }}</div>
+                                <small class="text-muted">
+                                    @if($catName) {{ $catName }} @endif
+                                    @if($accountType) · {{ $accountType }} @endif
+                                </small>
+                            </div>
+                        </div>
+                    </a>
                 @endforeach
-            </optgroup>
-        @endforeach
-    </select>
-    
-    @error($name)
-        <div class="invalid-feedback">{{ $message }}</div>
-    @enderror
-    
-    {{-- Account Type Legend --}}
-    <div class="account-type-legend mt-2">
-        <small class="text-muted d-block mb-1">
-            <i class="fas fa-info-circle me-1"></i>
-            Loại tài khoản:
-        </small>
-        <div class="row g-1">
-            @foreach($accountTypeConfig as $accountType => $config)
-                @if($sortedGroups->has($accountType))
-                    <div class="col-6 col-md-3">
-                        <span class="badge rounded-pill d-inline-flex align-items-center" 
-                              style="background-color: {{ $config['bg_color'] }}; color: {{ $config['color'] }}; border: 1px solid {{ $config['color'] }}20;">
-                            <span class="me-1">{{ $config['icon'] }}</span>
-                            <small>{{ Str::limit($accountType, 15) }}</small>
-                        </span>
-                    </div>
-                @endif
-            @endforeach
+            </div>
         </div>
     </div>
+
+    {{-- Hidden select để form submit --}}
+    <select class="d-none @error($name) is-invalid @enderror"
+            id="{{ $id }}"
+            name="{{ $name }}"
+            {{ $required ? 'required' : '' }}>
+        <option value="">— Chọn gói —</option>
+        @foreach($sortedPackages as $p)
+            <option value="{{ $p->id }}"
+                    data-price="{{ $p->price ?? 0 }}"
+                    data-duration="{{ $p->default_duration_days ?? '' }}"
+                    {{ $selectedValue == $p->id ? 'selected' : '' }}>
+                {{ $p->name }} ({{ $p->category?->name ?? 'N/A' }})
+            </option>
+        @endforeach
+    </select>
+
+    @error($name)
+        <div class="invalid-feedback d-block">{{ $message }}</div>
+    @enderror
 </div>
 
+@push('styles')
 <style>
-.service-package-selector {
-    position: relative;
+.package-search-selector { position: relative; }
+.package-search-selector .package-results-panel {
+    margin-top: 0.5rem;
+    width: 100%;
+    max-height: 380px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1);
 }
-
-.service-package-selector select {
-    font-size: 14px;
+.package-search-selector .package-results-header {
+    padding: 0.6rem 1rem;
+    color: #495057;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
-
-.service-package-selector optgroup {
-    font-weight: bold;
-    font-size: 13px;
-    padding: 8px 12px;
-    margin: 2px 0;
-    border-radius: 4px;
+.package-search-selector .package-results-empty {
+    padding: 1.25rem;
+    color: #6c757d;
+    text-align: center;
+    font-size: 0.9rem;
 }
-
-.service-package-selector optgroup[data-account-type="Tài khoản dùng chung"] {
-    background: linear-gradient(135deg, #fdf2f2 0%, #fce4e4 100%) !important;
-    border: 2px solid #e74c3c20;
-    font-weight: 900;
+.package-search-selector .package-result-item {
+    display: block;
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid #f1f3f5;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    color: inherit;
+    text-decoration: none;
 }
-
-.service-package-selector optgroup[data-account-type="Tài khoản dùng chung"] option {
-    background-color: #fff5f5 !important;
-    border-left: 3px solid #e74c3c;
-    font-weight: 600;
+.package-search-selector .package-result-item:last-child { border-bottom: none; }
+.package-search-selector .package-result-item:hover,
+.package-search-selector .package-result-item.active {
+    background-color: #eef2ff;
+    color: #1f2937;
+    text-decoration: none;
 }
-
-.service-package-selector option {
-    padding: 8px 12px;
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.service-package-selector option:hover {
-    background-color: #f8f9fa !important;
-}
-
-.account-type-legend .badge {
-    font-size: 10px;
-    padding: 4px 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .account-type-legend .col-6 {
-        margin-bottom: 4px;
-    }
-    
-    .service-package-selector select {
-        font-size: 13px;
-    }
-    
-    .service-package-selector optgroup {
-        font-size: 12px;
-    }
-    
-    .service-package-selector option {
-        font-size: 12px;
-        padding: 6px 10px;
-    }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    .service-package-selector optgroup {
-        color: #fff !important;
-    }
-    
-    .service-package-selector option {
-        background-color: #2d3748 !important;
-        color: #e2e8f0 !important;
-    }
-    
-    .account-type-legend .badge {
-        background-color: #4a5568 !important;
-        color: #e2e8f0 !important;
-        border-color: #718096 !important;
-    }
-}
-
-/* Focus states for accessibility */
-.service-package-selector select:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-/* Loading state */
-.service-package-selector.loading select {
-    background-image: url("data:image/svg+xml,%3csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M8 1V3M8 13V15M3 8H1M15 8H13M4.22 4.22L2.81 2.81M13.19 2.81L11.78 4.22M4.22 11.78L2.81 13.19M13.19 13.19L11.78 11.78' stroke='%236c757d' stroke-width='2' stroke-linecap='round'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+.package-search-selector .package-result-item.d-none { display: none !important; }
+.package-search-selector .package-icon {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex-shrink: 0;
 }
 </style>
+@endpush
 
+@push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Enhanced select functionality
-    const selector = document.getElementById('{{ $id }}');
-    if (selector) {
-        // Add search functionality (optional enhancement)
-        // Only for single character keys that are not space or special keys
-        selector.addEventListener('keydown', function(e) {
-            if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-                const searchTerm = e.key.toLowerCase();
-                const options = Array.from(this.options);
-                const matchingOption = options.find(option =>
-                    option.text.toLowerCase().startsWith(searchTerm) && option.value
-                );
+    initPackageSearchSelector('{{ $id }}');
+});
 
-                if (matchingOption) {
-                    this.value = matchingOption.value;
-                    this.dispatchEvent(new Event('change'));
-                }
+function initPackageSearchSelector(baseId) {
+    const searchInput = document.getElementById(baseId + '_search');
+    const hiddenSelect = document.getElementById(baseId);
+    const dropdown = document.getElementById(baseId + '_dropdown');
+    const resultsContainer = document.getElementById(baseId + '_results');
+
+    if (!searchInput || !hiddenSelect || !dropdown || !resultsContainer) return;
+
+    const items = Array.from(resultsContainer.querySelectorAll('.package-result-item'));
+
+    searchInput.addEventListener('focus', function() {
+        dropdown.style.display = 'block';
+        if (!this.value.trim()) applyFilter('');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    searchInput.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        applyFilter(q);
+        dropdown.style.display = 'block';
+        // Nếu user xoá hết → clear hidden select
+        if (!q && hiddenSelect.value) {
+            // Don't auto-clear — user might just be re-searching
+        }
+    });
+
+    function applyFilter(q) {
+        let visibleCount = 0;
+        items.forEach(item => {
+            const search = item.dataset.search || '';
+            if (q === '' || search.includes(q)) {
+                item.classList.remove('d-none');
+                visibleCount++;
+            } else {
+                item.classList.add('d-none');
             }
         });
-        
-        // Highlight shared accounts
-        selector.addEventListener('focus', function() {
-            const sharedAccountOptions = this.querySelectorAll('optgroup[data-account-type="Tài khoản dùng chung"] option');
-            sharedAccountOptions.forEach(option => {
-                option.style.animation = 'pulse 2s infinite';
-            });
-        });
-        
-        selector.addEventListener('blur', function() {
-            const sharedAccountOptions = this.querySelectorAll('optgroup[data-account-type="Tài khoản dùng chung"] option');
-            sharedAccountOptions.forEach(option => {
-                option.style.animation = '';
-            });
-        });
+
+        let emptyMsg = resultsContainer.querySelector('.package-results-empty');
+        if (visibleCount === 0) {
+            if (!emptyMsg) {
+                emptyMsg = document.createElement('div');
+                emptyMsg.className = 'package-results-empty';
+                resultsContainer.appendChild(emptyMsg);
+            }
+            emptyMsg.textContent = 'Không tìm thấy gói khớp "' + q + '"';
+        } else if (emptyMsg) {
+            emptyMsg.remove();
+        }
     }
-});
+
+    resultsContainer.addEventListener('click', function(e) {
+        e.preventDefault();
+        const item = e.target.closest('.package-result-item');
+        if (!item) return;
+
+        const id = item.dataset.id;
+        const name = item.dataset.name;
+        const cat = item.dataset.cat;
+
+        hiddenSelect.value = id;
+        searchInput.value = name + (cat ? ' (' + cat + ')' : '');
+        dropdown.style.display = 'none';
+        hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const firstVisible = items.find(item => !item.classList.contains('d-none'));
+            if (firstVisible) firstVisible.click();
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+    });
+}
 </script>
+@endpush
