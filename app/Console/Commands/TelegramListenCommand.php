@@ -667,6 +667,18 @@ class TelegramListenCommand extends Command
         $extras = [];
         if ($cs->status !== 'cancelled' && !$isTrashed) {
             $rows = [];
+
+            // Hàng 0: Đánh dấu Đã trả manual — chỉ hiện cho CS pending có PO chưa paid.
+            // Dùng khi khách CK đúng số tiền nhưng quên ghi mã đơn → Pay2S không match.
+            if ($cs->status === 'pending' && $cs->pending_order_id) {
+                $po = \App\Models\PendingOrder::find($cs->pending_order_id);
+                if ($po && $po->status === 'pending' && !$po->paid_at) {
+                    $rows[] = [
+                        ['text' => '💳 Đánh dấu Đã trả (manual)', 'callback_data' => "po_paid_{$po->id}"],
+                    ];
+                }
+            }
+
             // Hàng 1: Tính tiền hoàn (nếu có order_amount > 0)
             if ((int) $cs->order_amount > 0) {
                 $rows[] = [
