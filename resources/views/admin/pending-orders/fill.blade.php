@@ -71,22 +71,17 @@
                                 $preExpiresAt = old('expires_at', now()->addDays((int) $preDurationDays)->format('Y-m-d'));
                             @endphp
                             <div class="col-md-6">
-                                <label class="form-label">Khách hàng *</label>
-                                <select name="customer_id" class="form-select" required>
-                                    <option value="">— Chọn khách hàng —</option>
-                                    @foreach($customers as $c)
-                                        <option value="{{ $c->id }}" {{ $preCustomerId == $c->id ? 'selected' : '' }}>
-                                            {{ $c->name }} {{ $c->phone ? '· '.$c->phone : '' }} ({{ $c->customer_code }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <small class="text-muted">
-                                    @if($pendingOrder->customer_id && $pendingOrder->customer)
-                                        <i class="fas fa-check-circle text-success me-1"></i>Đã pre-fill từ bot: <code>{{ $pendingOrder->customer->customer_code }}</code> — {{ $pendingOrder->customer->name }}
-                                    @else
-                                        Không thấy khách? <a href="{{ route('admin.customers.create') }}" target="_blank">Tạo mới</a>
-                                    @endif
-                                </small>
+                                <x-customer-search-selector
+                                    name="customer_id"
+                                    :customers="$customers"
+                                    :value="$preCustomerId"
+                                    :required="true"
+                                    label="Khách hàng"
+                                    placeholder="Gõ tên / mã KH / SĐT để tìm..."
+                                    :help-text="$pendingOrder->customer_id && $pendingOrder->customer
+                                        ? 'Đã pre-fill từ bot: ' . $pendingOrder->customer->customer_code . ' — ' . $pendingOrder->customer->name
+                                        : 'Gõ để tìm khách (hỗ trợ tên/mã KUN/CTV/SĐT/email). Hoặc bấm + để thêm KH mới chỉ với tên.'"
+                                />
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Gói dịch vụ *</label>
