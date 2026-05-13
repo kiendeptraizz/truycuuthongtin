@@ -35,13 +35,28 @@ trait HandlesPendingOrderActions
         }
 
         $order->update(['status' => 'cancelled']);
-        Log::info('Bot Telegram: cancelled pending order via /list button', [
+
+        // Cancel CS pending link với PO (nếu có) — đồng bộ trạng thái.
+        // Trước đây chỉ update PO → CS vẫn pending → admin tra cứu lại thấy
+        // "Chờ thanh toán" gây confusion.
+        $csCancelled = false;
+        if ($order->customer_service_id) {
+            $cs = \App\Models\CustomerService::find($order->customer_service_id);
+            if ($cs && $cs->status === 'pending') {
+                $cs->update(['status' => 'cancelled']);
+                $csCancelled = true;
+            }
+        }
+
+        Log::info('Bot Telegram: cancelled pending order via button', [
             'order_id' => $order->id,
             'order_code' => $order->order_code,
+            'cs_cancelled' => $csCancelled,
             'by_user' => $userId,
         ]);
 
-        $this->bot->sendMessage($chatId, "✅ Đã huỷ đơn <code>{$order->order_code}</code>.");
+        $extra = $csCancelled ? " + dịch vụ pending đã bị huỷ." : "";
+        $this->bot->sendMessage($chatId, "✅ Đã huỷ đơn <code>{$order->order_code}</code>.{$extra}");
     }
 
     /**
