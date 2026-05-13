@@ -668,13 +668,18 @@ class TelegramListenCommand extends Command
         if ($cs->status !== 'cancelled' && !$isTrashed) {
             $rows = [];
 
-            // Hàng 0: Đánh dấu Đã trả manual — chỉ hiện cho CS pending có PO chưa paid.
-            // Dùng khi khách CK đúng số tiền nhưng quên ghi mã đơn → Pay2S không match.
+            // Hàng 0: Đánh dấu Đã trả manual + Huỷ đơn — chỉ cho CS pending có PO pending chưa paid.
+            // Đã trả: khi khách CK quên ghi mã. Huỷ: khi khách bỏ không CK.
             if ($cs->status === 'pending' && $cs->pending_order_id) {
                 $po = \App\Models\PendingOrder::find($cs->pending_order_id);
-                if ($po && $po->status === 'pending' && !$po->paid_at) {
+                if ($po && $po->status === 'pending') {
+                    if (!$po->paid_at) {
+                        $rows[] = [
+                            ['text' => '💳 Đánh dấu Đã trả (manual)', 'callback_data' => "po_paid_{$po->id}"],
+                        ];
+                    }
                     $rows[] = [
-                        ['text' => '💳 Đánh dấu Đã trả (manual)', 'callback_data' => "po_paid_{$po->id}"],
+                        ['text' => '❌ Huỷ đơn', 'callback_data' => "po_huy_{$po->id}"],
                     ];
                 }
             }
