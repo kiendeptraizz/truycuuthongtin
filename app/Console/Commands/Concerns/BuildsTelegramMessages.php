@@ -53,7 +53,7 @@ trait BuildsTelegramMessages
             [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_MULTI_ORDER]],
             [['text' => self::BTN_PENDING], ['text' => self::BTN_STATS]],
             [['text' => self::BTN_EXPIRING], ['text' => self::BTN_QUICK_ORDER]],
-            [['text' => self::BTN_HELP]],
+            [['text' => self::BTN_KHO], ['text' => self::BTN_HELP]],
         ];
         return ['reply_markup' => json_encode([
             'keyboard' => $keyboard,
@@ -194,12 +194,14 @@ trait BuildsTelegramMessages
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
             . "⚡ <b>Tạo đơn nhanh</b> — Flow ngắn 2 bước (số tiền + tên/mã KH) → tạo PendingOrder pending. Bot gửi QR ngay với mã đơn DH-XXX để khách CK. Admin fill chi tiết (gói/email/duration/...) sau qua <code>/admin/pending-orders</code>. Tiện cho lúc bận hoặc khách cần QR ngay.\n\n"
             . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc + CK 1 lần. Bot hỏi tên KH 1 lần + thông tin từng đơn → sinh mã lô <code>GR-XXX</code> + 1 QR tổng. Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
+            . "📦 <b>Kho TK</b> — Lưu trữ TK mua vào (chưa bán) để không quên. Bot hỏi 4 bước: chọn category → email/username → password → ghi chú (có thể /skip). TK lưu vào DB + tự sync lên Google Sheet nếu đã cấu hình. Lệnh: <code>/kho list [keyword]</code> để xem nhanh kho.\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — list 10 đơn pending mới nhất (toàn bộ)\n"
             . "/dh DH-XXX-XXX — xem chi tiết 1 đơn (hoặc gõ thẳng mã đơn)\n"
             . "/kh tên/mã/email/SĐT — search KH (vd <code>/kh nguyen</code>, <code>/kh KUN12345</code>)\n"
             . "/dt N — doanh thu + top DV trong N ngày qua (vd <code>/dt 7</code>, <code>/dt 30</code>)\n"
+            . "/kho list [keyword] — list 10 TK chưa bán trong kho (filter theo email/note)\n"
             . "/cancel DH-XXX-XXX — huỷ 1 đơn\n"
             . "/huy — huỷ conversation đang gõ\n"
             . "/lai — quay về bước trước\n\n"
@@ -253,6 +255,9 @@ trait BuildsTelegramMessages
             'family_email' => 'mã nhóm/gia đình',
             'warranty' => 'bảo hành',
             'profit' => 'lợi nhuận',
+            'kho_email' => 'email/username (kho TK)',
+            'kho_password' => 'mật khẩu (kho TK)',
+            'kho_note' => 'ghi chú (kho TK)',
             default => $step ?: 'không xác định',
         };
     }

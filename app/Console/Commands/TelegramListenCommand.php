@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Console\Commands\Concerns\BuildsTelegramMessages;
+use App\Console\Commands\Concerns\HandlesKho;
 use App\Console\Commands\Concerns\HandlesPendingOrderActions;
 use App\Console\Commands\Concerns\HandlesRefundFlow;
 use App\Console\Commands\Concerns\HandlesStats;
@@ -44,6 +45,7 @@ class TelegramListenCommand extends Command
     use HandlesRefundFlow;
     use HandlesWarrantyFlow;
     use HandlesPendingOrderActions;
+    use HandlesKho;
 
     protected $signature = 'telegram:listen';
     protected $description = 'Long polling Telegram bot — nhận tin nhắn để tạo pending orders';
@@ -59,6 +61,7 @@ class TelegramListenCommand extends Command
     private const BTN_STATS = '📊 Thống kê';
     private const BTN_EXPIRING = '⏰ Hết hạn';
     private const BTN_QUICK_ORDER = '⚡ Tạo đơn nhanh';
+    private const BTN_KHO = '📦 Kho TK';
     private const BTN_HELP = '❓ Hướng dẫn';
 
     public function handle(): int
@@ -280,6 +283,9 @@ class TelegramListenCommand extends Command
             case self::BTN_MULTI_ORDER:
                 $this->promptMultiCount($chatId);
                 return true;
+            case self::BTN_KHO:
+                $this->sendKhoMenu($chatId);
+                return true;
             case self::BTN_HELP:
                 $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
                 return true;
@@ -330,6 +336,7 @@ class TelegramListenCommand extends Command
                         . "📊 <b>Thống kê</b> — profit + số đơn hôm nay/tháng\n"
                         . "⏰ <b>Hết hạn</b> — đơn hết hạn hôm nay/tuần này\n"
                         . "⚡ <b>Tạo đơn nhanh</b> — chỉ hỏi số tiền + KH (gói/email/... fill sau qua web)\n"
+                        . "📦 <b>Kho TK</b> — Nhập TK mới mua + sync ra Google Sheet\n"
                         . "❓ <b>Hướng dẫn</b> — chi tiết các tính năng",
                     $this->mainMenuMarkup()
                 );
@@ -345,6 +352,19 @@ class TelegramListenCommand extends Command
 
             case '/list':
                 $this->sendListPending($chatId);
+                break;
+
+            case '/kho':
+                // /kho list [keyword] — xem 10 TK gần nhất trong kho (optional filter)
+                $parts2 = preg_split('/\s+/', $arg, 2);
+                $sub = strtolower($parts2[0] ?? '');
+                $kw = trim($parts2[1] ?? '');
+                if ($sub === 'list' || $sub === '') {
+                    $this->handleKhoListCallback($chatId, $kw ?: null);
+                } else {
+                    // /kho <keyword> — treat sub là keyword
+                    $this->handleKhoListCallback($chatId, $sub);
+                }
                 break;
 
             case '/cancel':
@@ -821,6 +841,54 @@ class TelegramListenCommand extends Command
 
                 $this->sendAndTrack($chatId, $headLine);
                 $this->finalizeQuickOrder($chatId, $userId, $data);
+                return;
+
+            // ============ KHO TK FLOW ============
+            case 'kho_email':
+                $email = trim($text);
+                if (mb_strlen($email) < 3) {
+                    $this->sendAndTrack($chatId, "❌ Quá ngắn. Gõ lại email/username:");
+                    return;
+                }
+                $data['email'] = $email;
+                $this->setState($chatId, ['step' => 'kho_password', 'data' => $data]);
+                $this->sendAndTrack(
+                    $chatId,
+                    "🔑 <b>Bước 3/4: Mật khẩu</b>\n"
+                        . "<i>Gõ password TK (bot lưu nguyên — KHÔNG share ra ngoài).</i>"
+                );
+                return;
+
+            case 'kho_password':
+                $password = trim($text);
+                if (mb_strlen($password) < 1) {
+                    $this->sendAndTrack($chatId, "❌ Mật khẩu rỗng. Gõ lại:");
+                    return;
+                }
+                $data['password'] = $password;
+                $this->setState($chatId, ['step' => 'kho_note', 'data' => $data]);
+                $this->sendAndTrack(
+                    $chatId,
+                    "📝 <b>Bước 4/4: Ghi chú</b>\n"
+                        . "<i>Optional — ghi chú thêm (vd: mua từ shop X, hết hạn YYYY-MM-DD).</i>\n\n"
+                        . "Gõ <code>/skip</code> nếu không cần.",
+                    ['reply_markup' => json_encode([
+                        'inline_keyboard' => [[
+                            ['text' => '⏭ Bỏ qua ghi chú', 'callback_data' => 'kho_skip_note'],
+                        ]],
+                    ])]
+                );
+                return;
+
+            case 'kho_note':
+                $note = trim($text);
+                $lc = strtolower($note);
+                if (in_array($lc, ['/skip', 'skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
+                    $data['note'] = null;
+                } else {
+                    $data['note'] = $note;
+                }
+                $this->finalizeKhoAdd($chatId, $data);
                 return;
 
             case 'warranty_email':
@@ -1554,6 +1622,33 @@ class TelegramListenCommand extends Command
                 $this->finalizeQuickOrder($chatId, '', $data);
             } else {
                 $this->bot->sendMessage($chatId, "ℹ️ Phiên đã hết hạn — bấm <b>⚡ Tạo đơn nhanh</b> lại.");
+            }
+            return;
+        }
+
+        // ===== KHO TK callbacks =====
+        if ($cbData === 'kho_add') {
+            $this->handleKhoAddCallback($chatId);
+            return;
+        }
+        if ($cbData === 'kho_list') {
+            $this->handleKhoListCallback($chatId);
+            return;
+        }
+        if ($cbData === 'kho_cancel') {
+            $this->handleKhoCancelCallback($chatId);
+            return;
+        }
+        if (preg_match('/^kho_cat_(\d+)$/', $cbData, $m)) {
+            $this->handleKhoCategoryCallback($chatId, (int) $m[1]);
+            return;
+        }
+        if ($cbData === 'kho_skip_note') {
+            $state = $this->getState($chatId);
+            if ($state && ($state['step'] ?? null) === 'kho_note') {
+                $data = $state['data'] ?? [];
+                $data['note'] = null;
+                $this->finalizeKhoAdd($chatId, $data);
             }
             return;
         }
