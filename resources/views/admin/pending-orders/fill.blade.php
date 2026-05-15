@@ -64,7 +64,11 @@
         </div>
 
         <div class="col-xl-8">
-            <form method="POST" action="{{ route('admin.pending-orders.fill', $pendingOrder) }}">
+            {{-- novalidate: tắt HTML5 validation vì 2 component <x-customer-search-selector> và
+                 <x-service-package-selector> dùng hidden <select required> với class d-none →
+                 browser cố focus để show tooltip nhưng element hidden → block submit IM LẶNG.
+                 Dùng server-side validation (đã đủ) thay thế. --}}
+            <form method="POST" action="{{ route('admin.pending-orders.fill', $pendingOrder) }}" novalidate>
                 @csrf
                 <div class="card">
                     <div class="card-header">
