@@ -197,13 +197,19 @@ class PendingOrderController extends Controller
         ]);
 
         DB::transaction(function () use ($validated, $request, $pendingOrder) {
-            // Tạo CustomerService
-            $cs = \App\Models\CustomerService::create([
+            $pendingOrder->refresh();
+
+            // Nếu đơn này đã có CS pending (do bot Telegram tạo qua hybrid flow)
+            // → UPDATE thay vì create mới (tránh duplicate order_code UNIQUE)
+            $existingCs = $pendingOrder->customer_service_id
+                ? \App\Models\CustomerService::find($pendingOrder->customer_service_id)
+                : null;
+
+            $payload = [
                 'customer_id' => $validated['customer_id'],
                 'service_package_id' => $validated['service_package_id'],
                 'assigned_by' => auth()->id(),
                 'login_email' => $validated['login_email'],
-                'login_password' => $validated['login_password'] ?? null,
                 'activated_at' => $validated['activated_at'],
                 'expires_at' => $validated['expires_at'],
                 'status' => 'active',
@@ -211,31 +217,56 @@ class PendingOrderController extends Controller
                 'family_code' => $validated['family_code'] ?? null,
                 'warranty_days' => $validated['warranty_days'] ?? null,
                 'order_amount' => $pendingOrder->amount,
-                'pending_order_id' => $pendingOrder->id,
-                'price' => 0, // theo cấu hình project: chỉ tính profit
-                'cost_price' => 0,
-                'internal_notes' => ($validated['internal_notes'] ?? '') . "\n\n📋 Tạo từ pending order {$pendingOrder->order_code} ({$pendingOrder->amount}đ)",
-            ]);
+            ];
 
-            // Tạo Profit nếu có
-            if (!empty($validated['profit_amount']) && $validated['profit_amount'] > 0) {
-                \App\Models\Profit::create([
-                    'customer_service_id' => $cs->id,
-                    'profit_amount' => $validated['profit_amount'],
-                    'notes' => $validated['profit_notes'] ?? null,
-                    'created_by' => auth()->id(),
+            if ($existingCs) {
+                // ACTIVATE CS pending — chỉ override login_password nếu user nhập mới
+                if (!empty($validated['login_password'])) {
+                    $payload['login_password'] = $validated['login_password'];
+                }
+                $payload['internal_notes'] = trim(
+                    ($existingCs->internal_notes ?? '')
+                    . "\n\n📋 Fill thủ công qua web (" . now()->format('d/m/Y H:i') . ")"
+                    . (!empty($validated['internal_notes']) ? "\n" . $validated['internal_notes'] : '')
+                );
+                $existingCs->update($payload);
+                $cs = $existingCs;
+            } else {
+                // Chưa có CS — tạo mới
+                $cs = \App\Models\CustomerService::create($payload + [
+                    'login_password' => $validated['login_password'] ?? null,
+                    'pending_order_id' => $pendingOrder->id,
+                    'price' => 0, // theo cấu hình project: chỉ tính profit
+                    'cost_price' => 0,
+                    'internal_notes' => ($validated['internal_notes'] ?? '') . "\n\n📋 Tạo từ pending order {$pendingOrder->order_code} ({$pendingOrder->amount}đ)",
                 ]);
+                $pendingOrder->update(['customer_service_id' => $cs->id]);
             }
 
-            // Đánh dấu pending order completed + link với customer service
-            $pendingOrder->update([
-                'status' => 'completed',
-                'customer_service_id' => $cs->id,
-            ]);
+            // Profit — update nếu có, tạo mới nếu chưa
+            if (!empty($validated['profit_amount']) && $validated['profit_amount'] > 0) {
+                if ($cs->profit) {
+                    $cs->profit->update([
+                        'profit_amount' => $validated['profit_amount'],
+                        'notes' => $validated['profit_notes'] ?? null,
+                    ]);
+                } else {
+                    \App\Models\Profit::create([
+                        'customer_service_id' => $cs->id,
+                        'profit_amount' => $validated['profit_amount'],
+                        'notes' => $validated['profit_notes'] ?? null,
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
+
+            // Đánh dấu pending order completed
+            $pendingOrder->update(['status' => 'completed']);
 
             Log::info('Pending order filled', [
                 'order_code' => $pendingOrder->order_code,
                 'customer_service_id' => $cs->id,
+                'mode' => $existingCs ? 'activated_existing' : 'created_new',
                 'by' => auth()->id(),
             ]);
         });
