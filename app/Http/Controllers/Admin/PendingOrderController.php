@@ -191,8 +191,9 @@ class PendingOrderController extends Controller
             'duration_days' => 'required|integer|min:1',
             'family_code' => 'nullable|string|max:255',
             'warranty_days' => 'nullable|integer|min:0',
-            'order_amount' => 'nullable|numeric|min:0',
-            'profit_amount' => 'nullable|numeric|min:0',
+            // Money inputs là string (có thể chứa dấu chấm phân cách "100.000" hoặc shortcut "100k") — parse qua parseShortAmount() bên dưới
+            'order_amount' => 'nullable|string|max:30',
+            'profit_amount' => 'nullable|string|max:30',
             'profit_notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string',
         ]);
@@ -206,10 +207,16 @@ class PendingOrderController extends Controller
                 ? \App\Models\CustomerService::find($pendingOrder->customer_service_id)
                 : null;
 
-            // order_amount lấy từ form (admin có thể sửa); fallback pending_order.amount nếu form trống
-            $orderAmount = isset($validated['order_amount']) && $validated['order_amount'] !== ''
-                ? (float) $validated['order_amount']
+            // order_amount lấy từ form (admin có thể sửa). Parse qua parseShortAmount()
+            // để hỗ trợ format "100.000" (dấu chấm phân cách) và shortcut "100k"/"1.5tr".
+            $orderAmount = !empty($validated['order_amount'])
+                ? (float) parseShortAmount($validated['order_amount'])
                 : (float) $pendingOrder->amount;
+
+            // profit_amount: parse tương tự
+            $profitAmount = !empty($validated['profit_amount'])
+                ? (float) parseShortAmount($validated['profit_amount'])
+                : 0;
 
             $payload = [
                 'customer_id' => $validated['customer_id'],
@@ -249,17 +256,17 @@ class PendingOrderController extends Controller
                 $pendingOrder->update(['customer_service_id' => $cs->id]);
             }
 
-            // Profit — update nếu có, tạo mới nếu chưa
-            if (!empty($validated['profit_amount']) && $validated['profit_amount'] > 0) {
+            // Profit — update nếu có, tạo mới nếu chưa (dùng giá đã parse từ shortcut)
+            if ($profitAmount > 0) {
                 if ($cs->profit) {
                     $cs->profit->update([
-                        'profit_amount' => $validated['profit_amount'],
+                        'profit_amount' => $profitAmount,
                         'notes' => $validated['profit_notes'] ?? null,
                     ]);
                 } else {
                     \App\Models\Profit::create([
                         'customer_service_id' => $cs->id,
-                        'profit_amount' => $validated['profit_amount'],
+                        'profit_amount' => $profitAmount,
                         'notes' => $validated['profit_notes'] ?? null,
                         'created_by' => auth()->id(),
                     ]);

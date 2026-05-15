@@ -184,10 +184,11 @@
                                     <i class="fas fa-money-bill me-1 text-success"></i>
                                     Số tiền đơn hàng (đ)
                                 </label>
-                                <input type="number" name="order_amount" class="form-control"
-                                       value="{{ $preOrderAmount }}" min="0" step="1000" placeholder="Vd: 395000">
+                                <input type="text" name="order_amount" id="order_amount" class="form-control money-input"
+                                       value="{{ $preOrderAmount ? number_format((float) $preOrderAmount, 0, ',', '.') : '' }}"
+                                       placeholder="Vd: 395.000 hoặc 395k">
                                 <small class="text-muted">
-                                    Mặc định = số tiền pending order ({{ formatShortAmount($pendingOrder->amount) }}). Sửa nếu khách trả khác.
+                                    Hỗ trợ <code>100k</code>, <code>1.5tr</code>, hoặc gõ số (tự thêm dấu chấm). Mặc định = số tiền pending order ({{ formatShortAmount($pendingOrder->amount) }}).
                                 </small>
                             </div>
                             <div class="col-md-6">
@@ -195,13 +196,13 @@
                                     <i class="fas fa-coins me-1 text-warning"></i>
                                     Lợi nhuận (đ)
                                 </label>
-                                <input type="number" name="profit_amount" class="form-control"
-                                       value="{{ $preProfitAmount }}" min="0" step="1000" placeholder="Vd: 100000">
+                                <input type="text" name="profit_amount" id="profit_amount" class="form-control money-input"
+                                       value="{{ $preProfitAmount ? number_format((float) $preProfitAmount, 0, ',', '.') : '' }}"
+                                       placeholder="Vd: 100.000 hoặc 100k">
                                 <small class="text-muted">
+                                    Hỗ trợ <code>100k</code>, <code>1.5tr</code>, hoặc gõ số (tự thêm dấu chấm).
                                     @if($pendingOrder->profit_amount)
-                                        <i class="fas fa-check-circle text-success me-1"></i>Đã pre-fill từ bot: {{ formatShortAmount($pendingOrder->profit_amount) }}
-                                    @else
-                                        Nhập lãi thực, hoặc để trống nếu chưa biết.
+                                        <br><i class="fas fa-check-circle text-success me-1"></i>Đã pre-fill từ bot: {{ formatShortAmount($pendingOrder->profit_amount) }}
                                     @endif
                                 </small>
                             </div>
@@ -288,6 +289,65 @@ $(function() {
     if (parseInt($custom.val()) > 0) {
         calcDays();
     }
+
+    // =====================================================
+    // Money input: hỗ trợ shortcut "100k", "1.5tr" + dấu chấm
+    // =====================================================
+    function parseShortMoney(str) {
+        if (!str) return 0;
+        str = String(str).toLowerCase().trim().replace(/\s+/g, '');
+        // Match: số (có thể có dấu chấm/phẩy) + đơn vị optional (k/tr/triệu/m)
+        const m = str.match(/^([\d.,]+)\s*(k|nghìn|nghin|tr|triệu|trieu|m)?$/i);
+        if (!m) return 0;
+        const unit = (m[2] || '').toLowerCase();
+        let num;
+        if (!unit) {
+            // Không có unit → coi dấu chấm/phẩy là thousand separator (VND không có decimal)
+            num = parseInt(m[1].replace(/[.,]/g, ''), 10);
+            return isNaN(num) ? 0 : num;
+        }
+        // Có unit → parse decimal (vd "1.5tr", "1,5tr")
+        num = parseFloat(m[1].replace(',', '.'));
+        if (isNaN(num)) return 0;
+        if (['k', 'nghìn', 'nghin'].includes(unit)) return Math.round(num * 1000);
+        if (['tr', 'triệu', 'trieu', 'm'].includes(unit)) return Math.round(num * 1_000_000);
+        return 0;
+    }
+
+    function formatMoney(n) {
+        if (!n || n === 0) return '';
+        return new Intl.NumberFormat('vi-VN').format(n);
+    }
+
+    $('.money-input').each(function() {
+        const $input = $(this);
+
+        // Khi gõ: chỉ giữ số/dấu chấm/k/tr — KHÔNG format ngay (tránh nhảy con trỏ)
+        $input.on('input', function() {
+            // Allow: digits, dots, commas, letters k/tr/m
+            const cleaned = $input.val().replace(/[^\d.,ktrmKTRM]/g, '');
+            if (cleaned !== $input.val()) {
+                $input.val(cleaned);
+            }
+        });
+
+        // Khi rời focus: parse + format thành "100.000"
+        $input.on('blur', function() {
+            const raw = $input.val().trim();
+            if (raw === '') return;
+            const num = parseShortMoney(raw);
+            $input.val(num > 0 ? formatMoney(num) : raw);
+        });
+
+        // Khi focus lại: bỏ dấu chấm để dễ edit
+        $input.on('focus', function() {
+            const v = $input.val();
+            // Chỉ unformat nếu là pure formatted number (không có k/tr)
+            if (v && /^[\d.]+$/.test(v)) {
+                $input.val(v.replace(/\./g, ''));
+            }
+        });
+    });
 });
 </script>
 @endpush
