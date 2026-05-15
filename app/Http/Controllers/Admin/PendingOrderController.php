@@ -191,6 +191,7 @@ class PendingOrderController extends Controller
             'duration_days' => 'required|integer|min:1',
             'family_code' => 'nullable|string|max:255',
             'warranty_days' => 'nullable|integer|min:0',
+            'order_amount' => 'nullable|numeric|min:0',
             'profit_amount' => 'nullable|numeric|min:0',
             'profit_notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string',
@@ -205,6 +206,11 @@ class PendingOrderController extends Controller
                 ? \App\Models\CustomerService::find($pendingOrder->customer_service_id)
                 : null;
 
+            // order_amount lấy từ form (admin có thể sửa); fallback pending_order.amount nếu form trống
+            $orderAmount = isset($validated['order_amount']) && $validated['order_amount'] !== ''
+                ? (float) $validated['order_amount']
+                : (float) $pendingOrder->amount;
+
             $payload = [
                 'customer_id' => $validated['customer_id'],
                 'service_package_id' => $validated['service_package_id'],
@@ -216,7 +222,7 @@ class PendingOrderController extends Controller
                 'duration_days' => $validated['duration_days'],
                 'family_code' => $validated['family_code'] ?? null,
                 'warranty_days' => $validated['warranty_days'] ?? null,
-                'order_amount' => $pendingOrder->amount,
+                'order_amount' => $orderAmount,
             ];
 
             if ($existingCs) {
@@ -260,13 +266,18 @@ class PendingOrderController extends Controller
                 }
             }
 
-            // Đánh dấu pending order completed
-            $pendingOrder->update(['status' => 'completed']);
+            // Đánh dấu pending order completed + đồng bộ amount nếu admin sửa
+            $orderUpdate = ['status' => 'completed'];
+            if ((float) $orderAmount !== (float) $pendingOrder->amount) {
+                $orderUpdate['amount'] = $orderAmount;
+            }
+            $pendingOrder->update($orderUpdate);
 
             Log::info('Pending order filled', [
                 'order_code' => $pendingOrder->order_code,
                 'customer_service_id' => $cs->id,
                 'mode' => $existingCs ? 'activated_existing' : 'created_new',
+                'order_amount' => $orderAmount,
                 'by' => auth()->id(),
             ]);
         });
