@@ -168,7 +168,8 @@
 @push('scripts')
 <script>
 $(function() {
-    // Auto-calc expires_at khi đổi activated_at hoặc duration_days
+    // Auto-calc expires_at khi đổi activated_at hoặc duration_days.
+    // Dùng 'input' event (fire ngay khi gõ/bấm arrow) thay vì 'change' (chỉ fire khi blur).
     function recalc() {
         const start = $('input[name=activated_at]').val();
         const days = parseInt($('input[name=duration_days]').val());
@@ -178,7 +179,7 @@ $(function() {
             $('input[name=expires_at]').val(d.toISOString().slice(0, 10));
         }
     }
-    $('input[name=activated_at], input[name=duration_days]').on('change', recalc);
+    $('input[name=activated_at], input[name=duration_days]').on('input change', recalc);
 });
 </script>
 @endpush
