@@ -218,7 +218,7 @@
                     </div>
                     <div class="card-footer text-end">
                         <a href="{{ route('admin.pending-orders.index') }}" class="btn btn-outline-secondary">Huỷ</a>
-                        <button type="submit" class="btn btn-success">
+                        <button type="submit" class="btn btn-success" id="fill-submit-btn">
                             <i class="fas fa-check me-1"></i>Hoàn tất tạo dịch vụ
                         </button>
                     </div>
@@ -324,30 +324,46 @@ $(function() {
 
         // Khi gõ: chỉ giữ số/dấu chấm/k/tr — KHÔNG format ngay (tránh nhảy con trỏ)
         $input.on('input', function() {
-            // Allow: digits, dots, commas, letters k/tr/m
-            const cleaned = $input.val().replace(/[^\d.,ktrmKTRM]/g, '');
-            if (cleaned !== $input.val()) {
-                $input.val(cleaned);
-            }
+            try {
+                const cleaned = $input.val().replace(/[^\d.,ktrmKTRM]/g, '');
+                if (cleaned !== $input.val()) $input.val(cleaned);
+            } catch (e) { console.warn('money input error', e); }
         });
 
         // Khi rời focus: parse + format thành "100.000"
         $input.on('blur', function() {
-            const raw = $input.val().trim();
-            if (raw === '') return;
-            const num = parseShortMoney(raw);
-            $input.val(num > 0 ? formatMoney(num) : raw);
+            try {
+                const raw = $input.val().trim();
+                if (raw === '') return;
+                const num = parseShortMoney(raw);
+                $input.val(num > 0 ? formatMoney(num) : raw);
+            } catch (e) { console.warn('money blur error', e); }
         });
 
         // Khi focus lại: bỏ dấu chấm để dễ edit
         $input.on('focus', function() {
-            const v = $input.val();
-            // Chỉ unformat nếu là pure formatted number (không có k/tr)
-            if (v && /^[\d.]+$/.test(v)) {
-                $input.val(v.replace(/\./g, ''));
-            }
+            try {
+                const v = $input.val();
+                if (v && /^[\d.]+$/.test(v)) $input.val(v.replace(/\./g, ''));
+            } catch (e) { console.warn('money focus error', e); }
         });
     });
+
+    // ===== DEFENSIVE: ép enable submit button khi page load =====
+    // (Phòng trường hợp bfcache giữ trạng thái disabled từ lần submit trước
+    //  hoặc admin-layout.js timeout chưa enable lại)
+    const $submitBtn = $('#fill-submit-btn');
+    function ensureSubmitEnabled() {
+        $submitBtn.prop('disabled', false).removeAttr('disabled');
+        const orig = $submitBtn.attr('data-original-text');
+        if (orig) {
+            $submitBtn.html(orig);
+            $submitBtn.removeAttr('data-original-text');
+        }
+    }
+    ensureSubmitEnabled();
+    // Restore khi user back/forward (bfcache)
+    window.addEventListener('pageshow', ensureSubmitEnabled);
 });
 </script>
 @endpush
