@@ -165,7 +165,10 @@ class PendingOrderController extends Controller
         // Eager load customer + servicePackage để view show "Đã pre-fill từ bot: KUN-XXX — Tên"
         $pendingOrder->load(['customer', 'servicePackage']);
 
-        $customers = Customer::orderBy('name')->limit(500)->get();
+        // Bỏ limit 500 — load all customers vì hidden select của component cần đủ option
+        // để JS selectCustomer() set value match. Nếu thiếu option, submit customer_id rỗng.
+        // 896 customers (snapshot) → page load vẫn nhẹ. Nếu sau này >10k cần AJAX search.
+        $customers = Customer::orderBy('name')->get();
         $servicePackages = ServicePackage::with('category')->where('is_active', true)
             ->orderBy('name')->get();
 
