@@ -501,7 +501,7 @@
                                     default => 'transparent',
                                 };
                             @endphp
-                            <tr data-order-row="{{ $order->id }}" class="{{ $rowClass }}" style="background-color: {{ $rowBg }};">
+                            <tr id="order-{{ $order->id }}" data-order-row="{{ $order->id }}" class="{{ $rowClass }}" style="background-color: {{ $rowBg }};">
                                 <td style="border-left: 6px solid {{ $stripColor }}; padding-left: 16px; background-color: {{ $rowBg }};">
                                     <span class="order-code" title="Click để copy" onclick="navigator.clipboard?.writeText('{{ $order->order_code }}')">
                                         {{ $order->order_code }}

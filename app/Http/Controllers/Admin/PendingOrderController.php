@@ -397,7 +397,9 @@ class PendingOrderController extends Controller
                 'cs_id' => $csId,
             ]);
         }
-        return back()->with('success', $msg);
+        // URL fragment #order-{id} → browser tự scroll đến row vừa update sau reload,
+        // không bị nhảy về đầu trang (kết hợp với admin-scroll-preserve.js để robust).
+        return back()->with('success', $msg)->withFragment("order-{$pendingOrder->id}");
     }
 
     /**
