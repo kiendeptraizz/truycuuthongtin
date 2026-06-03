@@ -25,8 +25,30 @@ trait HandlesStats
         $today = today();
         $startOfMonth = $today->copy()->startOfMonth();
 
-        $profitToday = (float) \App\Models\Profit::whereDate('created_at', $today)->sum('profit_amount');
-        $profitMonth = (float) \App\Models\Profit::whereBetween('created_at', [$startOfMonth, $today->copy()->endOfDay()])->sum('profit_amount');
+        // Profit tính theo ngày KHÁCH CK (PO.paid_at), KHÔNG phải ngày tạo Profit record.
+        // Đồng bộ với doanh thu (cũng dùng paid_at). Trước đây dùng Profit.created_at →
+        // khi admin fill trễ (vd đơn nhanh CK hôm qua, fill hôm nay) thì profit lệch ngày
+        // với doanh thu — user phản hồi 4/6/2026 muốn khớp.
+        //
+        // COALESCE(PO.paid_at, CS.activated_at):
+        //   - Đơn qua bot + Pay2S → PO.paid_at (= lúc Pay2S báo paid)
+        //   - Đơn web admin tạo trực tiếp (không qua PO) → CS.activated_at
+        $profitDateExpr = 'COALESCE(pending_orders.paid_at, customer_services.activated_at)';
+        $profitJoin = fn($q) => $q
+            ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id');
+
+        $profitToday = (float) \App\Models\Profit::query()
+            ->tap($profitJoin)
+            ->whereRaw("DATE($profitDateExpr) = ?", [$today->format('Y-m-d')])
+            ->sum('profits.profit_amount');
+        $profitMonth = (float) \App\Models\Profit::query()
+            ->tap($profitJoin)
+            ->whereRaw("$profitDateExpr BETWEEN ? AND ?", [
+                $startOfMonth->format('Y-m-d 00:00:00'),
+                $today->copy()->endOfDay()->format('Y-m-d H:i:s'),
+            ])
+            ->sum('profits.profit_amount');
 
         $paidToday = PendingOrder::where('status', 'completed')->whereDate('paid_at', $today)->count();
         $pendingToday = PendingOrder::where('status', 'pending')->whereDate('created_at', $today)->count();
@@ -66,8 +88,16 @@ trait HandlesStats
         $revenue = (float) (clone $paidQuery)->sum('amount');
         $paidCount = (clone $paidQuery)->count();
 
-        // Profit (Profit record tạo trong range — khớp khi đơn được mark paid)
-        $profit = (float) \App\Models\Profit::whereBetween('created_at', [$start, $end])->sum('profit_amount');
+        // Profit tính theo ngày khách CK (PO.paid_at), fallback CS.activated_at cho đơn
+        // web không qua PO. Đồng bộ với doanh thu — xem giải thích trong sendStatsToday.
+        $profit = (float) \App\Models\Profit::query()
+            ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw('COALESCE(pending_orders.paid_at, customer_services.activated_at) BETWEEN ? AND ?', [
+                $start->format('Y-m-d H:i:s'),
+                $end->format('Y-m-d H:i:s'),
+            ])
+            ->sum('profits.profit_amount');
 
         // Khách mới
         $newCustomers = \App\Models\Customer::whereBetween('created_at', [$start, $end])->count();
