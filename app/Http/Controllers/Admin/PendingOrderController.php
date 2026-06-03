@@ -411,13 +411,19 @@ class PendingOrderController extends Controller
      *
      * Behavior:
      *   - status='cancelled' → reject
-     *   - status='pending' + chưa paid → set paid_at=now() + paid_amount=amount + status='completed'
-     *   - status='pending' + đã paid (đơn nhanh paid chưa fill) → chỉ set status='completed'
      *   - status='completed' → idempotent return success
-     *
-     * KHÔNG tạo CS/Profit vì đây là đơn nhanh chưa có data structured. Stat dashboard
-     * (bot + web) đã tính theo paid_at + status != cancelled nên đơn này vẫn vào
-     * doanh thu/lợi nhuận từ PO.amount + COALESCE(profits.profit_amount, PO.profit_amount).
+     *   - status='pending':
+     *     * Chưa paid → set paid_at=now() + paid_amount=amount + status='completed'
+     *     * Đã paid → chỉ set status='completed'
+     *   - TẠO CS PLACEHOLDER (sau feedback user 4/6/2026: muốn đơn hoàn thành cũng
+     *     xuất hiện ở /admin/customer-services) với data tối thiểu:
+     *     * customer_id, service_package_id, login_email có thể NULL (migration
+     *       2026_06_04_014500 đã cho phép)
+     *     * order_code, order_amount, duration_days lấy từ PO
+     *     * activated_at = paid_at, expires_at = activated_at + duration_days (nếu có)
+     *     * status='active' (đơn đã hoàn thành tức là đang chạy)
+     *     * internal_notes đánh dấu rõ đây là CS từ markCompleted để view phân biệt
+     *   - TẠO Profit nếu PO.profit_amount > 0 (Profit FK customer_service_id)
      */
     public function markCompleted(Request $request, PendingOrder $pendingOrder)
     {
@@ -437,7 +443,8 @@ class PendingOrderController extends Controller
             return back()->with('info', $msg)->withFragment("order-{$pendingOrder->id}");
         }
 
-        \DB::transaction(function () use ($pendingOrder) {
+        $csId = null;
+        \DB::transaction(function () use ($pendingOrder, &$csId) {
             $locked = PendingOrder::where('id', $pendingOrder->id)->lockForUpdate()->first();
             if (!$locked || $locked->status !== 'pending') {
                 return;
@@ -445,7 +452,6 @@ class PendingOrderController extends Controller
 
             $update = ['status' => 'completed'];
             // Nếu chưa paid → set luôn paid_at + paid_amount để stat ghi nhận doanh thu.
-            // Đây là use case chính: đơn CTV admin tạo + mark hoàn thành ngay không qua Pay2S.
             if (!$locked->paid_at) {
                 $update['paid_at'] = now();
                 $update['paid_amount'] = (int) $locked->amount;
@@ -458,8 +464,62 @@ class PendingOrderController extends Controller
                     'note' => 'Đánh dấu hoàn thành thủ công (đơn CTV không fill chi tiết).',
                 ], JSON_UNESCAPED_UNICODE);
             }
-
             $locked->update($update);
+            $locked->refresh();
+
+            // Tạo CS placeholder nếu chưa có (đơn bot full 7-step đã có CS pending →
+            // chỉ activate nếu cần). Idempotent: nếu đã có CS link → skip create.
+            if ($locked->customer_service_id) {
+                // Đơn full 7-step → CS pending có sẵn → activate giống PaymentService
+                $cs = \App\Models\CustomerService::find($locked->customer_service_id);
+                if ($cs && $cs->status === 'pending') {
+                    $activatedAt = $locked->paid_at ?? now();
+                    $cs->update([
+                        'status' => 'active',
+                        'activated_at' => $activatedAt,
+                        'expires_at' => $cs->duration_days ? $activatedAt->copy()->addDays((int) $cs->duration_days) : null,
+                        'internal_notes' => trim(($cs->internal_notes ?? '')
+                            . "\n\n🏃 Đánh dấu hoàn thành thủ công qua web ({$locked->paid_at->format('d/m/Y H:i')})"),
+                    ]);
+                    $csId = $cs->id;
+                }
+            } else {
+                // Đơn nhanh → tạo CS placeholder mới với data tối thiểu từ PO
+                $activatedAt = $locked->paid_at ?? now();
+                $expiresAt = $locked->duration_days
+                    ? $activatedAt->copy()->addDays((int) $locked->duration_days)
+                    : null;
+
+                $cs = \App\Models\CustomerService::create([
+                    'pending_order_id' => $locked->id,
+                    'order_code' => $locked->order_code,
+                    'customer_id' => $locked->customer_id, // NULL OK (bot user có thể bỏ qua KH)
+                    'service_package_id' => null, // placeholder — đơn nhanh không có gói
+                    'login_email' => null,
+                    'order_amount' => $locked->amount,
+                    'duration_days' => $locked->duration_days,
+                    'activated_at' => $activatedAt,
+                    'expires_at' => $expiresAt,
+                    'status' => 'active',
+                    'price' => 0,
+                    'cost_price' => 0,
+                    'internal_notes' => "🏃 Đơn nhanh CTV — đánh dấu hoàn thành thủ công qua web ("
+                        . now()->format('d/m/Y H:i') . ") bởi " . (auth()->user()?->name ?? 'admin')
+                        . ". KHÔNG có gói/email cụ thể — đây là đơn nhanh không cần fill chi tiết.",
+                ]);
+                $locked->update(['customer_service_id' => $cs->id]);
+                $csId = $cs->id;
+
+                // Tạo Profit từ PO.profit_amount nếu có
+                if (!empty($locked->profit_amount) && (int) $locked->profit_amount > 0) {
+                    \App\Models\Profit::create([
+                        'customer_service_id' => $cs->id,
+                        'profit_amount' => $locked->profit_amount,
+                        'notes' => "Tự tạo từ đơn nhanh {$locked->order_code} qua nút Hoàn thành",
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
         });
 
         Log::info('Manual markCompleted success', [
@@ -467,11 +527,14 @@ class PendingOrderController extends Controller
             'order_code' => $pendingOrder->order_code,
             'admin_id' => auth()->id(),
             'was_paid_before' => $pendingOrder->paid_at !== null,
+            'cs_id_created' => $csId,
         ]);
 
-        $msg = "✅ Đã đánh dấu đơn {$pendingOrder->order_code} là hoàn thành. Đơn này sẽ tính vào doanh thu/lợi nhuận.";
+        $msg = "✅ Đã đánh dấu đơn {$pendingOrder->order_code} là hoàn thành"
+            . ($csId ? " và tạo dịch vụ #{$csId} (đơn nhanh CTV)." : '.')
+            . " Đơn này sẽ tính vào doanh thu/lợi nhuận và xuất hiện trong Dịch vụ khách hàng.";
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'message' => $msg]);
+            return response()->json(['success' => true, 'message' => $msg, 'cs_id' => $csId]);
         }
         return back()->with('success', $msg)->withFragment("order-{$pendingOrder->id}");
     }

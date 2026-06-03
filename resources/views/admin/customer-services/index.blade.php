@@ -378,7 +378,7 @@
                             <p class="mb-0">
                                 Cần liên hệ khách hàng ngay:
                                 @foreach($urgentServices->take(3) as $service)
-                                <strong>{{ $service->customer->name }}</strong>{{ !$loop->last ? ', ' : '' }}
+                                <strong>{{ $service->customer?->name ?? '(chưa gắn KH)' }}</strong>{{ !$loop->last ? ', ' : '' }}
                                 @endforeach
                                 @if($urgentServices->count() > 3)
                                 và {{ $urgentServices->count() - 3 }} khách hàng khác.
@@ -614,7 +614,7 @@
                                         <tr id="service-{{ $service->id }}" data-service-id="{{ $service->id }}" class="{{ $rowClass }}">
                                         <!-- Cột Checkbox -->
                                         <td style="text-align: center; vertical-align: middle;">
-                                            <input type="checkbox" class="form-check-input service-checkbox" value="{{ $service->id }}" data-name="{{ $service->customer->name }} - {{ $service->servicePackage->name }}">
+                                            <input type="checkbox" class="form-check-input service-checkbox" value="{{ $service->id }}" data-name="{{ ($service->customer?->name ?? '(chưa KH)') . ' - ' . ($service->servicePackage?->name ?? 'Đơn nhanh') }}">
                                         </td>
                                         <!-- Cột Thao tác - Di chuyển lên đầu và sticky -->
                                         <td class="sticky-column" style="position: sticky; left: 40px; background: white; z-index: 5; border-right: 1px solid #dee2e6;">
@@ -642,7 +642,7 @@
                                                     @endif
 
                                                     <button class="btn btn-sm btn-outline-danger"
-                                                        onclick="confirmDelete('{{ $service->customer->name }} - {{ $service->servicePackage->name }}', '{{ route('admin.customer-services.destroy', $service) }}', {{ $service->id }})"
+                                                        onclick="confirmDelete('{{ ($service->customer?->name ?? '(chưa KH)') . ' - ' . ($service->servicePackage?->name ?? 'Đơn nhanh') }}', '{{ route('admin.customer-services.destroy', $service) }}', {{ $service->id }})"
                                                         title="Xóa">
                                                         <i class="fas fa-trash-alt"></i>
                                                     </button>
@@ -660,8 +660,12 @@
                                         <!-- Cột Khách hàng -->
                                         <td>
                                             <div>
-                                                <strong>{{ $service->customer->name }}</strong>
-                                                <br><small class="text-muted">{{ $service->customer->customer_code }}</small>
+                                                @if($service->customer)
+                                                    <strong>{{ $service->customer->name }}</strong>
+                                                    <br><small class="text-muted">{{ $service->customer->customer_code }}</small>
+                                                @else
+                                                    <span class="text-muted fst-italic">Chưa gắn KH</span>
+                                                @endif
                                                 @if($status === 'expiring' && $daysRemaining <= 1)
                                                     <br><small class="text-danger fw-bold"><i class="fas fa-exclamation-triangle"></i> CẤP BÁC!</small>
                                                     @endif
@@ -669,8 +673,14 @@
                                         </td>
                                         <td>
                                             <div>
-                                                <strong>{{ $service->servicePackage->name }}</strong>
-                                                <br><small class="text-muted">{{ $service->servicePackage->category->name ?? 'N/A' }}</small>
+                                                @if($service->servicePackage)
+                                                    <strong>{{ $service->servicePackage->name }}</strong>
+                                                    <br><small class="text-muted">{{ $service->servicePackage->category->name ?? 'N/A' }}</small>
+                                                @else
+                                                    {{-- CS placeholder từ nút "Hoàn thành" (đơn nhanh CTV không có gói cụ thể) --}}
+                                                    <span class="badge bg-secondary"><i class="fas fa-running me-1"></i>Đơn nhanh</span>
+                                                    <br><small class="text-muted fst-italic">CTV / không fill chi tiết</small>
+                                                @endif
                                             </div>
                                         </td>
                                         <td>
@@ -685,7 +695,7 @@
                                                     <br>
                                                     <small class="text-muted">{{ $service->familyAccount->family_code }}</small>
                                                 </a>
-                                            @elseif(str_contains(strtolower($service->servicePackage->account_type ?? ''), 'family'))
+                                            @elseif($service->servicePackage && str_contains(strtolower($service->servicePackage->account_type ?? ''), 'family'))
                                                 <span class="badge bg-warning text-dark">
                                                     <i class="fas fa-exclamation-triangle me-1"></i>
                                                     Chưa gán Family
