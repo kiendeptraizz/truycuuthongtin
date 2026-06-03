@@ -24,40 +24,86 @@ trait HandlesStats
     {
         $today = today();
         $startOfMonth = $today->copy()->startOfMonth();
+        $startOfMonthStr = $startOfMonth->format('Y-m-d 00:00:00');
+        $endOfTodayStr = $today->copy()->endOfDay()->format('Y-m-d H:i:s');
+        $todayStr = $today->format('Y-m-d');
 
-        // Profit tính theo ngày KHÁCH CK (PO.paid_at), KHÔNG phải ngày tạo Profit record.
-        // Đồng bộ với doanh thu (cũng dùng paid_at). Trước đây dùng Profit.created_at →
-        // khi admin fill trễ (vd đơn nhanh CK hôm qua, fill hôm nay) thì profit lệch ngày
-        // với doanh thu — user phản hồi 4/6/2026 muốn khớp.
+        // === LOGIC TÍNH (sau feedback user 4/6/2026):
         //
-        // COALESCE(PO.paid_at, CS.activated_at):
-        //   - Đơn qua bot + Pay2S → PO.paid_at (= lúc Pay2S báo paid)
-        //   - Đơn web admin tạo trực tiếp (không qua PO) → CS.activated_at
-        $profitDateExpr = 'COALESCE(pending_orders.paid_at, customer_services.activated_at)';
-        $profitJoin = fn($q) => $q
+        // Đơn được tính vào doanh thu/lợi nhuận NGAY khi khách CK (paid_at != null),
+        // KHÔNG đợi admin fill chi tiết. Điều này có nghĩa "đơn nhanh paid chưa fill"
+        // (status='pending' + paid_at != null + chưa có CS) vẫn vào stat.
+        //
+        // 2 nguồn data:
+        //   1. PendingOrder: bot Telegram tạo → paid_at = lúc Pay2S báo paid
+        //   2. CustomerService không qua PO: admin tạo trực tiếp web (đơn không qua bot)
+        //      → activated_at = lúc admin tạo CS active
+        //
+        // Profit lấy COALESCE(Profit.profit_amount, PO.profit_amount):
+        //   - Đã fill có Profit record → ưu tiên Profit (admin có thể đã sửa)
+        //   - Chưa fill nhưng PO.profit_amount đã nhập từ bot bước 2/3 → fallback PO
+        //
+        // KHÔNG count status='cancelled' (admin huỷ rồi không tính).
+
+        // === DOANH THU + ĐƠN PAID (từ PendingOrder) ===
+        $poPaidToday = PendingOrder::whereNotNull('paid_at')
+            ->whereDate('paid_at', $today)
+            ->where('status', '!=', 'cancelled');
+        $revenuePO = (float) (clone $poPaidToday)->sum('amount');
+        $paidToday = (clone $poPaidToday)->count();
+
+        // === DOANH THU TỪ CS KHÔNG QUA PO (đơn web admin tạo trực tiếp) ===
+        $csOnlyToday = \App\Models\CustomerService::whereNull('pending_order_id')
+            ->whereNotNull('activated_at')
+            ->whereDate('activated_at', $today)
+            ->where('status', '!=', 'cancelled');
+        $revenueCSOnly = (float) (clone $csOnlyToday)->sum('order_amount');
+
+        $revenueToday = $revenuePO + $revenueCSOnly;
+
+        // === LỢI NHUẬN HÔM NAY (PO + CS-only) ===
+        // PO: COALESCE(Profit.profit_amount, PO.profit_amount)
+        $profitFromPO = (float) \App\Models\PendingOrder::query()
+            ->leftJoin('customer_services', 'pending_orders.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNotNull('pending_orders.paid_at')
+            ->whereDate('pending_orders.paid_at', $today)
+            ->where('pending_orders.status', '!=', 'cancelled')
+            ->selectRaw('SUM(COALESCE(profits.profit_amount, pending_orders.profit_amount, 0)) as total')
+            ->value('total');
+        // CS-only: Profit.profit_amount (đơn web không qua PO không có PO.profit_amount)
+        $profitFromCSOnly = (float) \App\Models\Profit::query()
             ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
-            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id');
-
-        $profitToday = (float) \App\Models\Profit::query()
-            ->tap($profitJoin)
-            ->whereRaw("DATE($profitDateExpr) = ?", [$today->format('Y-m-d')])
+            ->whereNull('customer_services.pending_order_id')
+            ->whereDate('customer_services.activated_at', $today)
+            ->where('customer_services.status', '!=', 'cancelled')
             ->sum('profits.profit_amount');
-        $profitMonth = (float) \App\Models\Profit::query()
-            ->tap($profitJoin)
-            ->whereRaw("$profitDateExpr BETWEEN ? AND ?", [
-                $startOfMonth->format('Y-m-d 00:00:00'),
-                $today->copy()->endOfDay()->format('Y-m-d H:i:s'),
-            ])
-            ->sum('profits.profit_amount');
+        $profitToday = $profitFromPO + $profitFromCSOnly;
 
-        $paidToday = PendingOrder::where('status', 'completed')->whereDate('paid_at', $today)->count();
-        $pendingToday = PendingOrder::where('status', 'pending')->whereDate('created_at', $today)->count();
+        // === LỢI NHUẬN THÁNG (tương tự, range) ===
+        $profitMonthFromPO = (float) \App\Models\PendingOrder::query()
+            ->leftJoin('customer_services', 'pending_orders.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNotNull('pending_orders.paid_at')
+            ->whereBetween('pending_orders.paid_at', [$startOfMonthStr, $endOfTodayStr])
+            ->where('pending_orders.status', '!=', 'cancelled')
+            ->selectRaw('SUM(COALESCE(profits.profit_amount, pending_orders.profit_amount, 0)) as total')
+            ->value('total');
+        $profitMonthFromCSOnly = (float) \App\Models\Profit::query()
+            ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
+            ->whereNull('customer_services.pending_order_id')
+            ->whereBetween('customer_services.activated_at', [$startOfMonthStr, $endOfTodayStr])
+            ->where('customer_services.status', '!=', 'cancelled')
+            ->sum('profits.profit_amount');
+        $profitMonth = $profitMonthFromPO + $profitMonthFromCSOnly;
+
+        // === ĐƠN PENDING + HUỶ (theo created_at để admin biết đơn mới hôm nay) ===
+        $pendingToday = PendingOrder::whereNull('paid_at')
+            ->where('status', '!=', 'cancelled')
+            ->whereDate('created_at', $today)
+            ->count();
         $cancelledToday = PendingOrder::where('status', 'cancelled')->whereDate('created_at', $today)->count();
-
         $newCustomersToday = \App\Models\Customer::whereDate('created_at', $today)->count();
-
-        // Doanh thu (sum amount của đơn đã paid hôm nay) — khác profit
-        $revenueToday = (float) PendingOrder::where('status', 'completed')->whereDate('paid_at', $today)->sum('amount');
 
         $msg = "📊 <b>Thống kê " . $today->format('d/m/Y') . "</b>\n\n"
             . "💵 <b>Lợi nhuận hôm nay:</b> " . formatShortAmount((int) $profitToday) . " (" . number_format($profitToday, 0, ',', '.') . "đ)\n"
@@ -82,22 +128,43 @@ trait HandlesStats
     {
         $end = now()->endOfDay();
         $start = now()->subDays($days - 1)->startOfDay(); // N=1 → hôm nay; N=7 → 7 ngày gồm hôm nay
+        $startStr = $start->format('Y-m-d H:i:s');
+        $endStr = $end->format('Y-m-d H:i:s');
 
-        // Doanh thu (đơn paid trong range)
-        $paidQuery = PendingOrder::where('status', 'completed')->whereBetween('paid_at', [$start, $end]);
-        $revenue = (float) (clone $paidQuery)->sum('amount');
-        $paidCount = (clone $paidQuery)->count();
+        // Doanh thu — include đơn paid (cả pending paid + completed), loại cancelled.
+        // Xem giải thích trong sendStatsToday.
+        $poPaidQuery = PendingOrder::whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$start, $end])
+            ->where('status', '!=', 'cancelled');
+        $revenuePO = (float) (clone $poPaidQuery)->sum('amount');
+        $paidCount = (clone $poPaidQuery)->count();
 
-        // Profit tính theo ngày khách CK (PO.paid_at), fallback CS.activated_at cho đơn
-        // web không qua PO. Đồng bộ với doanh thu — xem giải thích trong sendStatsToday.
-        $profit = (float) \App\Models\Profit::query()
+        // Doanh thu từ CS không qua PO (đơn web admin tạo trực tiếp)
+        $csOnlyQuery = \App\Models\CustomerService::whereNull('pending_order_id')
+            ->whereNotNull('activated_at')
+            ->whereBetween('activated_at', [$start, $end])
+            ->where('status', '!=', 'cancelled');
+        $revenueCSOnly = (float) (clone $csOnlyQuery)->sum('order_amount');
+        $paidCount += $csOnlyQuery->count();
+        $revenue = $revenuePO + $revenueCSOnly;
+
+        // Profit: COALESCE(Profit.profit_amount, PO.profit_amount) cho đơn qua PO,
+        //        + Profit.profit_amount cho CS-only
+        $profitFromPO = (float) \App\Models\PendingOrder::query()
+            ->leftJoin('customer_services', 'pending_orders.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNotNull('pending_orders.paid_at')
+            ->whereBetween('pending_orders.paid_at', [$startStr, $endStr])
+            ->where('pending_orders.status', '!=', 'cancelled')
+            ->selectRaw('SUM(COALESCE(profits.profit_amount, pending_orders.profit_amount, 0)) as total')
+            ->value('total');
+        $profitFromCSOnly = (float) \App\Models\Profit::query()
             ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
-            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
-            ->whereRaw('COALESCE(pending_orders.paid_at, customer_services.activated_at) BETWEEN ? AND ?', [
-                $start->format('Y-m-d H:i:s'),
-                $end->format('Y-m-d H:i:s'),
-            ])
+            ->whereNull('customer_services.pending_order_id')
+            ->whereBetween('customer_services.activated_at', [$startStr, $endStr])
+            ->where('customer_services.status', '!=', 'cancelled')
             ->sum('profits.profit_amount');
+        $profit = $profitFromPO + $profitFromCSOnly;
 
         // Khách mới
         $newCustomers = \App\Models\Customer::whereBetween('created_at', [$start, $end])->count();
