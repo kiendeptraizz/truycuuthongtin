@@ -101,10 +101,15 @@ class CustomerServiceController extends Controller
                     $query->expiringSoon();
                     break;
                 case 'expired':
-                    // Lọc theo ngày hết hạn thực tế (đã qua ngày hết hạn hoặc hết hạn hôm nay)
-                    // Bất kể status là gì
-                    // Dịch vụ hết hạn ngày hôm nay được coi là "đã hết hạn" từ 00:00:00
-                    $query->where('expires_at', '<=', now()->startOfDay());
+                    // Lọc theo NGÀY hết hạn (date-level, không tính giờ).
+                    // CS hết hạn ngày HÔM NAY (vd 03/06) được coi là "đã hết hạn" từ 00:00 hôm đó —
+                    // đồng bộ với view badge ($expires_at->startOfDay()->isPast()), cron
+                    // services:update-expired (chạy 00:05 hằng đêm với endOfDay), và
+                    // bot:notify-expirations (whereDate). Tránh bug: nếu dùng where('<=', startOfDay)
+                    // thì CS hết hạn 03/06 11:37 sẽ không match cho đến khi clock qua 11:37.
+                    // Loại bỏ CS đã hoàn tiền / huỷ vì admin đã xử lý xong — không cần hiện ở đây.
+                    $query->whereDate('expires_at', '<=', today())
+                        ->where('status', '!=', 'cancelled');
                     break;
                 case 'active':
                     $query->active();
