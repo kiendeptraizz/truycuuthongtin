@@ -77,7 +77,19 @@ class PendingOrderController extends Controller
 
         $orders = $query->paginate(30)->withQueryString();
 
-        $stats = [
+        $stats = $this->buildStats();
+
+        return view('admin.pending-orders.index', compact('orders', 'stats', 'status', 'customerSearch', 'paidFilter', 'source', 'code'));
+    }
+
+    /**
+     * Tính các counter hiển thị trên stats cards + dùng để trả về JSON sau AJAX
+     * action (markPaid / markCompleted / destroy) → cập nhật card real-time mà
+     * không reload trang. Key khớp với data-stats-key trong view.
+     */
+    private function buildStats(): array
+    {
+        return [
             'pending' => PendingOrder::where('status', 'pending')->count(),
             // Đơn paid nhưng chưa fill xong (CS chưa active) — cần xử lý gấp
             'needs_fill_urgent' => PendingOrder::where('status', 'pending')
@@ -87,8 +99,25 @@ class PendingOrderController extends Controller
             'today' => PendingOrder::whereDate('created_at', today())->count(),
             'today_amount' => PendingOrder::whereDate('created_at', today())->sum('amount'),
         ];
+    }
 
-        return view('admin.pending-orders.index', compact('orders', 'stats', 'status', 'customerSearch', 'paidFilter', 'source', 'code'));
+    /**
+     * Build JSON response sau AJAX action — gồm row_html (render lại partial _row
+     * với state mới) để JS thay <tr> tại chỗ + flash, KHÔNG reload trang.
+     */
+    private function rowJson(PendingOrder $order, string $message, ?int $csId = null): \Illuminate\Http\JsonResponse
+    {
+        $order->refresh()->load(['customer', 'customerService.customer', 'creator']);
+        $rowHtml = view('admin.pending-orders._row', ['order' => $order])->render();
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'id' => $order->id,
+            'cs_id' => $csId,
+            'row_html' => $rowHtml,
+            'stats' => $this->buildStats(),
+        ]);
     }
 
     public function store(Request $request)
@@ -312,14 +341,12 @@ class PendingOrderController extends Controller
         Log::info('Pending order cancelled', ['code' => $code, 'by' => auth()->id()]);
 
         if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => "Đã huỷ đơn {$code}",
-                'id' => $pendingOrder->id,
-            ]);
+            // Trả row_html mới (badge "Đã huỷ") để JS update tại chỗ + flash,
+            // không remove row → user thấy rõ đơn vừa huỷ ở đúng vị trí cũ.
+            return $this->rowJson($pendingOrder, "Đã huỷ đơn {$code}");
         }
 
-        return back()->with('success', "Đã huỷ đơn {$code}");
+        return back()->with('success', "Đã huỷ đơn {$code}")->withFragment("order-{$pendingOrder->id}");
     }
 
     /**
@@ -373,7 +400,7 @@ class PendingOrderController extends Controller
         if ($result['status'] === 'already_paid') {
             $msg = "Đơn {$pendingOrder->order_code} đã được đánh dấu thanh toán trước đó.";
             if ($request->expectsJson()) {
-                return response()->json(['success' => true, 'message' => $msg, 'cs_id' => $result['cs_id'] ?? null]);
+                return $this->rowJson($pendingOrder, $msg, $result['cs_id'] ?? null);
             }
             return back()->with('info', $msg);
         }
@@ -391,11 +418,7 @@ class PendingOrderController extends Controller
         ]);
 
         if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => $msg,
-                'cs_id' => $csId,
-            ]);
+            return $this->rowJson($pendingOrder, $msg, $csId);
         }
         // URL fragment #order-{id} → browser tự scroll đến row vừa update sau reload,
         // không bị nhảy về đầu trang (kết hợp với admin-scroll-preserve.js để robust).
@@ -441,7 +464,7 @@ class PendingOrderController extends Controller
         if ($pendingOrder->status === 'completed' && $pendingOrder->customer_service_id) {
             $msg = "Đơn {$pendingOrder->order_code} đã được đánh dấu hoàn thành trước đó.";
             if ($request->expectsJson()) {
-                return response()->json(['success' => true, 'message' => $msg]);
+                return $this->rowJson($pendingOrder, $msg, $pendingOrder->customer_service_id);
             }
             return back()->with('info', $msg)->withFragment("order-{$pendingOrder->id}");
         }
@@ -541,7 +564,7 @@ class PendingOrderController extends Controller
             . ($csId ? " và tạo dịch vụ #{$csId} (đơn nhanh CTV)." : '.')
             . " Đơn này sẽ tính vào doanh thu/lợi nhuận và xuất hiện trong Dịch vụ khách hàng.";
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'message' => $msg, 'cs_id' => $csId]);
+            return $this->rowJson($pendingOrder, $msg, $csId);
         }
         return back()->with('success', $msg)->withFragment("order-{$pendingOrder->id}");
     }

@@ -28,8 +28,34 @@
 
 (function () {
     'use strict';
-    window.__ajaxActionsLoaded = 'v3-' + Date.now();
+    window.__ajaxActionsLoaded = 'v4-' + Date.now();
     console.log('[admin-ajax-actions] LOADED', window.__ajaxActionsLoaded);
+
+    // Inject CSS flash 1 lần — highlight amber lướt qua row vừa update để user
+    // thấy rõ vị trí thao tác mà không cần reload trang.
+    function injectFlashStyle() {
+        if (document.getElementById('ajax-row-flash-style')) return;
+        const style = document.createElement('style');
+        style.id = 'ajax-row-flash-style';
+        style.textContent =
+            '@keyframes ajaxRowFlashKf {' +
+            '  0%   { box-shadow: inset 0 0 0 9999px rgba(255,193,7,0.40); }' +
+            '  60%  { box-shadow: inset 0 0 0 9999px rgba(255,193,7,0.22); }' +
+            '  100% { box-shadow: inset 0 0 0 9999px rgba(255,193,7,0); }' +
+            '}' +
+            'tr.ajax-row-flash > td { animation: ajaxRowFlashKf 1.6s ease-out; position: relative; }';
+        document.head.appendChild(style);
+    }
+    injectFlashStyle();
+
+    // Flash 1 row (sau khi outerHTML đã được thay). Tự gỡ class sau animation.
+    function flashRow(el) {
+        if (!el) return;
+        el.classList.remove('ajax-row-flash');
+        void el.offsetWidth; // force reflow → restart animation nếu trigger lại
+        el.classList.add('ajax-row-flash');
+        setTimeout(() => el.classList.remove('ajax-row-flash'), 1700);
+    }
 
     function showToast(message, type = 'success') {
         // Bootstrap 5 toast — fallback alert nếu không có Bootstrap
@@ -132,10 +158,21 @@
         if (!data) return;
 
         const row = resolveRowTarget(form);
+        const isUpdate = form.hasAttribute('data-row-update');
         if (row) {
-            row.style.transition = 'opacity 0.3s';
-            row.style.opacity = '0';
-            setTimeout(() => row.remove(), 300);
+            if (isUpdate && data.row_html) {
+                // Update tại chỗ: thay outerHTML <tr> bằng HTML mới (server render
+                // lại partial với state mới) → giữ nguyên vị trí, không nhảy trang.
+                const rowId = row.id;
+                row.outerHTML = data.row_html;
+                const newRow = rowId ? document.getElementById(rowId) : null;
+                flashRow(newRow);
+            } else {
+                // Remove mode (mặc định — các trang khác dùng data-row-target)
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => row.remove(), 300);
+            }
         }
         updateStats(data.stats);
         showToast(data.message || 'Thành công', 'success');
