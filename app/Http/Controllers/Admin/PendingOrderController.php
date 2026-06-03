@@ -403,6 +403,80 @@ class PendingOrderController extends Controller
     }
 
     /**
+     * Đánh dấu đơn HOÀN THÀNH thủ công — dành cho đơn nhanh CTV không cần fill chi tiết.
+     *
+     * Khác markPaid (yêu cầu Pay2S match hoặc admin xác nhận khách CK):
+     *   - markCompleted dùng cho đơn user chủ động đánh dấu xong (vd CTV đã thanh toán
+     *     ngoài hệ thống, hoặc đơn nội bộ không cần fill gói/email).
+     *
+     * Behavior:
+     *   - status='cancelled' → reject
+     *   - status='pending' + chưa paid → set paid_at=now() + paid_amount=amount + status='completed'
+     *   - status='pending' + đã paid (đơn nhanh paid chưa fill) → chỉ set status='completed'
+     *   - status='completed' → idempotent return success
+     *
+     * KHÔNG tạo CS/Profit vì đây là đơn nhanh chưa có data structured. Stat dashboard
+     * (bot + web) đã tính theo paid_at + status != cancelled nên đơn này vẫn vào
+     * doanh thu/lợi nhuận từ PO.amount + COALESCE(profits.profit_amount, PO.profit_amount).
+     */
+    public function markCompleted(Request $request, PendingOrder $pendingOrder)
+    {
+        if ($pendingOrder->status === 'cancelled') {
+            $msg = 'Không thể đánh dấu đơn đã huỷ là hoàn thành.';
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+            return back()->withErrors(['error' => $msg]);
+        }
+
+        if ($pendingOrder->status === 'completed') {
+            $msg = "Đơn {$pendingOrder->order_code} đã được đánh dấu hoàn thành trước đó.";
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => $msg]);
+            }
+            return back()->with('info', $msg)->withFragment("order-{$pendingOrder->id}");
+        }
+
+        \DB::transaction(function () use ($pendingOrder) {
+            $locked = PendingOrder::where('id', $pendingOrder->id)->lockForUpdate()->first();
+            if (!$locked || $locked->status !== 'pending') {
+                return;
+            }
+
+            $update = ['status' => 'completed'];
+            // Nếu chưa paid → set luôn paid_at + paid_amount để stat ghi nhận doanh thu.
+            // Đây là use case chính: đơn CTV admin tạo + mark hoàn thành ngay không qua Pay2S.
+            if (!$locked->paid_at) {
+                $update['paid_at'] = now();
+                $update['paid_amount'] = (int) $locked->amount;
+                $update['bank_transaction_id'] = 'manual-complete-' . auth()->id() . '-' . now()->timestamp;
+                $update['bank_raw_payload'] = json_encode([
+                    'source' => 'manual_complete',
+                    'admin_id' => auth()->id(),
+                    'admin_name' => auth()->user()?->name,
+                    'marked_at' => now()->toIso8601String(),
+                    'note' => 'Đánh dấu hoàn thành thủ công (đơn CTV không fill chi tiết).',
+                ], JSON_UNESCAPED_UNICODE);
+            }
+
+            $locked->update($update);
+        });
+
+        Log::info('Manual markCompleted success', [
+            'order_id' => $pendingOrder->id,
+            'order_code' => $pendingOrder->order_code,
+            'admin_id' => auth()->id(),
+            'was_paid_before' => $pendingOrder->paid_at !== null,
+        ]);
+
+        $msg = "✅ Đã đánh dấu đơn {$pendingOrder->order_code} là hoàn thành. Đơn này sẽ tính vào doanh thu/lợi nhuận.";
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => $msg]);
+        }
+        return back()->with('success', $msg)->withFragment("order-{$pendingOrder->id}");
+    }
+
+    /**
      * Hiển thị QR thanh toán riêng (modal trên web).
      */
     public function qr(PendingOrder $pendingOrder)

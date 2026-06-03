@@ -795,7 +795,7 @@ class TelegramListenCommand extends Command
                 $this->setState($chatId, ['step' => 'quick_order_profit', 'data' => $data]);
                 $this->sendAndTrack(
                     $chatId,
-                    "⚡ <b>Tạo đơn nhanh</b> — Bước 2/3: Lợi nhuận đơn này?\n"
+                    "⚡ <b>Tạo đơn nhanh</b> — Bước 2/4: Lợi nhuận đơn này?\n"
                         . "<i>Vd: <code>50k</code>, <code>100k</code>, <code>200000</code>. Đây là profit anh kiếm được sau khi trừ chi phí supplier.</i>\n\n"
                         . "Gõ <code>/skip</code> nếu chưa biết lợi nhuận (sẽ điền sau qua web khi fill chi tiết).",
                     ['reply_markup' => json_encode([
@@ -814,7 +814,7 @@ class TelegramListenCommand extends Command
                 // /skip → bỏ qua profit, fill sau qua web
                 if (strtolower(trim($text)) === '/skip') {
                     $data['profit_amount'] = null;
-                    $this->promptQuickOrderCustomer($chatId, $data);
+                    $this->promptQuickOrderDuration($chatId, $data);
                     return;
                 }
                 $profit = parseShortAmount($text);
@@ -837,6 +837,30 @@ class TelegramListenCommand extends Command
                     );
                 }
                 $data['profit_amount'] = $profit;
+                $this->promptQuickOrderDuration($chatId, $data);
+                return;
+
+            case 'quick_order_duration':
+                // /skip → bỏ qua thời hạn, fill sau qua web
+                if (strtolower(trim($text)) === '/skip') {
+                    $data['duration_days'] = null;
+                    $data['duration_label'] = null;
+                    $this->promptQuickOrderCustomer($chatId, $data);
+                    return;
+                }
+                $dur = $this->parseDuration(trim($text));
+                if (!$dur) {
+                    $this->sendAndTrack(
+                        $chatId,
+                        "❌ Sai format thời hạn.\n"
+                            . "Gõ vd: <code>1m</code> (1 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm). Hoặc <code>/skip</code> để bỏ qua."
+                    );
+                    return;
+                }
+                $data['duration_days'] = $dur['days'];
+                $data['duration_label'] = $dur['label'];
+                $data['duration_unit'] = $dur['unit'];
+                $data['duration_value'] = $dur['value'];
                 $this->promptQuickOrderCustomer($chatId, $data);
                 return;
 
@@ -1672,13 +1696,28 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Click "⏭ Bỏ qua lợi nhuận" trong flow Tạo đơn nhanh (Bước 2/3)
+        // Click "⏭ Bỏ qua lợi nhuận" trong flow Tạo đơn nhanh (Bước 2/4)
         if ($cbData === 'quick_skip_profit') {
             $state = $this->getState($chatId);
             if ($state && ($state['step'] ?? null) === 'quick_order_profit') {
                 $data = $state['data'] ?? [];
                 $data['profit_amount'] = null;
                 $this->sendAndTrack($chatId, "⏭ Đã bỏ qua lợi nhuận — anh fill sau qua web khi điền chi tiết đơn.");
+                $this->promptQuickOrderDuration($chatId, $data);
+            } else {
+                $this->bot->sendMessage($chatId, "ℹ️ Phiên đã hết hạn — bấm <b>⚡ Tạo đơn nhanh</b> lại.");
+            }
+            return;
+        }
+
+        // Click "⏭ Bỏ qua thời hạn" trong flow Tạo đơn nhanh (Bước 3/4)
+        if ($cbData === 'quick_skip_duration') {
+            $state = $this->getState($chatId);
+            if ($state && ($state['step'] ?? null) === 'quick_order_duration') {
+                $data = $state['data'] ?? [];
+                $data['duration_days'] = null;
+                $data['duration_label'] = null;
+                $this->sendAndTrack($chatId, "⏭ Đã bỏ qua thời hạn — anh fill sau qua web khi điền chi tiết đơn.");
                 $this->promptQuickOrderCustomer($chatId, $data);
             } else {
                 $this->bot->sendMessage($chatId, "ℹ️ Phiên đã hết hạn — bấm <b>⚡ Tạo đơn nhanh</b> lại.");
@@ -1932,7 +1971,7 @@ class TelegramListenCommand extends Command
         $this->setState($chatId, ['step' => 'quick_order_amount', 'data' => []]);
         $this->sendAndTrack(
             $chatId,
-            "⚡ <b>Tạo đơn nhanh</b> — Bước 1/3: Số tiền đơn hàng?\n"
+            "⚡ <b>Tạo đơn nhanh</b> — Bước 1/4: Số tiền đơn hàng?\n"
                 . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>\n\n"
                 . "<i>Đơn sẽ được tạo + push lên web chờ fill chi tiết (gói/email/...) sau.</i>\n\n"
                 . "Gõ /huy để huỷ.",
@@ -1941,15 +1980,41 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * Bước 3/3 của Tạo đơn nhanh: hỏi tên/mã KH. Tách ra helper vì cả flow text
-     * (gõ profit) lẫn callback (bấm "Bỏ qua lợi nhuận") đều cần prompt này.
+     * Bước 3/4 của Tạo đơn nhanh: hỏi thời hạn (số ngày/tháng/năm).
+     * Lưu duration_days vào PendingOrder để khi paid (auto activate qua webhook)
+     * thì expires_at = paid_at + duration_days được tính ngay, không cần admin fill.
+     * Có /skip + nút bỏ qua nếu user không quan tâm thời hạn (vd đơn CTV).
+     */
+    private function promptQuickOrderDuration(int|string $chatId, array $data): void
+    {
+        $this->setState($chatId, ['step' => 'quick_order_duration', 'data' => $data]);
+        $this->sendAndTrack(
+            $chatId,
+            "⚡ <b>Tạo đơn nhanh</b> — Bước 3/4: Thời hạn dịch vụ?\n"
+                . "<i>Vd: <code>1m</code> (1 tháng), <code>3m</code> (3 tháng), <code>25d</code> (25 ngày), <code>1y</code> (1 năm).</i>\n\n"
+                . "Gõ <code>/skip</code> nếu chưa biết hoặc đơn CTV không có thời hạn cố định.",
+            ['reply_markup' => json_encode([
+                'inline_keyboard' => [
+                    [['text' => '⏭ Bỏ qua thời hạn', 'callback_data' => 'quick_skip_duration']],
+                    [
+                        ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                        ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
+                    ],
+                ],
+            ])]
+        );
+    }
+
+    /**
+     * Bước 4/4 của Tạo đơn nhanh: hỏi tên/mã KH. Tách ra helper vì cả flow text
+     * (gõ duration) lẫn callback (bấm "Bỏ qua thời hạn") đều cần prompt này.
      */
     private function promptQuickOrderCustomer(int|string $chatId, array $data): void
     {
         $this->setState($chatId, ['step' => 'quick_order_customer', 'data' => $data]);
         $this->sendAndTrack(
             $chatId,
-            "⚡ <b>Tạo đơn nhanh</b> — Bước 3/3: Tên hoặc mã khách hàng?\n"
+            "⚡ <b>Tạo đơn nhanh</b> — Bước 4/4: Tên hoặc mã khách hàng?\n"
                 . "• Gõ <i>tên</i> (vd: <code>Nguyễn Văn A</code>) — KH mới sẽ tự tạo mã KUN\n"
                 . "• Hoặc gõ <i>mã KH</i> (vd: <code>KUN98473</code>) — chọn KH cũ trong DB\n\n"
                 . "Hoặc bấm <b>⏭ Bỏ qua KH</b> để sinh QR ngay (gắn KH sau qua web).",
@@ -2008,11 +2073,12 @@ class TelegramListenCommand extends Command
                 'amount' => $data['amount'],
                 'note' => $note,
                 'customer_id' => $data['customer_id'] ?? null,
-                // profit_amount lưu vào PendingOrder. Khi admin fill chi tiết sau qua web,
-                // form fill pre-fill từ PO.profit_amount → admin chỉ confirm/submit →
-                // Profit record được tạo tự động cùng CS active.
-                // service_package_id / account_email / duration_days vẫn fill sau.
+                // profit_amount + duration_days lưu vào PendingOrder. Khi admin fill
+                // chi tiết sau qua web, form fill pre-fill từ PO → admin chỉ confirm
+                // → Profit + CS active được tạo cùng lúc.
+                // service_package_id / account_email vẫn fill sau.
                 'profit_amount' => $data['profit_amount'] ?? null,
+                'duration_days' => $data['duration_days'] ?? null,
                 'created_via' => 'telegram',
                 'telegram_chat_id' => (string) $chatId,
             ]);
@@ -2038,12 +2104,17 @@ class TelegramListenCommand extends Command
             ? "💎 Lợi nhuận: <b>" . formatShortAmount((int) $data['profit_amount']) . "</b>\n"
             : "💎 <i>Lợi nhuận chưa nhập — fill sau qua web.</i>\n";
 
+        $durationLine = !empty($data['duration_days'])
+            ? "⏰ Thời hạn: <b>" . e($data['duration_label'] ?? ($data['duration_days'] . ' ngày')) . "</b>\n"
+            : "⏰ <i>Thời hạn chưa nhập — fill sau qua web.</i>\n";
+
         $caption = "✅ <code>{$order->order_code}</code> <i>(đơn nhanh)</i>\n\n"
             . $customerLine
             . "💵 Giá đơn: <b>" . formatShortAmount((int) $data['amount']) . "</b>\n"
-            . $profitLine . "\n"
-            . "<i>⏳ Đơn đang chờ fill chi tiết (gói / email / thời hạn / bảo hành). "
-            . "Vào <code>/admin/pending-orders</code> để fill.</i>\n\n"
+            . $profitLine
+            . $durationLine . "\n"
+            . "<i>⏳ Đơn đang chờ fill chi tiết (gói / email / bảo hành). "
+            . "Vào <code>/admin/pending-orders</code> để fill hoặc bấm <b>Hoàn thành</b> nếu là đơn CTV không cần fill.</i>\n\n"
             . "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
         // Speed up: gửi text caption TRƯỚC (instant), QR sau (Telegram fetch URL chậm).
