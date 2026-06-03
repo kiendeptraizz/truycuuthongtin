@@ -294,8 +294,14 @@ trait HandlesStats
     private function formatExpirationLine(\App\Models\CustomerService $cs): string
     {
         $code = $cs->order_code ?? "CS#{$cs->id}";
-        $kh = $cs->customer ? $cs->customer->name . ' (' . $cs->customer->customer_code . ')' : '?';
-        $pkg = $cs->servicePackage->name ?? '?';
+        // CS placeholder (đơn nhanh CTV qua nút Hoàn thành) có thể NULL customer/package
+        // → hiển thị label rõ ràng thay vì "?". Anh check internal_notes hoặc absence
+        // service_package_id để phân biệt.
+        $isQuick = $cs->service_package_id === null;
+        $kh = $cs->customer
+            ? $cs->customer->name . ' (' . $cs->customer->customer_code . ')'
+            : ($isQuick ? '🏃 Đơn nhanh CTV' : '(chưa KH)');
+        $pkg = $cs->servicePackage->name ?? ($isQuick ? '(CTV)' : '?');
         $exp = $cs->expires_at ? $cs->expires_at->format('d/m') : '?';
         return "• <code>{$code}</code> · <b>{$kh}</b> · {$pkg} · hạn {$exp}";
     }
