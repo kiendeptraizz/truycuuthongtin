@@ -118,25 +118,45 @@ trait ManagesTelegramState
      */
     private function sendPhotoSafe(int|string $chatId, string $url, string $caption = '', array $extras = []): void
     {
+        $needFallback = false;
+        $failReason = '';
+
         try {
-            $this->bot->sendPhoto($chatId, $url, $caption, $extras);
-        } catch (\Throwable $e) {
-            Log::warning('Telegram: sendPhoto failed → fallback text+link', [
-                'chat_id' => $chatId,
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-            $linkLine = "\n\n📷 <a href=\"" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "\">📥 Mở ảnh QR (Telegram không tải được — tap link)</a>";
-            try {
-                $this->bot->sendMessage($chatId, $caption . $linkLine, $extras);
-            } catch (\Throwable $e2) {
-                Log::error('Telegram: fallback sendMessage cũng fail', [
-                    'chat_id' => $chatId,
-                    'error' => $e2->getMessage(),
-                ]);
-                // Last resort plain message
-                $this->bot->sendMessage($chatId, "✅ Đã tạo đơn nhưng Telegram không gửi được QR. Vào /admin/pending-orders để xem chi tiết.");
+            $result = $this->bot->sendPhoto($chatId, $url, $caption, $extras);
+            // TelegramBotService::call() swallow HTTP 4xx/5xx thành return ['ok' => false]
+            // (vd Telegram báo "Bad Request: failed to get HTTP URL content" 400 khi
+            // VietQR slow / trả HTML error) — phải check return value, không chỉ rely
+            // vào exception. Trước đây thiếu check này → user không nhận QR + không
+            // nhận fallback message → tưởng bot lag (sự cố DH-260603-004 ngày 3/6/2026).
+            if (!is_array($result) || ($result['ok'] ?? false) !== true) {
+                $needFallback = true;
+                $failReason = is_array($result) ? ($result['description'] ?? 'unknown') : 'invalid response';
             }
+        } catch (\Throwable $e) {
+            $needFallback = true;
+            $failReason = $e->getMessage();
+        }
+
+        if (!$needFallback) {
+            return;
+        }
+
+        Log::warning('Telegram: sendPhoto failed → fallback text+link', [
+            'chat_id' => $chatId,
+            'url' => $url,
+            'reason' => $failReason,
+        ]);
+
+        $linkLine = "\n\n📷 <a href=\"" . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . "\">📥 Mở ảnh QR (Telegram không tải được — tap link)</a>";
+        try {
+            $this->bot->sendMessage($chatId, $caption . $linkLine, $extras);
+        } catch (\Throwable $e2) {
+            Log::error('Telegram: fallback sendMessage cũng fail', [
+                'chat_id' => $chatId,
+                'error' => $e2->getMessage(),
+            ]);
+            // Last resort plain message
+            $this->bot->sendMessage($chatId, "✅ Đã tạo đơn nhưng Telegram không gửi được QR. Vào /admin/pending-orders để xem chi tiết.");
         }
     }
 }
