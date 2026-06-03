@@ -720,6 +720,23 @@ class TelegramListenCommand extends Command
         }
 
         $this->bot->sendMessage($chatId, implode("\n", $lines), $extras);
+
+        // Resend QR nếu CS pending chưa CK — flow /dh DH-XXX dành cho đơn lỡ
+        // (vd VietQR transient fail lúc tạo đơn → khách không nhận QR → anh gõ
+        // /dh để resend). Trước đây thiếu logic này: PO có customer_service_id
+        // sẽ rơi vào sendCustomerServiceDetails, nhưng view này không gửi QR
+        // → anh phải mở web admin copy link → mất thời gian. Sự cố DH-260603-004
+        // ngày 3/6/2026 khi VietQR fail lúc tạo đơn.
+        if ($cs->status === 'pending' && $cs->pending_order_id) {
+            $po = isset($po) && $po ? $po : \App\Models\PendingOrder::find($cs->pending_order_id);
+            if ($po && !$po->paid_at && (int) $po->amount > 0) {
+                $this->sendPhotoSafe(
+                    $chatId,
+                    $po->qrCodeUrl(),
+                    "📷 QR thanh toán <code>{$po->order_code}</code> — số tiền <b>" . formatShortAmount((int) $po->amount) . "</b>"
+                );
+            }
+        }
     }
 
     /**
