@@ -19,6 +19,21 @@ use Illuminate\Support\Facades\Log;
 class RevenueController extends Controller
 {
     /**
+     * SQL expression dùng làm "ngày bán hàng" cho doanh thu + lợi nhuận:
+     *   - Đơn qua bot Telegram + Pay2S → PO.paid_at (lúc khách CK)
+     *   - Đơn web admin tạo trực tiếp (pending_order_id NULL) → CS.activated_at
+     *
+     * Đồng bộ với bot stats (HandlesStats trait) sau khi user feedback 4/6/2026:
+     * "doanh thu hôm nay phải khớp lợi nhuận hôm nay theo ngày khách CK, không
+     * phải theo ngày tạo CS record".
+     *
+     * Mọi query lọc theo "ngày bán hàng" PHẢI:
+     *   1. leftJoin pending_orders ON customer_services.pending_order_id = pending_orders.id
+     *   2. Filter theo self::PAID_DATE_EXPR thay vì customer_services.created_at
+     */
+    private const PAID_DATE_EXPR = 'COALESCE(pending_orders.paid_at, customer_services.activated_at)';
+
+    /**
      * Hiển thị trang thống kê doanh thu
      */
     public function index(Request $request): View
@@ -61,25 +76,29 @@ class RevenueController extends Controller
         $lastYear = Carbon::now()->subYear()->startOfYear();
         $lastYearEnd = Carbon::now()->subYear()->endOfYear()->endOfDay();
 
-        // Query 1: Revenue + Orders cho tất cả periods (1 query thay vì 16)
+        // Query 1: Revenue + Orders cho tất cả periods (1 query thay vì 16).
+        // Lọc theo COALESCE(PO.paid_at, CS.activated_at) — ngày khách CK / dịch vụ active,
+        // KHÔNG phải created_at (ngày tạo CS record).
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $revenueStats = DB::table('customer_services')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
             ->selectRaw("
-                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(order_amount, 0) ELSE 0 END) as today_revenue,
-                SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as today_orders,
-                SUM(CASE WHEN DATE(created_at) = ? THEN COALESCE(order_amount, 0) ELSE 0 END) as yesterday_revenue,
-                SUM(CASE WHEN DATE(created_at) = ? THEN 1 ELSE 0 END) as yesterday_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as week_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_week_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as month_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_month_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as year_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN COALESCE(order_amount, 0) ELSE 0 END) as last_year_revenue,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as today_revenue,
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN 1 ELSE 0 END) as today_orders,
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as yesterday_revenue,
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN 1 ELSE 0 END) as yesterday_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as week_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_week_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as month_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_month_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as year_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_year_revenue,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders
             ", [
                 $today, $today, $yesterday, $yesterday,
                 $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd,
@@ -91,17 +110,20 @@ class RevenueController extends Controller
             ])
             ->first();
 
-        // Query 2: Profit cho tất cả periods (1 query thay vì 9)
+        // Query 2: Profit cho tất cả periods. Tính theo ngày khách CK
+        // (COALESCE(PO.paid_at, CS.activated_at)) thay vì Profit.created_at.
         $profitStats = DB::table('profits')
+            ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
             ->selectRaw("
-                SUM(CASE WHEN DATE(created_at) = ? THEN profit_amount ELSE 0 END) as today_profit,
-                SUM(CASE WHEN DATE(created_at) = ? THEN profit_amount ELSE 0 END) as yesterday_profit,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as week_profit,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as last_week_profit,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as month_profit,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as last_month_profit,
-                SUM(CASE WHEN created_at BETWEEN ? AND ? THEN profit_amount ELSE 0 END) as year_profit,
-                SUM(profit_amount) as total_profit
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN profits.profit_amount ELSE 0 END) as today_profit,
+                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN profits.profit_amount ELSE 0 END) as yesterday_profit,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as week_profit,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as last_week_profit,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as month_profit,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as last_month_profit,
+                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as year_profit,
+                SUM(profits.profit_amount) as total_profit
             ", [
                 $today, $yesterday,
                 $thisWeek, $thisWeekEnd,
@@ -184,12 +206,17 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
-        // Base query
+        // Base query — lọc theo ngày khách CK (paid_at) / activate, KHÔNG phải created_at.
+        // Eloquent quan hệ Profit còn dùng nên dùng leftJoin để filter mà không destroy
+        // model hydration.
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $query = CustomerService::with(['customer', 'servicePackage', 'profit'])
-            ->whereBetween('customer_services.created_at', [$start, $end]);
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
+            ->select('customer_services.*'); // tránh column collision với pending_orders.*
 
-        // Get orders with revenue data
-        $orders = $query->orderBy('customer_services.created_at', 'desc')->get()->map(function ($order) {
+        // Get orders with revenue data — sắp xếp theo ngày khách CK giảm dần
+        $orders = $query->orderByRaw("$paidDateExpr DESC")->get()->map(function ($order) {
             return [
                 'id' => $order->id,
                 'customer_name' => $order->customer ? $order->customer->name : '[Không có tên]',
@@ -257,15 +284,19 @@ class RevenueController extends Controller
             default => 'Y-m-d',
         };
 
+        // Chart group theo NGÀY KHÁCH CK (COALESCE PO.paid_at, CS.activated_at), không
+        // theo CS.created_at — đồng bộ với dashboard + bot stats.
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $data = CustomerService::select(
-            DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
+            DB::raw("DATE_FORMAT($paidDateExpr, '$format') as period"),
             DB::raw('COUNT(*) as orders_count'),
             DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price)) as revenue'),
             DB::raw('COALESCE(SUM(profits.profit_amount), 0) as profit')
         )
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->groupBy('period')
             ->orderBy('period')
             ->get();
@@ -319,9 +350,13 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
+        // Export CSV lọc theo ngày khách CK (paid_at) / activate.
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $orders = CustomerService::with(['customer', 'servicePackage', 'profit'])
-            ->whereBetween('customer_services.created_at', [$start, $end])
-            ->orderBy('customer_services.created_at', 'desc')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
+            ->orderByRaw("$paidDateExpr DESC")
+            ->select('customer_services.*')
             ->get();
 
         $filename = sprintf('bao-cao-loi-nhuan_%s_%s.csv', $start->format('Ymd'), $end->format('Ymd'));
@@ -374,10 +409,14 @@ class RevenueController extends Controller
      */
     private function getConversionRate($startDate, $endDate)
     {
+        // KH mới (customers.created_at) — đúng vì đây là khái niệm "khách mới đăng ký",
+        // không liên quan paid_at. Đơn từ KH mới: lọc đơn theo ngày khách CK.
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $newCustomers = Customer::whereBetween('created_at', [$startDate, $endDate])->count();
         $ordersFromNewCustomers = CustomerService::join('customers', 'customer_services.customer_id', '=', 'customers.id')
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
             ->whereBetween('customers.created_at', [$startDate, $endDate])
-            ->whereBetween('customer_services.created_at', [$startDate, $endDate])
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$startDate, $endDate])
             ->count();
 
         return $newCustomers > 0 ? round(($ordersFromNewCustomers / $newCustomers) * 100, 2) : 0;
@@ -400,11 +439,13 @@ class RevenueController extends Controller
         }
 
         // Top khách hàng theo doanh thu — dùng COALESCE để tôn trọng giá đặt riêng ở customer_services
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $topCustomers = DB::table('customer_services')
             ->join('customers', 'customer_services.customer_id', '=', 'customers.id')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->select(
                 'customers.id',
                 'customers.name',
@@ -439,11 +480,13 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $categoryStats = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->join('service_categories', 'service_packages.category_id', '=', 'service_categories.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->select(
                 'service_categories.id',
                 'service_categories.name',
@@ -485,12 +528,14 @@ class RevenueController extends Controller
             default => '%Y-%m-%d',
         };
 
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $performance = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->select(
-                DB::raw("DATE_FORMAT(customer_services.created_at, '$format') as period"),
+                DB::raw("DATE_FORMAT($paidDateExpr, '$format') as period"),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
                 DB::raw('COUNT(DISTINCT customer_services.customer_id) as unique_customers'),
                 DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
@@ -528,12 +573,15 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
+        // Hourly: HOUR theo ngày khách CK (paid_at), không phải lúc tạo CS record.
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $hourlyStats = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereDate('customer_services.created_at', $targetDate)
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("DATE($paidDateExpr) = ?", [$targetDate->format('Y-m-d')])
             ->select(
-                DB::raw('HOUR(customer_services.created_at) as hour'),
+                DB::raw("HOUR($paidDateExpr) as hour"),
                 DB::raw('COUNT(customer_services.id) as orders_count'),
                 DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as total_revenue'),
                 DB::raw('COALESCE(SUM(profits.profit_amount), 0) as total_profit')
@@ -586,11 +634,13 @@ class RevenueController extends Controller
             return response()->json(['error' => 'Invalid date format'], 400);
         }
 
-        // Lấy thống kê chính xác bằng cách tính từ customer_services
+        // Lấy thống kê — lọc theo ngày khách CK (paid_at).
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $serviceStats = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
             ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->select(
                 'service_packages.id',
                 'service_packages.name',
@@ -748,19 +798,27 @@ class RevenueController extends Controller
      */
     private function getPeriodStats($start, $end)
     {
+        // Mọi stat trong period đều theo ngày khách CK (paid_at) / activate.
+        $paidDateExpr = self::PAID_DATE_EXPR;
+
         $revenue = CustomerService::join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->sum(DB::raw('COALESCE(customer_services.order_amount, service_packages.price, 0)'));
 
-        $orders = CustomerService::whereBetween('created_at', [$start, $end])->count();
+        $orders = CustomerService::leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
+            ->count();
 
         $profit = Profit::join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
-            ->whereBetween('customer_services.created_at', [$start, $end])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
             ->sum('profits.profit_amount');
 
-        $customers = CustomerService::whereBetween('created_at', [$start, $end])
-            ->distinct('customer_id')
-            ->count('customer_id');
+        $customers = CustomerService::leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$start, $end])
+            ->distinct('customer_services.customer_id')
+            ->count('customer_services.customer_id');
 
         return [
             'revenue' => (float) $revenue,
@@ -793,12 +851,14 @@ class RevenueController extends Controller
         $endDate = Carbon::today();
         $startDate = $endDate->copy()->subDays($baseDays);
 
-        // Lấy dữ liệu lịch sử
+        // Forecast dùng historical data theo ngày khách CK (paid_at).
+        $paidDateExpr = self::PAID_DATE_EXPR;
         $historicalData = DB::table('customer_services')
             ->join('service_packages', 'customer_services.service_package_id', '=', 'service_packages.id')
-            ->whereBetween('customer_services.created_at', [$startDate, $endDate])
+            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+            ->whereRaw("$paidDateExpr BETWEEN ? AND ?", [$startDate, $endDate])
             ->select(
-                DB::raw('DATE(customer_services.created_at) as date'),
+                DB::raw("DATE($paidDateExpr) as date"),
                 DB::raw('COUNT(customer_services.id) as orders'),
                 DB::raw('SUM(COALESCE(customer_services.order_amount, service_packages.price, 0)) as revenue')
             )
