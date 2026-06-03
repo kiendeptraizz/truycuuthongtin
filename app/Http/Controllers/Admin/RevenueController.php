@@ -76,63 +76,133 @@ class RevenueController extends Controller
         $lastYear = Carbon::now()->subYear()->startOfYear();
         $lastYearEnd = Carbon::now()->subYear()->endOfYear()->endOfDay();
 
-        // Query 1: Revenue + Orders cho tất cả periods (1 query thay vì 16).
-        // Lọc theo COALESCE(PO.paid_at, CS.activated_at) — ngày khách CK / dịch vụ active,
-        // KHÔNG phải created_at (ngày tạo CS record).
-        $paidDateExpr = self::PAID_DATE_EXPR;
-        $revenueStats = DB::table('customer_services')
-            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+        // === LOGIC (sau feedback user 4/6/2026): ===
+        // Đơn được tính NGAY khi paid_at != null + status != cancelled, KHÔNG đợi
+        // admin fill chi tiết. 2 nguồn data riêng:
+        //   1. PendingOrder paid (qua bot Telegram + Pay2S) — paid_at
+        //   2. CS không qua PO (admin tạo web) — activated_at
+        // Profit: COALESCE(Profit.profit_amount, PO.profit_amount) cho đơn PO,
+        //         Profit.profit_amount cho CS-only.
+        // Đồng bộ với bot HandlesStats trait — xem giải thích ở đó.
+
+        // Query A: stats từ PendingOrder (đơn qua bot)
+        $poStats = DB::table('pending_orders')
+            ->leftJoin('customer_services', 'pending_orders.customer_service_id', '=', 'customer_services.id')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNotNull('pending_orders.paid_at')
+            ->where('pending_orders.status', '!=', 'cancelled')
             ->selectRaw("
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as today_revenue,
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN 1 ELSE 0 END) as today_orders,
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as yesterday_revenue,
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN 1 ELSE 0 END) as yesterday_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as week_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_week_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as month_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_month_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as year_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_year_revenue,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN pending_orders.amount ELSE 0 END) as today_revenue,
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN 1 ELSE 0 END) as today_orders,
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as today_profit,
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN pending_orders.amount ELSE 0 END) as yesterday_revenue,
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN 1 ELSE 0 END) as yesterday_orders,
+                SUM(CASE WHEN DATE(pending_orders.paid_at) = ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as yesterday_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as week_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as week_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as last_week_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as last_week_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as month_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as month_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as last_month_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as last_month_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as year_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, pending_orders.profit_amount, 0) ELSE 0 END) as year_profit,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN pending_orders.amount ELSE 0 END) as last_year_revenue,
+                SUM(CASE WHEN pending_orders.paid_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders,
+                SUM(COALESCE(profits.profit_amount, pending_orders.profit_amount, 0)) as total_profit
             ", [
-                $today, $today, $yesterday, $yesterday,
-                $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd,
-                $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd,
-                $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd,
-                $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd,
-                $thisYear, $thisYearEnd, $thisYear, $thisYearEnd,
+                $today, $today, $today,
+                $yesterday, $yesterday, $yesterday,
+                $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd,
+                $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd,
+                $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd,
+                $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd,
+                $thisYear, $thisYearEnd, $thisYear, $thisYearEnd, $thisYear, $thisYearEnd,
                 $lastYear, $lastYearEnd, $lastYear, $lastYearEnd,
             ])
             ->first();
 
-        // Query 2: Profit cho tất cả periods. Tính theo ngày khách CK
-        // (COALESCE(PO.paid_at, CS.activated_at)) thay vì Profit.created_at.
-        $profitStats = DB::table('profits')
-            ->join('customer_services', 'profits.customer_service_id', '=', 'customer_services.id')
-            ->leftJoin('pending_orders', 'customer_services.pending_order_id', '=', 'pending_orders.id')
+        // Query B: stats từ CS không qua PO (đơn web admin tạo trực tiếp).
+        // Profit nguồn duy nhất là Profit table (PO.profit_amount không tồn tại).
+        $csStats = DB::table('customer_services')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNull('customer_services.pending_order_id')
+            ->whereNotNull('customer_services.activated_at')
+            ->where('customer_services.status', '!=', 'cancelled')
             ->selectRaw("
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN profits.profit_amount ELSE 0 END) as today_profit,
-                SUM(CASE WHEN DATE($paidDateExpr) = ? THEN profits.profit_amount ELSE 0 END) as yesterday_profit,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as week_profit,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as last_week_profit,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as month_profit,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as last_month_profit,
-                SUM(CASE WHEN $paidDateExpr BETWEEN ? AND ? THEN profits.profit_amount ELSE 0 END) as year_profit,
-                SUM(profits.profit_amount) as total_profit
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as today_revenue,
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN 1 ELSE 0 END) as today_orders,
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as today_profit,
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as yesterday_revenue,
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN 1 ELSE 0 END) as yesterday_orders,
+                SUM(CASE WHEN DATE(customer_services.activated_at) = ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as yesterday_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as week_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as week_orders,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as week_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_week_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_week_orders,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as last_week_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as month_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as month_orders,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as month_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_month_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_month_orders,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as last_month_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as year_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as year_orders,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(profits.profit_amount, 0) ELSE 0 END) as year_profit,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN COALESCE(customer_services.order_amount, 0) ELSE 0 END) as last_year_revenue,
+                SUM(CASE WHEN customer_services.activated_at BETWEEN ? AND ? THEN 1 ELSE 0 END) as last_year_orders,
+                SUM(COALESCE(profits.profit_amount, 0)) as total_profit
             ", [
-                $today, $yesterday,
-                $thisWeek, $thisWeekEnd,
-                $lastWeek, $lastWeekEnd,
-                $thisMonth, $thisMonthEnd,
-                $lastMonth, $lastMonthEnd,
-                $thisYear, $thisYearEnd,
+                $today, $today, $today,
+                $yesterday, $yesterday, $yesterday,
+                $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd, $thisWeek, $thisWeekEnd,
+                $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd, $lastWeek, $lastWeekEnd,
+                $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd, $thisMonth, $thisMonthEnd,
+                $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd, $lastMonth, $lastMonthEnd,
+                $thisYear, $thisYearEnd, $thisYear, $thisYearEnd, $thisYear, $thisYearEnd,
+                $lastYear, $lastYearEnd, $lastYear, $lastYearEnd,
             ])
             ->first();
+
+        // Helper combine: cộng từng metric của 2 nguồn để có total cho period
+        $sum = fn(string $key) => (float) ($poStats->$key ?? 0) + (float) ($csStats->$key ?? 0);
+        // Tạo $revenueStats + $profitStats wrappers giữ tương thích với cú pháp cũ
+        $revenueStats = (object) [
+            'today_revenue' => $sum('today_revenue'),
+            'today_orders' => $sum('today_orders'),
+            'yesterday_revenue' => $sum('yesterday_revenue'),
+            'yesterday_orders' => $sum('yesterday_orders'),
+            'week_revenue' => $sum('week_revenue'),
+            'week_orders' => $sum('week_orders'),
+            'last_week_revenue' => $sum('last_week_revenue'),
+            'last_week_orders' => $sum('last_week_orders'),
+            'month_revenue' => $sum('month_revenue'),
+            'month_orders' => $sum('month_orders'),
+            'last_month_revenue' => $sum('last_month_revenue'),
+            'last_month_orders' => $sum('last_month_orders'),
+            'year_revenue' => $sum('year_revenue'),
+            'year_orders' => $sum('year_orders'),
+            'last_year_revenue' => $sum('last_year_revenue'),
+            'last_year_orders' => $sum('last_year_orders'),
+        ];
+        $profitStats = (object) [
+            'today_profit' => $sum('today_profit'),
+            'yesterday_profit' => $sum('yesterday_profit'),
+            'week_profit' => $sum('week_profit'),
+            'last_week_profit' => $sum('last_week_profit'),
+            'month_profit' => $sum('month_profit'),
+            'last_month_profit' => $sum('last_month_profit'),
+            'year_profit' => $sum('year_profit'),
+            'total_profit' => $sum('total_profit'),
+        ];
 
         // Query 3: Customer stats (1 query thay vì 3)
         $customerStats = DB::table('customers')
