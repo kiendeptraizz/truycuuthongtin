@@ -609,18 +609,22 @@
                                            class="btn btn-sm btn-outline-primary" title="Fill thông tin">
                                             <i class="fas fa-edit me-1"></i>Fill
                                         </a>
-                                        {{-- Đơn nhanh CTV / không cần fill chi tiết → 1 click đóng đơn,
-                                             tự set paid_at=now() nếu chưa paid, status='completed'.
-                                             Đơn này vẫn tính vào doanh thu/lợi nhuận qua PO.amount + PO.profit_amount. --}}
+                                    @endif
+                                    {{-- Nút Hoàn thành: hiện cho pending HOẶC completed-chưa-có-CS (backfill).
+                                         Đơn nhanh CTV / không cần fill chi tiết → 1 click đóng đơn,
+                                         tự set paid_at=now() nếu chưa paid + status='completed' + tạo CS placeholder. --}}
+                                    @if($order->status === 'pending' || ($order->status === 'completed' && !$order->customer_service_id))
                                         <form action="{{ route('admin.pending-orders.mark-completed', $order) }}"
                                               method="POST" class="d-inline">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-outline-dark"
-                                                    title="Hoàn thành đơn (cho đơn CTV không cần fill chi tiết)"
-                                                    data-confirm="Đánh dấu đơn {{ $order->order_code }} ({{ formatShortAmount($order->amount) }}) là HOÀN THÀNH?&#10;&#10;&bull; Nếu chưa CK → tự đánh dấu đã CK lúc bây giờ&#10;&bull; Đơn này sẽ tính vào doanh thu/lợi nhuận&#10;&bull; Không cần fill gói/email/duration nữa&#10;&#10;Dùng cho đơn nhanh CTV không cần xử lý chi tiết.">
+                                                    title="Hoàn thành đơn (tạo CS placeholder cho đơn CTV không fill chi tiết)"
+                                                    data-confirm="Đánh dấu đơn {{ $order->order_code }} ({{ formatShortAmount($order->amount) }}) là HOÀN THÀNH?&#10;&#10;&bull; Nếu chưa CK → tự đánh dấu đã CK lúc bây giờ&#10;&bull; Tạo dịch vụ khách hàng (placeholder) ngay&#10;&bull; Đơn vào doanh thu/lợi nhuận&#10;&bull; Không cần fill gói/email/duration nữa&#10;&#10;Dùng cho đơn nhanh CTV không cần xử lý chi tiết.">
                                                 <i class="fas fa-flag-checkered me-1"></i>Hoàn thành
                                             </button>
                                         </form>
+                                    @endif
+                                    @if($order->status === 'pending')
                                         <form action="{{ route('admin.pending-orders.destroy', $order) }}"
                                               method="POST" class="d-inline"
                                               data-ajax-action data-row-target="closest:tr">

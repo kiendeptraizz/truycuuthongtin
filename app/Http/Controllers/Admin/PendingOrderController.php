@@ -435,7 +435,10 @@ class PendingOrderController extends Controller
             return back()->withErrors(['error' => $msg]);
         }
 
-        if ($pendingOrder->status === 'completed') {
+        // Idempotent: chỉ early-return nếu đã completed VÀ CS đã tồn tại.
+        // Đơn completed chưa có CS (vd marked qua commit cũ trước khi có logic tạo CS
+        // placeholder) → vẫn cho click để backfill CS.
+        if ($pendingOrder->status === 'completed' && $pendingOrder->customer_service_id) {
             $msg = "Đơn {$pendingOrder->order_code} đã được đánh dấu hoàn thành trước đó.";
             if ($request->expectsJson()) {
                 return response()->json(['success' => true, 'message' => $msg]);
@@ -446,7 +449,11 @@ class PendingOrderController extends Controller
         $csId = null;
         \DB::transaction(function () use ($pendingOrder, &$csId) {
             $locked = PendingOrder::where('id', $pendingOrder->id)->lockForUpdate()->first();
-            if (!$locked || $locked->status !== 'pending') {
+            if (!$locked) {
+                return;
+            }
+            // Cho phép cả pending lẫn completed-chưa-CS (backfill mode)
+            if ($locked->status !== 'pending' && !($locked->status === 'completed' && !$locked->customer_service_id)) {
                 return;
             }
 
