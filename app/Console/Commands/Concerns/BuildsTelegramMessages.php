@@ -192,7 +192,7 @@ trait BuildsTelegramMessages
             . "📊 <b>Thống kê</b> — profit hôm nay + tháng, doanh thu, đơn paid/pending/cancelled, KH mới.\n\n"
             . "⏰ <b>Hết hạn</b> — đơn hết hạn HÔM NAY + đã quá hạn + sắp hết hạn (3 ngày tới).\n"
             . "<i>Bot tự nhắc lúc 9h sáng mỗi ngày.</i>\n\n"
-            . "⚡ <b>Tạo đơn nhanh</b> — Flow ngắn 2 bước (số tiền + tên/mã KH) → tạo PendingOrder pending. Bot gửi QR ngay với mã đơn DH-XXX để khách CK. Admin fill chi tiết (gói/email/duration/...) sau qua <code>/admin/pending-orders</code>. Tiện cho lúc bận hoặc khách cần QR ngay.\n\n"
+            . "⚡ <b>Tạo đơn nhanh</b> — Gõ THẲNG <code>50k 10k</code> (tiền đơn + lợi nhuận) ngoài chat → bot tạo đơn + QR + mã đơn DH-XXX <b>NGAY</b> (bỏ qua thời hạn + KH). Hoặc bấm nút <b>⚡ Tạo đơn nhanh</b> để nhập từng bước. Admin fill chi tiết (gói/email/...) sau qua <code>/admin/pending-orders</code> — đơn luôn chờ fill, KHÔNG tự hoàn thành.\n\n"
             . "🛒 <b>Đơn nhiều DV</b> — Khách mua nhiều DV cùng lúc + CK 1 lần. Bot hỏi tên KH 1 lần + thông tin từng đơn → sinh mã lô <code>GR-XXX</code> + 1 QR tổng. Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
             . "📦 <b>Kho TK</b> — Lưu trữ TK mua vào (chưa bán) để không quên. Bot hỏi 4 bước: chọn category → email/username → password → ghi chú (có thể /skip). TK lưu vào DB + tự sync lên Google Sheet nếu đã cấu hình. Lệnh: <code>/kho list [keyword]</code> để xem nhanh kho.\n\n"
             . "<b>Lệnh thủ công:</b>\n"

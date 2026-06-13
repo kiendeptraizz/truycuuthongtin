@@ -248,13 +248,28 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Text root khác — KHÔNG auto-start tạo đơn nữa (trước đây gõ số tiền sẽ
-        // tự bắt đầu flow → user vô tình gõ "260503001" liền bị tạo KH rác).
+        // Cú pháp đơn nhanh gõ THẲNG (không cần bấm ⚡ Tạo đơn nhanh): "50k 10k" =
+        // tiền đơn 50k + lợi nhuận 10k → tạo PendingOrder + sinh QR NGAY (bỏ qua thời
+        // hạn + KH, fill chi tiết sau qua web). Strict (đúng 2 token dạng tiền, tiền
+        // đơn ≥ 1k) để tránh gõ nhầm text linh tinh thành đơn rác.
+        if ($quick = $this->parseQuickOrderShortcut($text)) {
+            $this->finalizeQuickOrder($chatId, $userId, [
+                'amount' => $quick['amount'],
+                'profit_amount' => $quick['profit'],
+                'duration_days' => null,
+                'duration_label' => null,
+            ]);
+            return;
+        }
+
+        // Text root khác — KHÔNG auto-start tạo đơn từ 1 số nữa (trước đây gõ số tiền
+        // sẽ tự bắt đầu flow → user vô tình gõ "260503001" liền bị tạo KH rác).
         // Giờ chỉ nudge user dùng nút menu cho rõ ý đồ.
         $this->bot->sendMessage(
             $chatId,
             "🤔 Bot không hiểu yêu cầu này.\n\n"
-                . "💡 Bấm <b>📝 Tạo đơn</b> để bắt đầu, gõ thẳng <b>mã đơn</b> (vd <code>DH-260502-025</code>) để xem chi tiết, hoặc bấm <b>❓ Hướng dẫn</b>.",
+                . "💡 Gõ thẳng <code>50k 10k</code> (tiền đơn + lợi nhuận) để <b>tạo đơn nhanh + QR ngay</b>, "
+                . "bấm <b>📝 Tạo đơn</b> để nhập đầy đủ, gõ <b>mã đơn</b> (vd <code>DH-260502-025</code>) để xem chi tiết, hoặc bấm <b>❓ Hướng dẫn</b>.",
             $this->mainMenuMarkup()
         );
     }
@@ -2078,6 +2093,37 @@ class TelegramListenCommand extends Command
                 . "Gõ /huy để huỷ.",
             $this->navMarkup(false)
         );
+    }
+
+    /**
+     * Phát hiện cú pháp đơn nhanh gõ THẲNG ngoài chat (không qua nút): "50k 10k".
+     * Chặt để tránh tạo đơn nhầm từ text linh tinh:
+     *   - ĐÚNG 2 token cách nhau khoảng trắng.
+     *   - Mỗi token dạng tiền: bắt đầu bằng SỐ, optional đơn vị k/tr/m/triệu (loại mã
+     *     KH "KUN123", mã đơn, chữ, SĐT nhiều nhóm...).
+     *   - Tiền đơn ≥ 1.000đ (loại "5 10" gõ nhầm), lợi nhuận > 0.
+     *
+     * @return array{amount:int, profit:int}|null  null nếu không khớp cú pháp.
+     */
+    private function parseQuickOrderShortcut(string $text): ?array
+    {
+        $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+        if (count($tokens) !== 2) {
+            return null;
+        }
+        // Mỗi token phải bắt đầu bằng chữ số (loại "KUN123" parse nhầm thành 123).
+        $moneyRe = '/^\d[\d.,]*\s*(k|tr|m|nghìn|nghin|triệu|trieu)?$/iu';
+        foreach ($tokens as $t) {
+            if (!preg_match($moneyRe, $t)) {
+                return null;
+            }
+        }
+        $amount = parseShortAmount($tokens[0]);
+        $profit = parseShortAmount($tokens[1]);
+        if ($amount < 1000 || $profit <= 0) {
+            return null;
+        }
+        return ['amount' => $amount, 'profit' => $profit];
     }
 
     /**
