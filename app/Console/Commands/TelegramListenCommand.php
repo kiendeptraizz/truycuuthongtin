@@ -248,6 +248,16 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Cú pháp ĐƠN CHI TIẾT gõ tắt 1 dòng (không cần bấm 📝 Tạo đơn):
+        // "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận>" → vd
+        // "CTV22522 a@gmail.com 1m 100k 10k". Điền sẵn 5 trường → bot chỉ hỏi 3 bước
+        // còn lại (gói → nhóm/gia đình → bảo hành) rồi finalize. Nhận diện CHẶT: đúng
+        // 5 token + token 2 là EMAIL hợp lệ + token 3 là thời hạn → không nhầm input khác.
+        if ($detail = $this->parseDetailedOrderShortcut($text)) {
+            $this->startDetailedOrderFromShortcut($chatId, $userId, $detail, $message['message_id'] ?? null);
+            return;
+        }
+
         // Cú pháp đơn nhanh gõ THẲNG (không cần bấm ⚡ Tạo đơn nhanh): "50k 10k" =
         // tiền đơn 50k + lợi nhuận 10k → tạo PendingOrder + sinh QR NGAY (bỏ qua thời
         // hạn + KH, fill chi tiết sau qua web). Strict (đúng 2 token dạng tiền, tiền
@@ -268,8 +278,10 @@ class TelegramListenCommand extends Command
         $this->bot->sendMessage(
             $chatId,
             "🤔 Bot không hiểu yêu cầu này.\n\n"
-                . "💡 Gõ thẳng <code>50k 10k</code> (tiền đơn + lợi nhuận) để <b>tạo đơn nhanh + QR ngay</b>, "
-                . "bấm <b>📝 Tạo đơn</b> để nhập đầy đủ, gõ <b>mã đơn</b> (vd <code>DH-260502-025</code>) để xem chi tiết, hoặc bấm <b>❓ Hướng dẫn</b>.",
+                . "💡 <b>Gõ tắt 1 dòng:</b>\n"
+                . "• <code>50k 10k</code> = tiền đơn + lợi nhuận → <b>đơn nhanh</b> + QR ngay (gói/email fill sau).\n"
+                . "• <code>CTV22522 a@gmail.com 1m 100k 10k</code> = KH + email + thời hạn + tiền + lãi → <b>đơn chi tiết</b>, bot chỉ hỏi gói/nhóm/bảo hành.\n\n"
+                . "Hoặc bấm <b>📝 Tạo đơn</b> để nhập đầy đủ, gõ <b>mã đơn</b> (<code>DH-260502-025</code>) để xem chi tiết, bấm <b>❓ Hướng dẫn</b>.",
             $this->mainMenuMarkup()
         );
     }
@@ -1250,7 +1262,7 @@ class TelegramListenCommand extends Command
             case 'family_email':
                 $input = trim($text);
                 $lcInput = strtolower($input);
-                if (in_array($lcInput, ['/skip', 'skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ'], true)) {
+                if (in_array($lcInput, ['/skip', 'skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ', '0'], true)) {
                     $data['family_email'] = null;
                 } elseif ($input === '') {
                     $this->sendAndTrack($chatId, "❌ Trống. Gõ mã/email/số hoặc /skip:");
@@ -1294,6 +1306,11 @@ class TelegramListenCommand extends Command
                     $data['has_full'] = false;
                 }
 
+                // Đơn chi tiết gõ tắt đã có lợi nhuận sẵn → bỏ qua bước hỏi lợi nhuận, finalize luôn.
+                if (!empty($data['_skip_profit'])) {
+                    $this->finalizeOrder($chatId, $userId, $data);
+                    return;
+                }
                 $this->setState($chatId, ['step' => 'profit', 'data' => $data]);
                 $this->promptProfit($chatId);
                 return;
@@ -1723,6 +1740,19 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Click "⏭ Bỏ qua" ở bước Mã nhóm/gia đình (Bước 5/7)
+        if ($cbData === 'step_skip_family') {
+            $state = $this->getState($chatId);
+            if ($state && ($state['step'] ?? null) === 'family_email') {
+                $data = $state['data'] ?? [];
+                $data['family_email'] = null;
+                $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
+                $this->sendAndTrack($chatId, "⏭ Đã bỏ qua nhóm/gia đình.");
+                $this->promptWarranty($chatId);
+            }
+            return;
+        }
+
         // Click "⏭ Bỏ qua KH" trong flow Tạo đơn nhanh (Bước 3/3)
         if ($cbData === 'quick_skip_customer') {
             $state = $this->getState($chatId);
@@ -2096,6 +2126,119 @@ class TelegramListenCommand extends Command
     }
 
     /**
+     * Phát hiện cú pháp ĐƠN CHI TIẾT gõ tắt 1 dòng (không qua nút 📝 Tạo đơn):
+     *   "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận>"
+     *   vd "CTV22522 kienbafab@gmail.com 1m 100k 10k"
+     *
+     * Nhận diện CHẶT để không nhầm input khác:
+     *   - ĐÚNG 5 token cách nhau khoảng trắng.
+     *   - Token 2 = EMAIL hợp lệ (tín hiệu mạnh nhất — không input root nào khác có).
+     *   - Token 3 = thời hạn parse được (1m/25d/1y).
+     *   - Token 4 (tiền đơn) dạng tiền ≥ 1.000đ; token 5 (lợi nhuận) dạng tiền ≥ 0.
+     *   - Token 1 (KH) là 1 token bất kỳ (mã KUN/CTV hoặc tên 1 từ) — resolve sau.
+     *
+     * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int}|null
+     */
+    private function parseDetailedOrderShortcut(string $text): ?array
+    {
+        $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+        if (count($tokens) !== 5) {
+            return null;
+        }
+        [$custTok, $emailTok, $durTok, $amountTok, $profitTok] = $tokens;
+
+        if (!filter_var($emailTok, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+        $dur = $this->parseDuration($durTok);
+        if (!$dur) {
+            return null;
+        }
+        $moneyRe = '/^\d[\d.,]*\s*(k|tr|m|nghìn|nghin|triệu|trieu)?$/iu';
+        if (!preg_match($moneyRe, $amountTok) || !preg_match($moneyRe, $profitTok)) {
+            return null;
+        }
+        $amount = parseShortAmount($amountTok);
+        $profit = parseShortAmount($profitTok);
+        if ($amount < 1000 || $profit < 0) {
+            return null;
+        }
+        return [
+            'customer_token' => $custTok,
+            'email' => $emailTok,
+            'duration' => $dur,
+            'amount' => $amount,
+            'profit' => $profit,
+        ];
+    }
+
+    /**
+     * Khởi động flow đơn chi tiết từ cú pháp gõ tắt: resolve KH, điền sẵn 5 trường
+     * (KH/email/thời hạn/tiền/lãi) vào state rồi NHẢY vào flow đầy đủ ở bước gói dịch
+     * vụ. Flow tự tiếp tục: gói → nhóm/gia đình → bảo hành → finalize (bỏ bước lợi
+     * nhuận vì đã có — xem cờ `_skip_profit` ở case 'warranty').
+     */
+    private function startDetailedOrderFromShortcut(int|string $chatId, string $userId, array $detail, ?int $msgId): void
+    {
+        $custTok = $detail['customer_token'];
+
+        // Resolve KH: mã KUN/CTV → tìm chính xác (lỗi nếu không có); còn lại → tên 1 từ.
+        if (preg_match('/^(KUN|CTV)\d+$/i', $custTok)) {
+            $code = strtoupper($custTok);
+            $customer = \App\Models\Customer::where('customer_code', $code)->first();
+            if (!$customer) {
+                $this->bot->sendMessage(
+                    $chatId,
+                    "❌ Không tìm thấy KH mã <code>{$code}</code>.\n\n"
+                        . "Kiểm tra lại mã, hoặc bấm 📝 <b>Tạo đơn</b> để nhập tay.",
+                    $this->mainMenuMarkup()
+                );
+                return;
+            }
+        } else {
+            try {
+                $customer = $this->findOrCreateCustomer($custTok);
+            } catch (\Throwable $e) {
+                Log::error('Telegram: detailed shortcut findOrCreateCustomer failed', [
+                    'name' => $custTok,
+                    'error' => $e->getMessage(),
+                ]);
+                $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                return;
+            }
+        }
+
+        $dur = $detail['duration'];
+        $data = [
+            'amount' => $detail['amount'],
+            'customer_id' => $customer->id,
+            'customer_code' => $customer->customer_code,
+            'customer_name' => $customer->name,
+            'duration_days' => $dur['days'],
+            'duration_label' => $dur['label'],
+            'duration_unit' => $dur['unit'],
+            'duration_value' => $dur['value'],
+            'email' => $detail['email'],
+            'profit_amount' => $detail['profit'],
+            // Cờ báo bước 'warranty' finalize luôn (bỏ qua bước hỏi lợi nhuận).
+            '_skip_profit' => true,
+            // Track tin nhắn gõ tắt để purge cùng các prompt khi finalize (chat sạch).
+            '_track_msgs' => $msgId ? [(int) $msgId] : [],
+        ];
+        $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
+
+        $summary = "⚡ <b>Đơn chi tiết</b> — đã nhận gõ tắt:\n"
+            . "👤 KH: <code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>\n"
+            . "📧 Email: <code>" . e($detail['email']) . "</code>\n"
+            . "⏰ Thời hạn: <b>" . e($dur['label']) . "</b>\n"
+            . "💵 Giá đơn: <b>" . formatShortAmount($detail['amount']) . "</b>\n"
+            . "💎 Lợi nhuận: <b>" . formatShortAmount($detail['profit']) . "</b>\n\n"
+            . "Còn 3 bước: <b>gói dịch vụ → nhóm/gia đình → bảo hành</b>.";
+        $this->sendAndTrack($chatId, $summary);
+        $this->sendCategoryPicker($chatId);
+    }
+
+    /**
      * Phát hiện cú pháp đơn nhanh gõ THẲNG ngoài chat (không qua nút): "50k 10k".
      * Chặt để tránh tạo đơn nhầm từ text linh tinh:
      *   - ĐÚNG 2 token cách nhau khoảng trắng.
@@ -2255,8 +2398,16 @@ class TelegramListenCommand extends Command
             "👥 <b>Bước 5/7:</b> Mã nhóm - gia đình?\n"
                 . "<i>Có thể là email / số / mã / text bất kỳ.</i>\n"
                 . "<i>Vd: <code>2</code>, <code>gd_abc@gmail.com</code>, <code>gia đình A</code></i>\n\n"
-                . "Bấm /skip nếu không có",
-            $this->navMarkup()
+                . "Gõ <code>0</code> / <code>/skip</code> hoặc bấm <b>⏭ Bỏ qua</b> nếu không có.",
+            ['reply_markup' => json_encode([
+                'inline_keyboard' => [
+                    [['text' => '⏭ Bỏ qua (không có)', 'callback_data' => 'step_skip_family']],
+                    [
+                        ['text' => '↩ Bước trước', 'callback_data' => 'back'],
+                        ['text' => '❌ Huỷ đơn', 'callback_data' => 'cancel'],
+                    ],
+                ],
+            ])]
         );
     }
 
