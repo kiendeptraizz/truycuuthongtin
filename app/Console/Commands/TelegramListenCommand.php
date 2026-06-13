@@ -781,17 +781,43 @@ class TelegramListenCommand extends Command
                 return;
 
             case 'quick_order_amount':
-                $amount = parseShortAmount($text);
+                // Cú pháp nhanh "90k 40k": token 1 = tiền đơn, token 2 = lợi nhuận →
+                // tạo đơn NGAY, bỏ qua bước thời hạn + KH (admin fill chi tiết sau qua web).
+                // Gõ 1 số duy nhất → giữ flow từng bước như cũ.
+                $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+                $amount = parseShortAmount($tokens[0] ?? '');
                 if ($amount <= 0) {
                     $this->sendAndTrack(
                         $chatId,
                         "❌ Số tiền không hợp lệ.\n"
-                            . "Gõ vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code>",
+                            . "Gõ <code>90k 40k</code> (tiền đơn + lợi nhuận → tạo ngay), "
+                            . "hoặc chỉ <code>100k</code> để nhập từng bước.",
                         $this->navMarkup(false)
                     );
                     return;
                 }
                 $data['amount'] = $amount;
+
+                // Có token thứ 2 → coi là lợi nhuận → fast-path: bỏ qua thời hạn + KH, finalize luôn.
+                if (count($tokens) >= 2) {
+                    $profit = parseShortAmount($tokens[1]);
+                    if ($profit <= 0) {
+                        $this->sendAndTrack(
+                            $chatId,
+                            "❌ Lợi nhuận <code>" . e($tokens[1]) . "</code> không hợp lệ.\n"
+                                . "Gõ <code>90k 40k</code> (tiền đơn + lợi nhuận), hoặc chỉ <code>" . e($tokens[0]) . "</code> để nhập từng bước.",
+                            $this->navMarkup(false)
+                        );
+                        return;
+                    }
+                    $data['profit_amount'] = $profit;
+                    // Cú pháp nhanh: KHÔNG có thời hạn + KH (fill sau qua web).
+                    $data['duration_days'] = null;
+                    $data['duration_label'] = null;
+                    $this->finalizeQuickOrder($chatId, $userId, $data);
+                    return;
+                }
+
                 $this->setState($chatId, ['step' => 'quick_order_profit', 'data' => $data]);
                 $this->sendAndTrack(
                     $chatId,
@@ -1971,9 +1997,11 @@ class TelegramListenCommand extends Command
         $this->setState($chatId, ['step' => 'quick_order_amount', 'data' => []]);
         $this->sendAndTrack(
             $chatId,
-            "⚡ <b>Tạo đơn nhanh</b> — Bước 1/4: Số tiền đơn hàng?\n"
-                . "<i>Vd: <code>100k</code>, <code>200k</code>, <code>1.5tr</code>, <code>500000</code></i>\n\n"
-                . "<i>Đơn sẽ được tạo + push lên web chờ fill chi tiết (gói/email/...) sau.</i>\n\n"
+            "⚡ <b>Tạo đơn nhanh</b> — Số tiền đơn hàng?\n\n"
+                . "💡 <b>Nhanh nhất:</b> gõ <code>90k 40k</code> = tiền đơn <b>90k</b> + lợi nhuận <b>40k</b> → "
+                . "bot tạo đơn + sinh QR <b>NGAY</b> (bỏ qua bước thời hạn &amp; khách hàng — fill chi tiết sau qua web).\n\n"
+                . "Hoặc gõ <b>1 số</b> (vd <code>100k</code>, <code>1.5tr</code>) để nhập từng bước (lợi nhuận → thời hạn → KH).\n\n"
+                . "<i>Đơn luôn được push lên web chờ fill chi tiết (gói/email/...) — KHÔNG tự hoàn thành.</i>\n\n"
                 . "Gõ /huy để huỷ.",
             $this->navMarkup(false)
         );
