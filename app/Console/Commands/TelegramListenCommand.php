@@ -2131,25 +2131,39 @@ class TelegramListenCommand extends Command
      *   vd "CTV22522 kienbafab@gmail.com 1m 100k 10k"
      *
      * Nhận diện CHẶT để không nhầm input khác:
-     *   - ĐÚNG 5 token cách nhau khoảng trắng.
-     *   - Token 2 = EMAIL hợp lệ (tín hiệu mạnh nhất — không input root nào khác có).
-     *   - Token 3 = thời hạn parse được (1m/25d/1y).
-     *   - Token 4 (tiền đơn) dạng tiền ≥ 1.000đ; token 5 (lợi nhuận) dạng tiền ≥ 0.
-     *   - Token 1 (KH) là 1 token bất kỳ (mã KUN/CTV hoặc tên 1 từ) — resolve sau.
+     *   - Tối thiểu 5 token. Mốc chia là token EMAIL hợp lệ đầu tiên (tín hiệu mạnh
+     *     nhất — không input root nào khác có email).
+     *   - Trước email = tên KH, cho phép NHIỀU TỪ ("Nguyễn Văn A") hoặc mã KUN/CTV.
+     *   - Ngay sau email phải ĐÚNG 3 trường: thời hạn (1m/25d/1y) + tiền đơn (≥1k) + lợi nhuận (≥0).
      *
      * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int}|null
      */
     private function parseDetailedOrderShortcut(string $text): ?array
     {
         $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
-        if (count($tokens) !== 5) {
+        // Tối thiểu 5 token: tên (≥1 từ) + email + thời hạn + tiền đơn + lợi nhuận.
+        if (count($tokens) < 5) {
             return null;
         }
-        [$custTok, $emailTok, $durTok, $amountTok, $profitTok] = $tokens;
+        // Mốc chia: token EMAIL đầu tiên. Trước email = tên KH (nhiều từ OK);
+        // sau email phải ĐÚNG 3 token (thời hạn, tiền, lãi).
+        $emailIdx = null;
+        foreach ($tokens as $i => $t) {
+            if (filter_var($t, FILTER_VALIDATE_EMAIL)) {
+                $emailIdx = $i;
+                break;
+            }
+        }
+        if ($emailIdx === null || $emailIdx < 1 || ($emailIdx + 3) !== (count($tokens) - 1)) {
+            return null;
+        }
 
-        if (!filter_var($emailTok, FILTER_VALIDATE_EMAIL)) {
-            return null;
-        }
+        $custName = implode(' ', array_slice($tokens, 0, $emailIdx));
+        $email = $tokens[$emailIdx];
+        $durTok = $tokens[$emailIdx + 1];
+        $amountTok = $tokens[$emailIdx + 2];
+        $profitTok = $tokens[$emailIdx + 3];
+
         $dur = $this->parseDuration($durTok);
         if (!$dur) {
             return null;
@@ -2164,8 +2178,8 @@ class TelegramListenCommand extends Command
             return null;
         }
         return [
-            'customer_token' => $custTok,
-            'email' => $emailTok,
+            'customer_token' => $custName,
+            'email' => $email,
             'duration' => $dur,
             'amount' => $amount,
             'profit' => $profit,
