@@ -1271,8 +1271,7 @@ class TelegramListenCommand extends Command
                     // Cho phép bất cứ định dạng gì: email, số, text, code...
                     $data['family_email'] = $input;
                 }
-                $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
-                $this->promptWarranty($chatId);
+                $this->advanceAfterFamily($chatId, $userId, $data);
                 return;
 
             case 'warranty':
@@ -1746,9 +1745,8 @@ class TelegramListenCommand extends Command
             if ($state && ($state['step'] ?? null) === 'family_email') {
                 $data = $state['data'] ?? [];
                 $data['family_email'] = null;
-                $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
                 $this->sendAndTrack($chatId, "⏭ Đã bỏ qua nhóm/gia đình.");
-                $this->promptWarranty($chatId);
+                $this->advanceAfterFamily($chatId, $userId, $data);
             }
             return;
         }
@@ -2127,16 +2125,19 @@ class TelegramListenCommand extends Command
 
     /**
      * Phát hiện cú pháp ĐƠN CHI TIẾT gõ tắt 1 dòng (không qua nút 📝 Tạo đơn):
-     *   "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận>"
-     *   vd "CTV22522 kienbafab@gmail.com 1m 100k 10k"
+     *   "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận> [bảo hành]"
+     *   vd "CTV22522 kienbafab@gmail.com 1m 100k 10k" hoặc "... 10k full" / "... 10k 30d"
      *
      * Nhận diện CHẶT để không nhầm input khác:
      *   - Tối thiểu 5 token. Mốc chia là token EMAIL hợp lệ đầu tiên (tín hiệu mạnh
      *     nhất — không input root nào khác có email).
      *   - Trước email = tên KH, cho phép NHIỀU TỪ ("Nguyễn Văn A") hoặc mã KUN/CTV.
-     *   - Ngay sau email phải ĐÚNG 3 trường: thời hạn (1m/25d/1y) + tiền đơn (≥1k) + lợi nhuận (≥0).
+     *   - Ngay sau email phải có ÍT NHẤT 3 trường: thời hạn (1m/25d/1y) + tiền đơn (≥1k) + lợi nhuận (≥0).
+     *   - Token thứ 4+ (optional) = bảo hành: "full" (kể cả "bảo hành full") / 30d / 1m / 1y /
+     *     từ bỏ qua (skip/không/0). KHÔNG ghi gì = bảo hành để trống. Token thừa không hợp lệ
+     *     → loại cả shortcut (return null) cho an toàn.
      *
-     * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int}|null
+     * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int, warranty:?array}|null
      */
     private function parseDetailedOrderShortcut(string $text): ?array
     {
@@ -2154,7 +2155,8 @@ class TelegramListenCommand extends Command
                 break;
             }
         }
-        if ($emailIdx === null || $emailIdx < 1 || ($emailIdx + 3) !== (count($tokens) - 1)) {
+        // Sau email cần ÍT NHẤT 3 token (thời hạn, tiền, lãi). Token thứ 4+ (nếu có) = bảo hành.
+        if ($emailIdx === null || $emailIdx < 1 || (count($tokens) - 1 - $emailIdx) < 3) {
             return null;
         }
 
@@ -2163,6 +2165,8 @@ class TelegramListenCommand extends Command
         $durTok = $tokens[$emailIdx + 1];
         $amountTok = $tokens[$emailIdx + 2];
         $profitTok = $tokens[$emailIdx + 3];
+        // Token thứ 4+ sau email = bảo hành (optional). Gộp để nhận cả "full" lẫn "bảo hành full".
+        $warrantyTokens = array_slice($tokens, $emailIdx + 4);
 
         $dur = $this->parseDuration($durTok);
         if (!$dur) {
@@ -2177,12 +2181,31 @@ class TelegramListenCommand extends Command
         if ($amount < 1000 || $profit < 0) {
             return null;
         }
+
+        // Bảo hành (token 4+): null = để trống. "full"/"bảo hành full" = full thời hạn.
+        // 1 token 30d/1m/1y = BH theo thời hạn đó. Từ bỏ qua = để trống. Còn lại → loại shortcut.
+        $warranty = null;
+        if (!empty($warrantyTokens)) {
+            $wStr = ltrim(strtolower(trim(implode(' ', $warrantyTokens))), '/');
+            $skipWords = ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ', '0', 'trống', 'trong'];
+            if (in_array($wStr, $skipWords, true)) {
+                $warranty = null;
+            } elseif (str_contains($wStr, 'full')) {
+                $warranty = ['type' => 'full'];
+            } elseif (count($warrantyTokens) === 1 && ($w = $this->parseDuration($warrantyTokens[0]))) {
+                $warranty = ['type' => 'duration', 'days' => $w['days'], 'label' => $w['label']];
+            } else {
+                return null;
+            }
+        }
+
         return [
             'customer_token' => $custName,
             'email' => $email,
             'duration' => $dur,
             'amount' => $amount,
             'profit' => $profit,
+            'warranty' => $warranty,
         ];
     }
 
@@ -2223,6 +2246,23 @@ class TelegramListenCommand extends Command
         }
 
         $dur = $detail['duration'];
+
+        // Bảo hành lấy từ gõ tắt (nếu có). 3 khóa giống hệt bước 'warranty' thủ công set ra.
+        $w = $detail['warranty'] ?? null;
+        if ($w === null) {
+            $wDays = null;          // để trống — không bảo hành
+            $wLabel = null;
+            $wFull = false;
+        } elseif (($w['type'] ?? null) === 'full') {
+            $wDays = (int) $dur['days'];   // full = bằng thời hạn dịch vụ
+            $wLabel = 'full thời hạn';
+            $wFull = true;
+        } else {
+            $wDays = $w['days'];
+            $wLabel = $w['label'];
+            $wFull = false;
+        }
+
         $data = [
             'amount' => $detail['amount'],
             'customer_id' => $customer->id,
@@ -2234,20 +2274,26 @@ class TelegramListenCommand extends Command
             'duration_value' => $dur['value'],
             'email' => $detail['email'],
             'profit_amount' => $detail['profit'],
-            // Cờ báo bước 'warranty' finalize luôn (bỏ qua bước hỏi lợi nhuận).
+            'warranty_days' => $wDays,
+            'warranty_label' => $wLabel,
+            'has_full' => $wFull,
+            // Đã có lợi nhuận + bảo hành sẵn → bỏ CẢ bước hỏi lợi nhuận LẪN bước hỏi bảo hành.
             '_skip_profit' => true,
+            '_skip_warranty' => true,
             // Track tin nhắn gõ tắt để purge cùng các prompt khi finalize (chat sạch).
             '_track_msgs' => $msgId ? [(int) $msgId] : [],
         ];
         $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
 
+        $warrantyText = $wLabel ?? '(để trống)';
         $summary = "⚡ <b>Đơn chi tiết</b> — đã nhận gõ tắt:\n"
             . "👤 KH: <code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>\n"
             . "📧 Email: <code>" . e($detail['email']) . "</code>\n"
             . "⏰ Thời hạn: <b>" . e($dur['label']) . "</b>\n"
             . "💵 Giá đơn: <b>" . formatShortAmount($detail['amount']) . "</b>\n"
-            . "💎 Lợi nhuận: <b>" . formatShortAmount($detail['profit']) . "</b>\n\n"
-            . "Còn 3 bước: <b>gói dịch vụ → nhóm/gia đình → bảo hành</b>.";
+            . "💎 Lợi nhuận: <b>" . formatShortAmount($detail['profit']) . "</b>\n"
+            . "🛡 Bảo hành: <b>" . e($warrantyText) . "</b>\n\n"
+            . "Còn 2 bước: <b>gói dịch vụ → nhóm/gia đình</b>.";
         $this->sendAndTrack($chatId, $summary);
         $this->sendCategoryPicker($chatId);
     }
@@ -2423,6 +2469,27 @@ class TelegramListenCommand extends Command
                 ],
             ])]
         );
+    }
+
+    /**
+     * Sau bước Mã nhóm/gia đình: nếu bảo hành đã set sẵn từ gõ tắt (_skip_warranty) thì BỎ
+     * bước hỏi bảo hành. Khi đó lợi nhuận cũng có sẵn (_skip_profit) → finalize luôn; phòng
+     * trường hợp chưa có profit thì vẫn hỏi lợi nhuận. Còn lại: hỏi bảo hành như flow thường.
+     * Dùng CHUNG cho cả đường text (gõ family) lẫn nút "⏭ Bỏ qua" để 2 đường không phân kỳ.
+     */
+    private function advanceAfterFamily(int|string $chatId, string $userId, array $data): void
+    {
+        if (!empty($data['_skip_warranty'])) {
+            if (!empty($data['_skip_profit'])) {
+                $this->finalizeOrder($chatId, $userId, $data);
+                return;
+            }
+            $this->setState($chatId, ['step' => 'profit', 'data' => $data]);
+            $this->promptProfit($chatId);
+            return;
+        }
+        $this->setState($chatId, ['step' => 'warranty', 'data' => $data]);
+        $this->promptWarranty($chatId);
     }
 
     private function promptWarranty(int|string $chatId): void

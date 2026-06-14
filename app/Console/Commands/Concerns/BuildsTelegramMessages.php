@@ -179,7 +179,7 @@ trait BuildsTelegramMessages
     {
         return "🤖 <b>Bot quản lý đơn — Hướng dẫn</b>\n\n"
             . "Bấm các nút bên dưới (cuối màn hình) để chọn nhanh:\n\n"
-            . "📝 <b>Tạo đơn</b> — đầy đủ 7 bước. ⚡ <b>Gõ tắt 1 dòng:</b> <code>CTV22522 a@gmail.com 1m 100k 10k</code> (KH + email + thời hạn + tiền đơn + lãi) → bot chỉ hỏi gói/nhóm/bảo hành rồi sinh QR.\n"
+            . "📝 <b>Tạo đơn</b> — đầy đủ 7 bước. ⚡ <b>Gõ tắt 1 dòng:</b> <code>CTV22522 a@gmail.com 1m 100k 10k full</code> (KH + email + thời hạn + tiền đơn + lãi + bảo hành) → bot chỉ hỏi gói/nhóm rồi sinh QR. Bảo hành ở cuối: <code>full</code> = full thời hạn, hoặc <code>30d</code>/<code>1m</code>/<code>1y</code>; KHÔNG ghi gì = không bảo hành.\n"
             . "  0️⃣ Số tiền — <code>100k</code>/<code>200k</code>/<code>1.5tr</code>\n"
             . "  1️⃣ Tên/mã KH — tên mới sẽ tự tạo KUN; gõ <code>KUN98473</code> để chọn KH cũ\n"
             . "  2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"
