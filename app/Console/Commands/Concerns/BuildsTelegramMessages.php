@@ -138,11 +138,11 @@ trait BuildsTelegramMessages
     private function buildOrderDetailsLines(array $data): array
     {
         $today = now();
-        $expiresAt = match ($data['duration_unit'] ?? 'day') {
-            'year'  => $today->copy()->addYears((int) ($data['duration_value'] ?? 0)),
-            'month' => $today->copy()->addMonths((int) ($data['duration_value'] ?? 0)),
-            default => $today->copy()->addDays((int) ($data['duration_value'] ?? 0)),
-        };
+        // Hạn hiển thị trên QR PHẢI tính GIỐNG PaymentService::activate* — tức
+        // addDays(duration_days), với 1 tháng = 30 ngày / 1 năm = 365 ngày (xem parseDuration()).
+        // Nếu dùng addMonths/addYears theo lịch thì QR gửi khách sẽ lệch ngày so với
+        // expires_at lưu DB (mà web admin + bot "đơn chi tiết" đọc ra), gây 2 con số khác nhau.
+        $expiresAt = $today->copy()->addDays((int) ($data['duration_days'] ?? 0));
 
         $lines = [
             "📌 Tên dịch vụ: <b>{$data['service_name']}</b>",
