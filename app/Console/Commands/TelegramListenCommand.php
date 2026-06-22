@@ -248,6 +248,20 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Cú pháp LÔ ĐƠN gõ tắt NHIỀU DÒNG (giống đơn chi tiết nhưng nhiều DV chung 1 KH):
+        // dòng 1 đủ "<KH> <email> <hạn> <tiền> <lãi> [BH]", dòng 2+ gọn (bỏ KH). Bot hỏi
+        // gói từng đơn rồi sinh 1 QR tổng + mã lô GR-XXX. Phải check TRƯỚC đơn lẻ vì input
+        // nhiều dòng cần tách dòng (đơn lẻ split \s+ sẽ nuốt newline gộp các đơn thành 1).
+        $multiShortcut = $this->parseMultiDetailedOrderShortcut($text);
+        if ($multiShortcut !== null) {
+            if (isset($multiShortcut['error'])) {
+                $this->bot->sendMessage($chatId, $multiShortcut['error'], $this->mainMenuMarkup());
+            } else {
+                $this->startMultiDetailedOrderFromShortcut($chatId, $userId, $multiShortcut, $message['message_id'] ?? null);
+            }
+            return;
+        }
+
         // Cú pháp ĐƠN CHI TIẾT gõ tắt 1 dòng (không cần bấm 📝 Tạo đơn):
         // "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận>" → vd
         // "CTV22522 a@gmail.com 1m 100k 10k". Điền sẵn 5 trường → bot chỉ hỏi 3 bước
@@ -1367,13 +1381,28 @@ class TelegramListenCommand extends Command
             $multi['drafts'][] = $draftData;
             $multi['index']++;
 
-            // Còn đơn để tạo → reset state về 'awaiting_amount' với customer giữ nguyên
+            // Còn đơn để tạo → tiếp đơn kế (customer giữ nguyên).
             if ($multi['index'] < $multi['count']) {
+                $trackMsgs = $data['_track_msgs'] ?? []; // giữ để xoá hết khi finalize lô
+
+                // Lô GÕ TẮT: đơn kế đã sẵn tiền/email/thời hạn/lãi → chỉ hỏi gói (như đơn lẻ).
+                if (isset($multi['prefills'][$multi['index']])) {
+                    // Track msgId tin "Đã lưu" thủ công: promptMultiShortcutOrder set lại state
+                    // ngay sau đó nên sendAndTrack không kịp gắn vào _track_msgs của lô.
+                    $resp = $this->sendAndTrack($chatId, "✅ Đã lưu đơn {$multi['index']}/{$multi['count']}.");
+                    $savedId = $resp['result']['message_id'] ?? null;
+                    if ($savedId) {
+                        $trackMsgs[] = (int) $savedId;
+                    }
+                    $this->promptMultiShortcutOrder($chatId, $multi, $trackMsgs);
+                    return;
+                }
+
+                // Lô NHẬP TAY (nút 🛒 Đơn nhiều DV): hỏi số tiền đơn kế.
                 $next = $multi['index'] + 1;
-                // Giữ _track_msgs để xoá hết khi finalize lô (cuối cùng)
                 $newData = [
                     '_multi' => $multi,
-                    '_track_msgs' => $data['_track_msgs'] ?? [],
+                    '_track_msgs' => $trackMsgs,
                 ];
                 $this->setState($chatId, ['step' => 'awaiting_amount', 'data' => $newData]);
                 $this->sendAndTrack(
@@ -2114,7 +2143,11 @@ class TelegramListenCommand extends Command
         $this->sendAndTrack(
             $chatId,
             "🛒 <b>Đơn nhiều dịch vụ</b> — Khách mua nhiều DV cùng lúc, CK 1 lần.\n\n"
-                . "Số đơn cần tạo? (2 đến 5 đơn)\n"
+                . "⚡ <b>Nhanh nhất — gõ tắt cả lô</b> (không cần bấm nút): mỗi DV 1 dòng, dòng 1 kèm KH:\n"
+                . "<code>CTV22522 a@gmail.com 1m 100k 10k</code>\n"
+                . "<code>b@gmail.com 6m 50k 5k full</code>\n"
+                . "→ bot chỉ hỏi <b>gói</b> từng đơn rồi sinh 1 QR tổng.\n\n"
+                . "Hoặc <b>nhập tay</b>: số đơn cần tạo? (2 đến 5 đơn)\n"
                 . "<i>Vd: gõ <code>2</code> hoặc <code>3</code></i>\n\n"
                 . "Sau đó bot sẽ hỏi tên KH (1 lần) + thông tin từng đơn (gói, email, ...). "
                 . "Cuối cùng bot sinh 1 QR tổng + mã lô <code>GR-XXX</code>.\n\n"
@@ -2124,30 +2157,47 @@ class TelegramListenCommand extends Command
     }
 
     /**
-     * Phát hiện cú pháp ĐƠN CHI TIẾT gõ tắt 1 dòng (không qua nút 📝 Tạo đơn):
+     * Phát hiện cú pháp ĐƠN CHI TIẾT gõ tắt 1 DÒNG (không qua nút 📝 Tạo đơn):
      *   "<KH> <email> <thời hạn> <tiền đơn> <lợi nhuận> [bảo hành]"
      *   vd "CTV22522 kienbafab@gmail.com 1m 100k 10k" hoặc "... 10k full" / "... 10k 30d"
      *
-     * Nhận diện CHẶT để không nhầm input khác:
-     *   - Tối thiểu 5 token. Mốc chia là token EMAIL hợp lệ đầu tiên (tín hiệu mạnh
-     *     nhất — không input root nào khác có email).
-     *   - Trước email = tên KH, cho phép NHIỀU TỪ ("Nguyễn Văn A") hoặc mã KUN/CTV.
-     *   - Ngay sau email phải có ÍT NHẤT 3 trường: thời hạn (1m/25d/1y) + tiền đơn (≥1k) + lợi nhuận (≥0).
-     *   - Token thứ 4+ (optional) = bảo hành: "full" (kể cả "bảo hành full") / 30d / 1m / 1y /
-     *     từ bỏ qua (skip/không/0). KHÔNG ghi gì = bảo hành để trống. Token thừa không hợp lệ
-     *     → loại cả shortcut (return null) cho an toàn.
+     * Đơn lẻ BẮT BUỘC có KH (token trước email) để phân biệt với cú pháp đơn nhanh
+     * "50k 10k". Input nhiều dòng → bỏ qua ở đây (parseMultiDetailedOrderShortcut lo).
      *
      * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int, warranty:?array}|null
      */
     private function parseDetailedOrderShortcut(string $text): ?array
     {
-        $tokens = preg_split('/\s+/', trim($text), -1, PREG_SPLIT_NO_EMPTY);
-        // Tối thiểu 5 token: tên (≥1 từ) + email + thời hạn + tiền đơn + lợi nhuận.
-        if (count($tokens) < 5) {
+        // Nhiều dòng → KHÔNG xử lý ở đây (tránh \s+ nuốt newline gộp nhiều đơn thành 1).
+        if (preg_match('/[\r\n]/', $text)) {
             return null;
         }
-        // Mốc chia: token EMAIL đầu tiên. Trước email = tên KH (nhiều từ OK);
-        // sau email phải ĐÚNG 3 token (thời hạn, tiền, lãi).
+        $parsed = $this->parseOrderShortcutLine($text);
+        // Đơn lẻ cần KH ở đầu; thiếu KH → không phải cú pháp đơn chi tiết.
+        if (!$parsed || $parsed['customer_token'] === '') {
+            return null;
+        }
+        return $parsed;
+    }
+
+    /**
+     * Parse 1 DÒNG đơn gõ tắt: "[KH] <email> <thời hạn> <tiền đơn> <lợi nhuận> [bảo hành]".
+     *
+     * KH (các token TRƯỚC email) optional — caller quyết định có bắt buộc không (đơn lẻ +
+     * dòng 1 của lô: bắt buộc; dòng 2+ của lô: bỏ được). Mốc chia là token EMAIL hợp lệ
+     * đầu tiên — tín hiệu mạnh nhất, không input root nào khác có email. Sau email phải có
+     * ÍT NHẤT 3 trường: thời hạn (1m/25d/1y) + tiền đơn (≥1k) + lợi nhuận (≥0); token thứ
+     * 4+ = bảo hành (xem parseShortcutWarrantyTokens).
+     *
+     * @return array{customer_token:string, email:string, duration:array, amount:int, profit:int, warranty:?array}|null
+     */
+    private function parseOrderShortcutLine(string $line): ?array
+    {
+        $tokens = preg_split('/\s+/', trim($line), -1, PREG_SPLIT_NO_EMPTY);
+        // Tối thiểu 4 token (email + thời hạn + tiền + lãi) khi không có KH.
+        if (count($tokens) < 4) {
+            return null;
+        }
         $emailIdx = null;
         foreach ($tokens as $i => $t) {
             if (filter_var($t, FILTER_VALIDATE_EMAIL)) {
@@ -2155,12 +2205,12 @@ class TelegramListenCommand extends Command
                 break;
             }
         }
-        // Sau email cần ÍT NHẤT 3 token (thời hạn, tiền, lãi). Token thứ 4+ (nếu có) = bảo hành.
-        if ($emailIdx === null || $emailIdx < 1 || (count($tokens) - 1 - $emailIdx) < 3) {
+        // Cần có email + ≥3 token sau email. emailIdx có thể = 0 (dòng không kèm KH).
+        if ($emailIdx === null || (count($tokens) - 1 - $emailIdx) < 3) {
             return null;
         }
 
-        $custName = implode(' ', array_slice($tokens, 0, $emailIdx));
+        $custName = $emailIdx > 0 ? implode(' ', array_slice($tokens, 0, $emailIdx)) : '';
         $email = $tokens[$emailIdx];
         $durTok = $tokens[$emailIdx + 1];
         $amountTok = $tokens[$emailIdx + 2];
@@ -2182,21 +2232,9 @@ class TelegramListenCommand extends Command
             return null;
         }
 
-        // Bảo hành (token 4+): null = để trống. "full"/"bảo hành full" = full thời hạn.
-        // 1 token 30d/1m/1y = BH theo thời hạn đó. Từ bỏ qua = để trống. Còn lại → loại shortcut.
-        $warranty = null;
-        if (!empty($warrantyTokens)) {
-            $wStr = ltrim(strtolower(trim(implode(' ', $warrantyTokens))), '/');
-            $skipWords = ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ', '0', 'trống', 'trong'];
-            if (in_array($wStr, $skipWords, true)) {
-                $warranty = null;
-            } elseif (str_contains($wStr, 'full')) {
-                $warranty = ['type' => 'full'];
-            } elseif (count($warrantyTokens) === 1 && ($w = $this->parseDuration($warrantyTokens[0]))) {
-                $warranty = ['type' => 'duration', 'days' => $w['days'], 'label' => $w['label']];
-            } else {
-                return null;
-            }
+        $w = $this->parseShortcutWarrantyTokens($warrantyTokens);
+        if (!$w['ok']) {
+            return null;
         }
 
         return [
@@ -2205,7 +2243,112 @@ class TelegramListenCommand extends Command
             'duration' => $dur,
             'amount' => $amount,
             'profit' => $profit,
-            'warranty' => $warranty,
+            'warranty' => $w['warranty'],
+        ];
+    }
+
+    /**
+     * Parse phần bảo hành (token sau lợi nhuận) của cú pháp gõ tắt.
+     *   - Rỗng → để trống (warranty=null), ok=true.
+     *   - "full" / "bảo hành full" → full thời hạn.
+     *   - 1 token 30d/1m/1y → BH theo thời hạn đó.
+     *   - Từ bỏ qua (skip/không/0/-) → để trống.
+     *   - Còn lại (token thừa không hợp lệ) → ok=false để caller loại cả shortcut.
+     *
+     * @param array<int,string> $warrantyTokens
+     * @return array{ok:bool, warranty:?array}
+     */
+    private function parseShortcutWarrantyTokens(array $warrantyTokens): array
+    {
+        if (empty($warrantyTokens)) {
+            return ['ok' => true, 'warranty' => null];
+        }
+        $wStr = ltrim(strtolower(trim(implode(' ', $warrantyTokens))), '/');
+        $skipWords = ['skip', 'không', 'khong', 'no', '-', 'bo', 'bỏ', '0', 'trống', 'trong'];
+        if (in_array($wStr, $skipWords, true)) {
+            return ['ok' => true, 'warranty' => null];
+        }
+        if (str_contains($wStr, 'full')) {
+            return ['ok' => true, 'warranty' => ['type' => 'full']];
+        }
+        if (count($warrantyTokens) === 1 && ($w = $this->parseDuration($warrantyTokens[0]))) {
+            return ['ok' => true, 'warranty' => ['type' => 'duration', 'days' => $w['days'], 'label' => $w['label']]];
+        }
+        return ['ok' => false, 'warranty' => null];
+    }
+
+    /**
+     * Phát hiện cú pháp LÔ ĐƠN gõ tắt NHIỀU DÒNG (giống đơn lẻ nhưng nhiều dịch vụ, chung
+     * 1 KH + CK 1 lần). Dòng 1 đầy đủ (có KH); dòng 2+ gọn (bỏ KH):
+     *   CTV22522 a@gmail.com 1m 100k 10k
+     *   b@gmail.com 6m 50k 5k full
+     *   c@gmail.com 1y 200k 20k
+     *
+     * Trả:
+     *   - null nếu KHÔNG phải lô gõ tắt (<2 dòng, hoặc dòng 1 không phải đơn chi tiết đầy
+     *     đủ) → để handler khác (đơn lẻ/nhanh) thử tiếp.
+     *   - ['error' => '...'] nếu RÕ RÀNG là lô (dòng 1 hợp lệ) nhưng 1 dòng sai → báo lỗi
+     *     cụ thể, không rơi xuống nudge chung gây khó hiểu.
+     *   - ['customer_token' => ..., 'orders' => [...]] khi hợp lệ.
+     *
+     * @return array{customer_token?:string, orders?:array<int,array>, error?:string}|null
+     */
+    private function parseMultiDetailedOrderShortcut(string $text): ?array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', trim($text));
+        $lines = array_values(array_filter(array_map('trim', $lines), fn($l) => $l !== ''));
+        if (count($lines) < 2) {
+            return null;
+        }
+
+        // Dòng 1 PHẢI là đơn chi tiết đầy đủ (có KH) — xác nhận ý đồ "lô đơn".
+        $first = $this->parseOrderShortcutLine($lines[0]);
+        if (!$first || $first['customer_token'] === '') {
+            return null;
+        }
+
+        $maxOrders = 5; // đồng bộ cap với flow nút "🛒 Đơn nhiều DV"
+        if (count($lines) > $maxOrders) {
+            return ['error' => "❌ Lô tối đa <b>{$maxOrders}</b> đơn nhưng bạn gõ <b>" . count($lines) . "</b> dòng.\n"
+                . "Bớt lại còn ≤ {$maxOrders} dịch vụ rồi gửi lại nhé."];
+        }
+
+        $orders = [$this->extractOrderPrefill($first)];
+
+        for ($i = 1; $i < count($lines); $i++) {
+            $line = $this->parseOrderShortcutLine($lines[$i]);
+            if (!$line) {
+                return ['error' => "❌ Dòng " . ($i + 1) . " sai cú pháp: <code>" . e($lines[$i]) . "</code>\n\n"
+                    . "Mỗi dòng (từ dòng 2) cần: <b>email thời-hạn tiền lãi [bảo-hành]</b>\n"
+                    . "Vd: <code>b@gmail.com 6m 50k 5k full</code>"];
+            }
+            // Dòng sau lỡ ghi lại KH thì phải KHỚP KH dòng 1 (cả lô chung 1 KH).
+            if ($line['customer_token'] !== ''
+                && mb_strtolower($line['customer_token']) !== mb_strtolower($first['customer_token'])) {
+                return ['error' => "❌ Dòng " . ($i + 1) . " ghi KH <code>" . e($line['customer_token']) . "</code> khác dòng 1 (<code>" . e($first['customer_token']) . "</code>).\n\n"
+                    . "Cả lô dùng chung 1 KH — chỉ cần ghi KH ở dòng 1, các dòng sau bỏ KH đi."];
+            }
+            $orders[] = $this->extractOrderPrefill($line);
+        }
+
+        return [
+            'customer_token' => $first['customer_token'],
+            'orders' => $orders,
+        ];
+    }
+
+    /**
+     * Rút các trường per-order (bỏ customer_token) từ kết quả parseOrderShortcutLine để
+     * lưu vào _multi['prefills'].
+     */
+    private function extractOrderPrefill(array $line): array
+    {
+        return [
+            'email' => $line['email'],
+            'duration' => $line['duration'],
+            'amount' => $line['amount'],
+            'profit' => $line['profit'],
+            'warranty' => $line['warranty'],
         ];
     }
 
@@ -2247,21 +2390,8 @@ class TelegramListenCommand extends Command
 
         $dur = $detail['duration'];
 
-        // Bảo hành lấy từ gõ tắt (nếu có). 3 khóa giống hệt bước 'warranty' thủ công set ra.
-        $w = $detail['warranty'] ?? null;
-        if ($w === null) {
-            $wDays = null;          // để trống — không bảo hành
-            $wLabel = null;
-            $wFull = false;
-        } elseif (($w['type'] ?? null) === 'full') {
-            $wDays = (int) $dur['days'];   // full = bằng thời hạn dịch vụ
-            $wLabel = 'full thời hạn';
-            $wFull = true;
-        } else {
-            $wDays = $w['days'];
-            $wLabel = $w['label'];
-            $wFull = false;
-        }
+        // Bảo hành lấy từ gõ tắt (nếu có) → 3 khóa giống hệt bước 'warranty' thủ công.
+        [$wDays, $wLabel, $wFull] = $this->resolveShortcutWarranty($detail['warranty'] ?? null, $dur);
 
         $data = [
             'amount' => $detail['amount'],
@@ -2295,6 +2425,139 @@ class TelegramListenCommand extends Command
             . "🛡 Bảo hành: <b>" . e($warrantyText) . "</b>\n\n"
             . "Còn 2 bước: <b>gói dịch vụ → nhóm/gia đình</b>.";
         $this->sendAndTrack($chatId, $summary);
+        $this->sendCategoryPicker($chatId);
+    }
+
+    /**
+     * Chuẩn hoá bảo hành từ cú pháp gõ tắt → [warranty_days, warranty_label, has_full].
+     * full = bằng thời hạn dịch vụ ($dur['days']); null = không bảo hành. Dùng chung cho
+     * đơn lẻ (startDetailedOrderFromShortcut) lẫn lô (promptMultiShortcutOrder).
+     *
+     * @return array{0:?int, 1:?string, 2:bool}
+     */
+    private function resolveShortcutWarranty(?array $w, array $dur): array
+    {
+        if ($w === null) {
+            return [null, null, false];
+        }
+        if (($w['type'] ?? null) === 'full') {
+            return [(int) $dur['days'], 'full thời hạn', true];
+        }
+        return [$w['days'] ?? null, $w['label'] ?? null, false];
+    }
+
+    /**
+     * Khởi động LÔ ĐƠN từ cú pháp gõ tắt nhiều dòng: resolve KH 1 lần, lưu prefills từng
+     * đơn vào _multi rồi hỏi GÓI (+ nhóm/gia đình) cho từng đơn — giống flow nút "🛒 Đơn
+     * nhiều DV" nhưng đã điền sẵn tiền/email/thời hạn/lãi/bảo hành. Đơn cuối xong →
+     * finalizeMultiOrder sinh 1 QR tổng + mã lô GR-XXX.
+     */
+    private function startMultiDetailedOrderFromShortcut(int|string $chatId, string $userId, array $parsed, ?int $msgId): void
+    {
+        $custTok = $parsed['customer_token'];
+
+        // Resolve KH: mã KUN/CTV → tìm chính xác; còn lại → tên (find/create). Giống đơn lẻ.
+        if (preg_match('/^(KUN|CTV)\d+$/i', $custTok)) {
+            $code = strtoupper($custTok);
+            $customer = \App\Models\Customer::where('customer_code', $code)->first();
+            if (!$customer) {
+                $this->bot->sendMessage(
+                    $chatId,
+                    "❌ Không tìm thấy KH mã <code>{$code}</code>.\n\n"
+                        . "Kiểm tra lại mã, hoặc bấm 🛒 <b>Đơn nhiều DV</b> để nhập tay.",
+                    $this->mainMenuMarkup()
+                );
+                return;
+            }
+        } else {
+            try {
+                $customer = $this->findOrCreateCustomer($custTok);
+            } catch (\Throwable $e) {
+                Log::error('Telegram: multi shortcut findOrCreateCustomer failed', [
+                    'name' => $custTok,
+                    'error' => $e->getMessage(),
+                ]);
+                $this->bot->sendMessage($chatId, "❌ Lỗi tạo/tìm khách hàng: " . $e->getMessage());
+                return;
+            }
+        }
+
+        $orders = $parsed['orders'];
+        $count = count($orders);
+        $multi = [
+            'count' => $count,
+            'index' => 0,
+            'drafts' => [],
+            'shared_customer_id' => $customer->id,
+            'shared_customer_code' => $customer->customer_code,
+            'shared_customer_name' => $customer->name,
+            'prefills' => $orders, // mỗi phần tử: email/duration/amount/profit/warranty
+        ];
+
+        $total = (int) array_sum(array_column($orders, 'amount'));
+        $custLabel = $customer->wasRecentlyCreated ? 'Đã tạo KH mới' : 'KH';
+        $summary = "🛒 <b>Lô {$count} đơn</b> — đã nhận gõ tắt\n"
+            . "👤 {$custLabel}: <code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>\n"
+            . "💵 Tổng tiền: <b>" . formatShortAmount($total) . "</b>\n\n"
+            . "Bot sẽ hỏi <b>gói dịch vụ</b> (+ nhóm/gia đình) cho từng đơn, rồi sinh <b>1 QR tổng</b>.";
+
+        // Chưa có state → track thủ công cả tin gõ tắt của user lẫn summary để purge cuối lô.
+        $resp = $this->bot->sendMessage($chatId, $summary);
+        $summaryMsgId = $resp['result']['message_id'] ?? null;
+        $trackMsgs = array_values(array_filter([
+            $msgId ? (int) $msgId : null,
+            $summaryMsgId ? (int) $summaryMsgId : null,
+        ], fn($v) => $v !== null));
+
+        $this->promptMultiShortcutOrder($chatId, $multi, $trackMsgs);
+    }
+
+    /**
+     * Nạp prefill của đơn _multi['index'] vào state ở bước 'service_package' (đã sẵn
+     * tiền/KH/thời hạn/email/lãi/bảo hành + cờ _skip_profit/_skip_warranty) rồi gửi
+     * category picker. Dùng cho cả đơn đầu lẫn các đơn kế trong lô gõ tắt.
+     *
+     * @param array<int,int> $trackMsgs message_id đã track để purge khi finalize lô.
+     */
+    private function promptMultiShortcutOrder(int|string $chatId, array $multi, array $trackMsgs): void
+    {
+        $index = (int) $multi['index'];
+        $human = $index + 1;
+        $count = (int) $multi['count'];
+        $pf = $multi['prefills'][$index];
+
+        [$wDays, $wLabel, $wFull] = $this->resolveShortcutWarranty($pf['warranty'] ?? null, $pf['duration']);
+
+        $data = [
+            '_multi' => $multi,
+            '_track_msgs' => $trackMsgs,
+            'amount' => $pf['amount'],
+            'customer_id' => $multi['shared_customer_id'],
+            'customer_code' => $multi['shared_customer_code'],
+            'customer_name' => $multi['shared_customer_name'],
+            'duration_days' => $pf['duration']['days'],
+            'duration_label' => $pf['duration']['label'],
+            'duration_unit' => $pf['duration']['unit'],
+            'duration_value' => $pf['duration']['value'],
+            'email' => $pf['email'],
+            'profit_amount' => $pf['profit'],
+            'warranty_days' => $wDays,
+            'warranty_label' => $wLabel,
+            'has_full' => $wFull,
+            // Đã có lãi + bảo hành sẵn → bỏ cả 2 bước hỏi (xem advanceAfterFamily + case 'warranty').
+            '_skip_profit' => true,
+            '_skip_warranty' => true,
+        ];
+        $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
+
+        $warrantyText = $wLabel ?? '(để trống)';
+        $this->sendAndTrack(
+            $chatId,
+            "📦 <b>Đơn {$human}/{$count}</b>\n"
+                . "📧 <code>" . e($pf['email']) . "</code> · ⏰ <b>" . e($pf['duration']['label']) . "</b>\n"
+                . "💵 <b>" . formatShortAmount($pf['amount']) . "</b> · 💎 <b>" . formatShortAmount($pf['profit']) . "</b> · 🛡 " . e($warrantyText) . "\n\n"
+                . "Chọn <b>gói dịch vụ</b> cho đơn này:"
+        );
         $this->sendCategoryPicker($chatId);
     }
 
