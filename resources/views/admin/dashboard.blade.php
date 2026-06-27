@@ -424,14 +424,14 @@
                                                     <i class="fas fa-user text-white" style="font-size: 0.75rem;"></i>
                                                 </div>
                                                 <div>
-                                                    <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;">{{ $assignment->customer->name }}</div>
-                                                    <div style="font-size: 0.75rem; color: #94a3b8;">{{ $assignment->customer->customer_code }}</div>
+                                                    <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;">{{ $assignment->customer?->name ?? '—' }}</div>
+                                                    <div style="font-size: 0.75rem; color: #94a3b8;">{{ $assignment->customer?->customer_code }}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td style="padding: 0.85rem 1.25rem;">
-                                            <div style="font-weight: 600; color: #334155; font-size: 0.85rem;">{{ $assignment->servicePackage->name }}</div>
-                                            <div style="font-size: 0.75rem; color: #94a3b8;">{{ number_format($assignment->servicePackage->price) }}đ</div>
+                                            <div style="font-weight: 600; color: #334155; font-size: 0.85rem;">{{ $assignment->servicePackage?->name ?? '—' }}</div>
+                                            <div style="font-size: 0.75rem; color: #94a3b8;">{{ number_format($assignment->servicePackage?->price ?? 0) }}đ</div>
                                         </td>
                                         <td style="padding: 0.85rem 1.25rem; color: #64748b; font-size: 0.85rem;">
                                             {{ $assignment->created_at->format('d/m/Y') }}
@@ -479,10 +479,10 @@
                                 <i class="fas fa-clock" style="color: #d97706; font-size: 0.8rem;"></i>
                             </div>
                             <div class="flex-grow-1 min-width-0">
-                                <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;" class="text-truncate">{{ $service->customer->name }}</div>
-                                <div style="font-size: 0.75rem; color: #64748b;" class="text-truncate">{{ $service->servicePackage->name }}</div>
+                                <div style="font-weight: 600; color: #1e293b; font-size: 0.85rem;" class="text-truncate">{{ $service->customer?->name ?? '—' }}</div>
+                                <div style="font-size: 0.75rem; color: #64748b;" class="text-truncate">{{ $service->servicePackage?->name ?? '—' }}</div>
                                 <div style="font-size: 0.72rem; color: #ef4444; font-weight: 500;">
-                                    <i class="fas fa-calendar-times me-1"></i>{{ $service->expires_at->format('d/m/Y') }}
+                                    <i class="fas fa-calendar-times me-1"></i>{{ $service->expires_at?->format('d/m/Y') ?? '—' }}
                                 </div>
                             </div>
                         </div>
