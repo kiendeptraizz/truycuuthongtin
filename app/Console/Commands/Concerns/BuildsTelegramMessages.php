@@ -179,7 +179,9 @@ trait BuildsTelegramMessages
     {
         return "🤖 <b>Bot quản lý đơn — Hướng dẫn</b>\n\n"
             . "Bấm các nút bên dưới (cuối màn hình) để chọn nhanh:\n\n"
-            . "📝 <b>Tạo đơn</b> — đầy đủ 7 bước. ⚡ <b>Gõ tắt 1 dòng:</b> <code>CTV22522 a@gmail.com 1m 100k 10k full</code> (KH + email + thời hạn + tiền đơn + lãi + bảo hành) → bot chỉ hỏi gói/nhóm rồi sinh QR. Bảo hành ở cuối: <code>full</code> = full thời hạn, hoặc <code>30d</code>/<code>1m</code>/<code>1y</code>; KHÔNG ghi gì = không bảo hành.\n"
+            . "📝 <b>Tạo đơn</b> — đầy đủ 7 bước. ⚡ <b>Gõ tắt 1 dòng:</b> <code>CTV22522 a@gmail.com 1m 100k 10k full 2</code> (KH + email + thời hạn + tiền + lãi + [bảo hành] + nhóm) → bot chỉ còn hỏi <b>gói</b> rồi sinh QR.\n"
+            . "  • <b>Token CUỐI = mã nhóm/gia đình</b>: <code>0</code> = không nhóm; ký tự khác (số/email/mã) = thuộc nhóm đó. Không gõ token cuối → bot hỏi bước nhóm như cũ.\n"
+            . "  • <b>Bảo hành</b> (đứng trước nhóm): <code>full</code>/<code>30d</code>/<code>1m</code>/<code>1y</code>; bỏ trống = không bảo hành. Vd <code>...10k full 0</code> = BH full + không nhóm.\n"
             . "  0️⃣ Số tiền — <code>100k</code>/<code>200k</code>/<code>1.5tr</code>\n"
             . "  1️⃣ Tên/mã KH — tên mới sẽ tự tạo KUN; gõ <code>KUN98473</code> để chọn KH cũ\n"
             . "  2️⃣ Thời hạn — <code>1m</code>=tháng, <code>25d</code>=ngày, <code>1y</code>=năm\n"

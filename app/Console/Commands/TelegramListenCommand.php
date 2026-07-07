@@ -294,7 +294,7 @@ class TelegramListenCommand extends Command
             "🤔 Bot không hiểu yêu cầu này.\n\n"
                 . "💡 <b>Gõ tắt 1 dòng:</b>\n"
                 . "• <code>50k 10k</code> = tiền đơn + lợi nhuận → <b>đơn nhanh</b> + QR ngay (gói/email fill sau).\n"
-                . "• <code>CTV22522 a@gmail.com 1m 100k 10k</code> = KH + email + thời hạn + tiền + lãi → <b>đơn chi tiết</b>, bot chỉ hỏi gói/nhóm/bảo hành.\n\n"
+                . "• <code>CTV22522 a@gmail.com 1m 100k 10k full 2</code> = KH email hạn tiền lãi [bảo hành] nhóm → <b>đơn chi tiết</b>, bot chỉ còn hỏi gói. Token cuối = nhóm/GĐ (<code>0</code>=không nhóm; bỏ trống → bot hỏi).\n\n"
                 . "Hoặc bấm <b>📝 Tạo đơn</b> để nhập đầy đủ, gõ <b>mã đơn</b> (<code>DH-260502-025</code>) để xem chi tiết, bấm <b>❓ Hướng dẫn</b>.",
             $this->mainMenuMarkup()
         );
@@ -1245,7 +1245,7 @@ class TelegramListenCommand extends Command
                 }
 
                 if ($packages->count() === 1) {
-                    $this->selectServicePackage($chatId, $packages->first(), $data);
+                    $this->selectServicePackage($chatId, $userId, $packages->first(), $data);
                     return;
                 }
 
@@ -1690,7 +1690,7 @@ class TelegramListenCommand extends Command
                 $this->sendCategoryPicker($chatId);
                 return;
             }
-            $this->selectServicePackage($chatId, $pkg, $state['data'] ?? []);
+            $this->selectServicePackage($chatId, $userId, $pkg, $state['data'] ?? []);
             return;
         }
 
@@ -1968,20 +1968,27 @@ class TelegramListenCommand extends Command
     /**
      * Lưu ServicePackage đã chọn vào state, sang bước 5 (mã gia đình).
      */
-    private function selectServicePackage(int|string $chatId, \App\Models\ServicePackage $pkg, array $data): void
+    private function selectServicePackage(int|string $chatId, string $userId, \App\Models\ServicePackage $pkg, array $data): void
     {
         $data['service_package_id'] = $pkg->id;
         $data['service_name'] = $pkg->name;
         $data['account_type'] = $pkg->account_type;
         $data['category_name'] = $pkg->category?->name;
 
-        $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
-
         $this->sendAndTrack(
             $chatId,
             "✅ Đã chọn: <b>{$pkg->name}</b>\n"
                 . "<i>Loại: {$pkg->account_type} · Danh mục: " . ($pkg->category?->name ?? '—') . "</i>"
         );
+
+        // Gõ tắt đã có sẵn nhóm/gia đình (token cuối) → bỏ bước hỏi nhóm, đi thẳng finalize.
+        // advanceAfterFamily tự bỏ tiếp bảo hành + lợi nhuận nếu đã có (_skip_warranty/_skip_profit).
+        if (!empty($data['_skip_family'])) {
+            $this->advanceAfterFamily($chatId, $userId, $data);
+            return;
+        }
+
+        $this->setState($chatId, ['step' => 'family_email', 'data' => $data]);
         $this->promptFamilyEmail($chatId);
     }
 
@@ -2215,8 +2222,21 @@ class TelegramListenCommand extends Command
         $durTok = $tokens[$emailIdx + 1];
         $amountTok = $tokens[$emailIdx + 2];
         $profitTok = $tokens[$emailIdx + 3];
-        // Token thứ 4+ sau email = bảo hành (optional). Gộp để nhận cả "full" lẫn "bảo hành full".
-        $warrantyTokens = array_slice($tokens, $emailIdx + 4);
+
+        // Sau lợi nhuận: [bảo hành] <nhóm>. Token CUỐI CÙNG (nếu có) = mã nhóm/gia đình:
+        //   '0'/từ bỏ qua = không có nhóm; ký tự khác = dịch vụ thuộc nhóm đó.
+        //   Bảo hành (nếu có) đứng NGAY TRƯỚC nhóm. Không có token nào sau lợi nhuận →
+        //   nhóm CHƯA nhập (family_provided=false) → bot sẽ hỏi bước nhóm như cũ.
+        $tail = array_slice($tokens, $emailIdx + 4);
+        $family = null;
+        $familyProvided = false;
+        if (!empty($tail)) {
+            $familyTok = array_pop($tail); // token cuối = nhóm/gia đình
+            $familyProvided = true;
+            $familyNoWords = ['0', '-', 'skip', 'không', 'khong', 'no', 'bo', 'bỏ'];
+            $family = in_array(mb_strtolower($familyTok), $familyNoWords, true) ? null : $familyTok;
+        }
+        $warrantyTokens = $tail; // phần còn lại (đã tách token nhóm) = bảo hành
 
         $dur = $this->parseDuration($durTok);
         if (!$dur) {
@@ -2244,6 +2264,8 @@ class TelegramListenCommand extends Command
             'amount' => $amount,
             'profit' => $profit,
             'warranty' => $w['warranty'],
+            'family' => $family,
+            'family_provided' => $familyProvided,
         ];
     }
 
@@ -2349,6 +2371,8 @@ class TelegramListenCommand extends Command
             'amount' => $line['amount'],
             'profit' => $line['profit'],
             'warranty' => $line['warranty'],
+            'family' => $line['family'] ?? null,
+            'family_provided' => $line['family_provided'] ?? false,
         ];
     }
 
@@ -2413,17 +2437,31 @@ class TelegramListenCommand extends Command
             // Track tin nhắn gõ tắt để purge cùng các prompt khi finalize (chat sạch).
             '_track_msgs' => $msgId ? [(int) $msgId] : [],
         ];
+
+        // Nhóm/gia đình từ token cuối (nếu gõ) → điền sẵn + bỏ bước hỏi nhóm.
+        // family=null nghĩa là gõ '0' = không nhóm (vẫn skip, không hỏi).
+        $familyProvided = !empty($detail['family_provided']);
+        if ($familyProvided) {
+            $data['family_email'] = $detail['family']; // có thể null (0 = không nhóm)
+            $data['_skip_family'] = true;
+        }
         $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
 
         $warrantyText = $wLabel ?? '(để trống)';
+        $familyLine = $familyProvided
+            ? "👥 Nhóm/GĐ: <b>" . e($detail['family'] ?? '(không có)') . "</b>\n"
+            : '';
         $summary = "⚡ <b>Đơn chi tiết</b> — đã nhận gõ tắt:\n"
             . "👤 KH: <code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>\n"
             . "📧 Email: <code>" . e($detail['email']) . "</code>\n"
             . "⏰ Thời hạn: <b>" . e($dur['label']) . "</b>\n"
             . "💵 Giá đơn: <b>" . formatShortAmount($detail['amount']) . "</b>\n"
             . "💎 Lợi nhuận: <b>" . formatShortAmount($detail['profit']) . "</b>\n"
-            . "🛡 Bảo hành: <b>" . e($warrantyText) . "</b>\n\n"
-            . "Còn 2 bước: <b>gói dịch vụ → nhóm/gia đình</b>.";
+            . "🛡 Bảo hành: <b>" . e($warrantyText) . "</b>\n"
+            . $familyLine . "\n"
+            . ($familyProvided
+                ? "Còn 1 bước: <b>chọn gói dịch vụ</b>."
+                : "Còn 2 bước: <b>gói dịch vụ → nhóm/gia đình</b>.");
         $this->sendAndTrack($chatId, $summary);
         $this->sendCategoryPicker($chatId);
     }
@@ -2548,14 +2586,22 @@ class TelegramListenCommand extends Command
             '_skip_profit' => true,
             '_skip_warranty' => true,
         ];
+
+        // Nhóm/gia đình từ token cuối của dòng (nếu gõ) → điền sẵn + bỏ bước hỏi nhóm.
+        $familyProvided = !empty($pf['family_provided']);
+        if ($familyProvided) {
+            $data['family_email'] = $pf['family']; // có thể null (0 = không nhóm)
+            $data['_skip_family'] = true;
+        }
         $this->setState($chatId, ['step' => 'service_package', 'data' => $data]);
 
         $warrantyText = $wLabel ?? '(để trống)';
+        $familyPart = $familyProvided ? " · 👥 " . e($pf['family'] ?? '(không nhóm)') : '';
         $this->sendAndTrack(
             $chatId,
             "📦 <b>Đơn {$human}/{$count}</b>\n"
                 . "📧 <code>" . e($pf['email']) . "</code> · ⏰ <b>" . e($pf['duration']['label']) . "</b>\n"
-                . "💵 <b>" . formatShortAmount($pf['amount']) . "</b> · 💎 <b>" . formatShortAmount($pf['profit']) . "</b> · 🛡 " . e($warrantyText) . "\n\n"
+                . "💵 <b>" . formatShortAmount($pf['amount']) . "</b> · 💎 <b>" . formatShortAmount($pf['profit']) . "</b> · 🛡 " . e($warrantyText) . $familyPart . "\n\n"
                 . "Chọn <b>gói dịch vụ</b> cho đơn này:"
         );
         $this->sendCategoryPicker($chatId);
