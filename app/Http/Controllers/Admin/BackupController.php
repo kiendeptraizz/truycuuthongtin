@@ -22,6 +22,23 @@ class BackupController extends Controller
     }
 
     /**
+     * Tất cả file backup trong thư mục: .sql, .sql.gz (mysqldump gzip — backup daily),
+     * .zip (complete backup). Trước đây các hàm chỉ glob *.sql + *.zip nên BỎ SÓT toàn
+     * bộ backup .sql.gz → list/dashboard/stats hiển thị rỗng + không có nút tải (lỗi P1-12).
+     * File checksum *.sql.gz.sha256 KHÔNG lọt vào (glob *.sql.gz không match .sha256).
+     *
+     * @return array<int,string> đường dẫn tuyệt đối
+     */
+    private function backupFiles(): array
+    {
+        return array_merge(
+            glob($this->backupPath . '/*.sql') ?: [],
+            glob($this->backupPath . '/*.sql.gz') ?: [],
+            glob($this->backupPath . '/*.zip') ?: []
+        );
+    }
+
+    /**
      * Dashboard backup - trang chính
      */
     public function index()
@@ -268,10 +285,7 @@ class BackupController extends Controller
 
     private function getBackupStatistics()
     {
-        // Lấy cả file .sql và .zip
-        $sqlFiles = glob($this->backupPath . '/*.sql');
-        $zipFiles = glob($this->backupPath . '/*.zip');
-        $files = array_merge($sqlFiles, $zipFiles);
+        $files = $this->backupFiles();
 
         if (empty($files)) {
             return [
@@ -319,10 +333,7 @@ class BackupController extends Controller
 
     private function calculateHealthScore()
     {
-        // Lấy cả file .sql và .zip
-        $sqlFiles = glob($this->backupPath . '/*.sql');
-        $zipFiles = glob($this->backupPath . '/*.zip');
-        $files = array_merge($sqlFiles, $zipFiles);
+        $files = $this->backupFiles();
 
         if (empty($files)) {
             return [
@@ -372,10 +383,7 @@ class BackupController extends Controller
 
     private function getRecentBackups($limit = 5)
     {
-        // Lấy cả file .sql và .zip
-        $sqlFiles = glob($this->backupPath . '/*.sql');
-        $zipFiles = glob($this->backupPath . '/*.zip');
-        $files = array_merge($sqlFiles, $zipFiles);
+        $files = $this->backupFiles();
 
         if (empty($files)) {
             return [];
@@ -417,10 +425,7 @@ class BackupController extends Controller
 
     private function getAllBackups()
     {
-        // Lấy cả file .sql và .zip
-        $sqlFiles = glob($this->backupPath . '/*.sql');
-        $zipFiles = glob($this->backupPath . '/*.zip');
-        $files = array_merge($sqlFiles, $zipFiles);
+        $files = $this->backupFiles();
 
         if (empty($files)) {
             return [];
@@ -478,15 +483,28 @@ class BackupController extends Controller
 
     private function verifyBackupIntegrity($filePath)
     {
+        if (!file_exists($filePath) || filesize($filePath) === 0) {
+            return false;
+        }
+
         $extension = pathinfo($filePath, PATHINFO_EXTENSION);
 
         if ($extension === 'sql') {
-            return file_exists($filePath) && filesize($filePath) > 0;
-        } elseif ($extension === 'zip') {
-            if (!file_exists($filePath) || filesize($filePath) === 0) {
+            return true; // đã kiểm tồn tại + size > 0 ở trên
+        }
+
+        if ($extension === 'gz') {
+            // .sql.gz — kiểm magic bytes gzip (1F 8B) để chắc file không hỏng/không rỗng.
+            $fh = @fopen($filePath, 'rb');
+            if (!$fh) {
                 return false;
             }
+            $magic = fread($fh, 2);
+            fclose($fh);
+            return $magic === "\x1f\x8b";
+        }
 
+        if ($extension === 'zip') {
             // Kiểm tra tính toàn vẹn của ZIP file
             $zip = new \ZipArchive();
             $result = $zip->open($filePath, \ZipArchive::CHECKCONS);
