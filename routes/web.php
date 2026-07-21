@@ -28,6 +28,10 @@ use App\Http\Controllers\Auth\AuthController;
 Route::post('/api/webhook/pay2s', \App\Http\Controllers\Api\Pay2sWebhookController::class)
     ->name('webhook.pay2s');
 
+// Nhận đơn bán tự động từ hệ bot Python (web shop + bot lẻ/sỉ + dropship). Verify bằng BOT_INGEST_TOKEN.
+Route::post('/api/webhook/ingest-sale', \App\Http\Controllers\Api\BotSaleController::class)
+    ->name('webhook.ingest-sale');
+
 // ============================================================================
 // 🔐 AUTHENTICATION ROUTES
 // ============================================================================
@@ -292,6 +296,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
         Route::get('/category-stats', [RevenueController::class, 'getCategoryStats'])->name('category-stats');
         Route::get('/performance-stats', [RevenueController::class, 'getPerformanceStats'])->name('performance-stats');
         Route::get('/hourly-stats', [RevenueController::class, 'getHourlyStats'])->name('hourly-stats');
+        Route::get('/channel-stats', [RevenueController::class, 'getChannelStats'])->name('channel-stats');
         Route::get('/growth-stats', [RevenueController::class, 'getGrowthStats'])->name('growth-stats');
         Route::get('/forecast-stats', [RevenueController::class, 'getForecastStats'])->name('forecast-stats');
         Route::get('/export', [RevenueController::class, 'exportReport'])->name('export');

@@ -685,6 +685,105 @@ class RevenueController extends Controller
     }
 
     /**
+     * Thống kê doanh thu/lợi nhuận theo KÊNH bán.
+     * Đơn bán tự động đi qua pending_orders.channel (shop_web/bot_le/bot_si/dropship);
+     * đơn CRM qua PO gom theo created_via; đơn CRM web admin (không PO) → nhãn 'crm_web'.
+     */
+    public function getChannelStats(Request $request): JsonResponse
+    {
+        $startDate = $request->get('start_date', Carbon::today()->toDateString());
+        $endDate = $request->get('end_date', Carbon::today()->toDateString());
+        try {
+            $start = Carbon::parse($startDate)->startOfDay();
+            $end = Carbon::parse($endDate)->endOfDay();
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid date format'], 400);
+        }
+
+        $labels = [
+            'shop_web' => 'Web lẻ (shop)',
+            'bot_le' => 'Bot lẻ',
+            'bot_si' => 'Bot sỉ (CTV)',
+            'dropship' => 'Dropship',
+            'web' => 'CRM Web',
+            'telegram' => 'CRM Bot (Telegram)',
+            'bot' => 'Bán tự động',
+            'crm_web' => 'CRM / Nhập tay',
+            'khac' => 'Khác',
+        ];
+
+        // Nguồn A: đơn qua PendingOrder (bot + CRM). Gom theo channel, fallback created_via.
+        $poRows = DB::table('pending_orders')
+            ->leftJoin('profits', 'pending_orders.customer_service_id', '=', 'profits.customer_service_id')
+            ->whereNotNull('pending_orders.paid_at')
+            ->where('pending_orders.status', '!=', 'cancelled')
+            ->whereBetween('pending_orders.paid_at', [$start, $end])
+            ->selectRaw("
+                COALESCE(NULLIF(pending_orders.channel, ''), pending_orders.created_via, 'khac') as ch,
+                COUNT(*) as orders,
+                SUM(pending_orders.amount) as revenue,
+                SUM(COALESCE(profits.profit_amount, pending_orders.profit_amount, 0)) as profit
+            ")
+            ->groupBy('ch')
+            ->get();
+
+        $buckets = [];
+        foreach ($poRows as $r) {
+            $buckets[$r->ch] = [
+                'orders' => (int) $r->orders,
+                'revenue' => (float) $r->revenue,
+                'profit' => (float) $r->profit,
+            ];
+        }
+
+        // Nguồn B: CS không qua PO (đơn web admin tạo tay) → nhãn crm_web.
+        $cs = DB::table('customer_services')
+            ->leftJoin('profits', 'customer_services.id', '=', 'profits.customer_service_id')
+            ->whereNull('customer_services.pending_order_id')
+            ->whereNotNull('customer_services.activated_at')
+            ->where('customer_services.status', '!=', 'cancelled')
+            ->whereBetween('customer_services.activated_at', [$start, $end])
+            ->selectRaw("
+                COUNT(*) as orders,
+                SUM(COALESCE(customer_services.order_amount, 0)) as revenue,
+                SUM(COALESCE(profits.profit_amount, 0)) as profit
+            ")
+            ->first();
+        if ($cs && (int) $cs->orders > 0) {
+            $prev = $buckets['crm_web'] ?? ['orders' => 0, 'revenue' => 0, 'profit' => 0];
+            $buckets['crm_web'] = [
+                'orders' => $prev['orders'] + (int) $cs->orders,
+                'revenue' => $prev['revenue'] + (float) $cs->revenue,
+                'profit' => $prev['profit'] + (float) $cs->profit,
+            ];
+        }
+
+        $channels = [];
+        foreach ($buckets as $ch => $b) {
+            $channels[] = [
+                'channel' => $ch,
+                'label' => $labels[$ch] ?? $ch,
+                'orders' => $b['orders'],
+                'revenue' => $b['revenue'],
+                'profit' => $b['profit'],
+                'margin' => $b['revenue'] > 0 ? round($b['profit'] / $b['revenue'] * 100, 2) : 0,
+            ];
+        }
+        usort($channels, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
+
+        return response()->json([
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+            'channels' => $channels,
+            'totals' => [
+                'orders' => array_sum(array_column($channels, 'orders')),
+                'revenue' => array_sum(array_column($channels, 'revenue')),
+                'profit' => array_sum(array_column($channels, 'profit')),
+            ],
+        ]);
+    }
+
+    /**
      * Lấy thống kê theo dịch vụ
      */
     public function getServiceStats(Request $request): JsonResponse

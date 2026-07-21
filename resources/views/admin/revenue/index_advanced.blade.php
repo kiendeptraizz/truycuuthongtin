@@ -450,6 +450,29 @@
                         </div>
                     </div>
 
+                    <!-- Doanh thu theo KÊNH bán -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap">
+                                    <h6 class="m-0 font-weight-bold text-primary">
+                                        <i class="fas fa-sitemap me-2"></i>
+                                        Doanh thu theo kênh bán
+                                    </h6>
+                                    <span class="text-muted small">Web lẻ · Bot lẻ · Bot sỉ (CTV) · Dropship · CRM</span>
+                                </div>
+                                <div class="card-body">
+                                    <div id="channelStats">
+                                        <div class="text-center text-muted py-4">
+                                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                            <p class="mt-2">Đang tải...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Growth Comparison -->
                     <div class="row">
                         <div class="col-12">
@@ -866,6 +889,7 @@
         Promise.all([
             loadRevenueData(),
             loadServiceStats(),
+            loadChannelStats(),
             loadGrowthStats()
         ]).then(() => {
 
@@ -956,6 +980,49 @@
                 handleDataError('services');
             }
         });
+    }
+
+    function loadChannelStats() {
+        $('#channelStats').html('<div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2">Đang tải...</p></div>');
+        return $.ajax({
+            url: '{{ route("admin.revenue.channel-stats") }}',
+            method: 'GET',
+            data: currentFilters,
+            success: function(response) {
+                renderChannelStats(response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Error loading channel stats:', error);
+                $('#channelStats').html('<div class="alert alert-danger mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Lỗi tải thống kê theo kênh. <button class="btn btn-sm btn-outline-danger ms-2" onclick="loadChannelStats()"><i class="fas fa-redo"></i> Thử lại</button></div>');
+            }
+        });
+    }
+
+    function renderChannelStats(res) {
+        var chans = (res && res.channels) ? res.channels : [];
+        if (!chans.length) {
+            $('#channelStats').html('<p class="text-muted text-center mb-0 py-3">Chưa có đơn nào trong khoảng thời gian này.</p>');
+            return;
+        }
+        var fmt = function (n) { return Number(n || 0).toLocaleString('vi-VN'); };
+        var t = res.totals || { orders: 0, revenue: 0, profit: 0 };
+        var rows = chans.map(function (c) {
+            var share = t.revenue > 0 ? Math.round(c.revenue / t.revenue * 100) : 0;
+            return '<tr>'
+                + '<td><span class="fw-semibold">' + c.label + '</span></td>'
+                + '<td class="text-end">' + fmt(c.orders) + '</td>'
+                + '<td class="text-end text-primary fw-semibold">' + fmt(c.revenue) + 'đ</td>'
+                + '<td class="text-end text-success">' + fmt(c.profit) + 'đ</td>'
+                + '<td class="text-end">' + c.margin + '%</td>'
+                + '<td style="min-width:130px"><div class="progress" style="height:8px"><div class="progress-bar bg-info" role="progressbar" style="width:' + share + '%"></div></div><small class="text-muted">' + share + '%</small></td>'
+                + '</tr>';
+        }).join('');
+        var html = '<div class="table-responsive"><table class="table table-sm align-middle mb-0">'
+            + '<thead><tr><th>Kênh</th><th class="text-end">Đơn</th><th class="text-end">Doanh thu</th><th class="text-end">Lợi nhuận</th><th class="text-end">Biên LN</th><th>Tỷ trọng DT</th></tr></thead>'
+            + '<tbody>' + rows + '</tbody>'
+            + '<tfoot><tr class="fw-bold border-top"><td>Tổng</td><td class="text-end">' + fmt(t.orders) + '</td><td class="text-end text-primary">' + fmt(t.revenue) + 'đ</td><td class="text-end text-success">' + fmt(t.profit) + 'đ</td><td></td><td></td></tr></tfoot>'
+            + '</table></div>';
+        $('#channelStats').html(html);
     }
 
     function loadGrowthStats() {

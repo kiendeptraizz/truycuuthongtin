@@ -17,6 +17,7 @@ class PendingOrder extends Model
         'note',
         'status',
         'created_via',
+        'channel',
         'is_paid',
         'paid_at',
         'paid_amount',

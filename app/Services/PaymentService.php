@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CustomerService;
 use App\Models\PendingOrder;
 use App\Models\Profit;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -35,10 +36,11 @@ class PaymentService
         int $amount,
         ?string $bankTxId = null,
         ?string $rawPayload = null,
-        string $source = 'pay2s'
+        string $source = 'pay2s',
+        ?Carbon $paidAt = null
     ): array {
         try {
-            return DB::transaction(function () use ($order, $amount, $bankTxId, $rawPayload, $source) {
+            return DB::transaction(function () use ($order, $amount, $bankTxId, $rawPayload, $source, $paidAt) {
                 // Lock + reload để đảm bảo state mới nhất
                 $locked = PendingOrder::where('id', $order->id)->lockForUpdate()->first();
                 if (!$locked) {
@@ -49,14 +51,14 @@ class PaymentService
                 }
 
                 $locked->update([
-                    'paid_at' => now(),
+                    'paid_at' => $paidAt ?? now(),
                     'paid_amount' => $amount,
                     'bank_transaction_id' => $bankTxId ?: null,
                     'bank_raw_payload' => $rawPayload,
                 ]);
 
                 $locked->refresh();
-                $csId = $this->tryAutoCreateCustomerService($locked, $source);
+                $csId = $this->tryAutoCreateCustomerService($locked, $source, $paidAt);
 
                 return [
                     'ok' => true,
@@ -226,10 +228,10 @@ class PaymentService
      *   - PendingOrder.customer_service_id != null → activate CS pending.
      *   - Còn lại → tạo CS active mới nếu đủ data structured.
      */
-    public function tryAutoCreateCustomerService(PendingOrder $order, string $source = 'pay2s'): ?int
+    public function tryAutoCreateCustomerService(PendingOrder $order, string $source = 'pay2s', ?Carbon $asOf = null): ?int
     {
         if ($order->customer_service_id) {
-            return $this->activatePendingCustomerService($order, $source);
+            return $this->activatePendingCustomerService($order, $source, $asOf);
         }
 
         $missing = array_filter([
@@ -249,10 +251,10 @@ class PaymentService
             return null;
         }
 
-        return $this->createActiveCustomerService($order, $source);
+        return $this->createActiveCustomerService($order, $source, $asOf);
     }
 
-    private function activatePendingCustomerService(PendingOrder $order, string $source): ?int
+    private function activatePendingCustomerService(PendingOrder $order, string $source, ?Carbon $asOf = null): ?int
     {
         $cs = CustomerService::find($order->customer_service_id);
         if (!$cs) {
@@ -262,14 +264,14 @@ class PaymentService
                 'source' => $source,
             ]);
             $order->update(['customer_service_id' => null]);
-            return $this->createActiveCustomerService($order, $source);
+            return $this->createActiveCustomerService($order, $source, $asOf);
         }
 
         if ($cs->status === 'active' && $cs->activated_at) {
             return $cs->id;
         }
 
-        $now = now();
+        $now = $asOf ?? now();
         $expiresAt = $now->copy()->addDays((int) ($order->duration_days ?? $cs->duration_days ?? 0));
         $sourceLabel = $source === 'manual' ? 'admin xác nhận thủ công' : 'Pay2S';
 
@@ -300,9 +302,9 @@ class PaymentService
         return $cs->id;
     }
 
-    private function createActiveCustomerService(PendingOrder $order, string $source): ?int
+    private function createActiveCustomerService(PendingOrder $order, string $source, ?Carbon $asOf = null): ?int
     {
-        $now = now();
+        $now = $asOf ?? now();
         $expiresAt = $now->copy()->addDays((int) $order->duration_days);
         $sourceLabel = $source === 'manual' ? 'admin xác nhận thủ công' : 'Pay2S webhook';
 

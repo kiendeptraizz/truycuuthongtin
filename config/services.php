@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Nhận đơn bán tự động từ hệ bot Python (ingest-sale). Token nội bộ, chạy localhost.
+    'bot_ingest' => [
+        'token' => env('BOT_INGEST_TOKEN', ''),
+        'category_name' => env('BOT_INGEST_CATEGORY', '🤖 Bán tự động (Bot/Web)'),
+    ],
+
 ];
