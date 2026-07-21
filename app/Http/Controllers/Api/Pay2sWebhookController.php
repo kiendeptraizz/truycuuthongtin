@@ -221,6 +221,14 @@ class Pay2sWebhookController extends Controller
                     ? "\n⚠️ <i>Khách trả dư " . formatShortAmount($delta) . " (so với tổng lô " . formatShortAmount($totalExpected) . ")</i>"
                     : "\n⚠️ <i>Khách trả thiếu " . formatShortAmount(abs($delta)) . " (so với tổng lô " . formatShortAmount($totalExpected) . ")</i>");
 
+            // Dòng giảm giá (nếu lô có áp %) — tổng sau giảm = totalExpected (đã khớp tiền QR).
+            $discountPercent = (float) ($groupResult['discount_percent'] ?? 0);
+            $subtotal = (int) ($groupResult['subtotal'] ?? $totalExpected);
+            $discountLine = $discountPercent > 0
+                ? "\n🏷 <i>Giảm giá -" . rtrim(rtrim(number_format($discountPercent, 2), '0'), '.') . "% (tạm tính "
+                    . formatShortAmount($subtotal) . " → sau giảm " . formatShortAmount($totalExpected) . ")</i>"
+                : '';
+
             $customerLine = $customer
                 ? "<code>{$customer->customer_code}</code> — <b>" . e($customer->name) . "</b>"
                 : "<i>(chưa gắn KH)</i>";
@@ -235,7 +243,8 @@ class Pay2sWebhookController extends Controller
             $msg = "💰 <b>ĐÃ NHẬN TIỀN — Cám ơn quý khách đã mua hàng!</b>\n\n"
                 . "👤 Mã khách hàng: {$customerLine}\n"
                 . "🛒 Mã lô: <code>{$groupCode}</code> ({$groupResult['count']} đơn)\n"
-                . $orderLines . "\n\n"
+                . $orderLines
+                . $discountLine . "\n\n"
                 . "💵 Tổng tiền nhận: <b>" . formatShortAmount($amount) . "</b>"
                 . $deltaNote
                 . "\n\n"

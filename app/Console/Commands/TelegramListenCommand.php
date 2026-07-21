@@ -1126,6 +1126,30 @@ class TelegramListenCommand extends Command
                 );
                 return;
 
+            case 'awaiting_multi_discount':
+                $input = trim($text);
+                $lcDiscount = strtolower($input);
+                if (in_array($lcDiscount, ['/skip', 'skip', '0', 'không', 'khong', 'no', '-'], true)) {
+                    $this->finalizeMultiWithDiscount($chatId, $userId, $data, 0.0);
+                    return;
+                }
+                // Chấp nhận "10", "10%", "10.5", "10,5"
+                $normDiscount = str_replace([',', '%', ' '], ['.', '', ''], $input);
+                if (!preg_match('/^\d+(\.\d+)?$/', $normDiscount) || (float) $normDiscount < 0 || (float) $normDiscount > 100) {
+                    $this->sendAndTrack(
+                        $chatId,
+                        "❌ % giảm không hợp lệ. Gõ số 0–100 (vd <code>10</code> = giảm 10%), hoặc <code>0</code> / bấm <b>Không giảm</b>:",
+                        ['reply_markup' => json_encode([
+                            'inline_keyboard' => [[
+                                ['text' => '⏭ Không giảm (0%)', 'callback_data' => 'multi_no_discount'],
+                            ]],
+                        ])]
+                    );
+                    return;
+                }
+                $this->finalizeMultiWithDiscount($chatId, $userId, $data, (float) $normDiscount);
+                return;
+
             case 'customer_name':
                 $input = trim($text);
                 if (mb_strlen($input) < 2) {
@@ -1415,14 +1439,17 @@ class TelegramListenCommand extends Command
                 return;
             }
 
-            // Đơn cuối → tạo lô. Save tracked msgs trước clearState để purge
-            // async sau finalizeMultiOrder gửi xong QR + caption.
-            $trackedMsgs = $data['_track_msgs'] ?? [];
-            $this->clearState($chatId);
-            $this->finalizeMultiOrder($chatId, $userId, $multi['drafts']);
-            if (!empty($trackedMsgs)) {
-                $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
-            }
+            // Đơn cuối → HỎI % giảm giá cho lô trước khi tạo + sinh QR.
+            // Giữ drafts + _track_msgs trong state để bước giảm giá dùng lại (cả 2 luồng
+            // nút lẫn gõ tắt đều hội tụ ở đây).
+            $this->setState($chatId, [
+                'step' => 'awaiting_multi_discount',
+                'data' => [
+                    '_multi' => $multi,
+                    '_track_msgs' => $data['_track_msgs'] ?? [],
+                ],
+            ]);
+            $this->promptMultiDiscount($chatId, $multi);
             return;
         }
 
@@ -1477,20 +1504,58 @@ class TelegramListenCommand extends Command
      * @param  string $userId
      * @param  array<int, array> $drafts  Mỗi draft là full $data của 1 đơn (đủ 7 bước).
      */
-    private function finalizeMultiOrder(int|string $chatId, string $userId, array $drafts): void
+    /**
+     * Hỏi % giảm giá cho cả lô (bước cuối trước khi sinh QR) — dùng chung nút + gõ tắt.
+     */
+    private function promptMultiDiscount(int|string $chatId, array $multi): void
+    {
+        $subtotal = (int) array_sum(array_column($multi['drafts'] ?? [], 'amount'));
+        $count = count($multi['drafts'] ?? []);
+        $this->sendAndTrack(
+            $chatId,
+            "✅ Đã nhập xong <b>{$count} đơn</b> — tạm tính <b>" . formatShortAmount($subtotal) . "</b>.\n\n"
+                . "🏷 <b>Nhập % giảm giá cho lô</b> — vd gõ <code>10</code> = giảm 10% trên tổng.\n"
+                . "Gõ <code>0</code> hoặc bấm <b>Không giảm</b> nếu không áp dụng.",
+            ['reply_markup' => json_encode([
+                'inline_keyboard' => [
+                    [['text' => '⏭ Không giảm (0%)', 'callback_data' => 'multi_no_discount']],
+                    [['text' => '❌ Huỷ lô', 'callback_data' => 'cancel']],
+                ],
+            ])]
+        );
+    }
+
+    /**
+     * Clear state + tạo lô với % giảm + purge tracked msgs. Dùng chung cho đường text
+     * (gõ %) lẫn callback "Không giảm".
+     */
+    private function finalizeMultiWithDiscount(int|string $chatId, string $userId, array $data, float $discountPercent): void
+    {
+        $multi = $data['_multi'] ?? [];
+        $trackedMsgs = $data['_track_msgs'] ?? [];
+        $this->clearState($chatId);
+        $this->finalizeMultiOrder($chatId, $userId, $multi['drafts'] ?? [], $discountPercent);
+        if (!empty($trackedMsgs)) {
+            $this->purgeTrackedMessages($chatId, ['_track_msgs' => $trackedMsgs]);
+        }
+    }
+
+    private function finalizeMultiOrder(int|string $chatId, string $userId, array $drafts, float $discountPercent = 0): void
     {
         if (empty($drafts)) {
             $this->bot->sendMessage($chatId, "❌ Lô rỗng — không có đơn nào để tạo.");
             return;
         }
+        $discountPercent = max(0.0, min(100.0, $discountPercent));
 
         try {
-            $result = \Illuminate\Support\Facades\DB::transaction(function () use ($chatId, $drafts) {
+            $result = \Illuminate\Support\Facades\DB::transaction(function () use ($chatId, $drafts, $discountPercent) {
                 $groupCode = PendingOrder::generateGroupCode();
                 $orders = [];
                 foreach ($drafts as $draft) {
                     $order = PendingOrderController::createOrder([
                         'amount' => $draft['amount'],
+                        'discount_percent' => $discountPercent,
                         'note' => $this->buildNote($draft),
                         'group_code' => $groupCode, // chia sẻ cho cả lô
                         'customer_id' => $draft['customer_id'] ?? null,
@@ -1520,12 +1585,14 @@ class TelegramListenCommand extends Command
             return;
         }
 
-        // Build caption + QR tổng
-        $totalAmount = (int) array_sum(array_column($drafts, 'amount'));
+        // Build caption + QR tổng (đã trừ % giảm giá nếu có)
+        $subtotal = (int) array_sum(array_column($drafts, 'amount'));
+        $discountAmount = (int) round($subtotal * $discountPercent / 100);
+        $totalAmount = $subtotal - $discountAmount; // tổng KHÁCH PHẢI TRẢ → tích hợp vào QR
         $groupCode = $result['groupCode'];
         $qrUrl = $this->qr->buildQrUrl($totalAmount, $groupCode);
 
-        // Header: lô + KH + tổng tiền
+        // Header: lô + KH (tổng tiền đưa xuống footer hoá đơn)
         $header = [
             "🛒 <b>LÔ ĐƠN — " . count($drafts) . " dịch vụ</b>",
             "🏷 Mã lô: <code>{$groupCode}</code>",
@@ -1533,9 +1600,8 @@ class TelegramListenCommand extends Command
         if (!empty($drafts[0]['customer_code']) && !empty($drafts[0]['customer_name'])) {
             $header[] = "👤 Khách hàng: <code>{$drafts[0]['customer_code']}</code> — <b>" . e($drafts[0]['customer_name']) . "</b>";
         }
-        $header[] = "💵 Tổng tiền: <b>" . formatShortAmount($totalAmount) . "</b>";
 
-        // Block từng đơn — format giống đơn lẻ (✅ mã đơn + 📌 dịch vụ/giá/email/...)
+        // Block từng đơn — GIÁ GỐC (format giống đơn lẻ: ✅ mã đơn + 📌 dịch vụ/giá/email/...)
         $blocks = collect($result['orders'])->map(function ($item) {
             $order = $item['order'];
             $draft = $item['draft'];
@@ -1544,11 +1610,23 @@ class TelegramListenCommand extends Command
             return implode("\n", $lines);
         })->implode("\n\n──────\n\n");
 
+        // Footer hoá đơn: có giảm giá → Tạm tính / Giảm X% / Tổng; không giảm → chỉ Tổng.
+        if ($discountPercent > 0) {
+            $dLabel = rtrim(rtrim(number_format($discountPercent, 2), '0'), '.'); // 10.00 → 10 ; 10.50 → 10.5
+            $summary = "🧾 Tạm tính: <b>" . formatShortAmount($subtotal) . "</b>\n"
+                . "🏷 Giảm giá: <b>-{$dLabel}%</b> (−" . formatShortAmount($discountAmount) . ")\n"
+                . "💵 <b>Tổng phải trả: " . formatShortAmount($totalAmount) . "</b>";
+        } else {
+            $summary = "💵 <b>Tổng tiền: " . formatShortAmount($totalAmount) . "</b>";
+        }
+
         $tail = "<b><i>📌 Thông tin đơn hàng đã được tích hợp vào QR, quý khách vui lòng quét mã chuyển khoản và chụp lại bill giúp em, em cám ơn ạ</i></b>";
 
         $caption = implode("\n", $header)
             . "\n\n──────\n\n"
             . $blocks
+            . "\n\n──────\n\n"
+            . $summary
             . "\n\n──────\n\n"
             . $tail;
 
@@ -1655,6 +1733,16 @@ class TelegramListenCommand extends Command
                 $this->clearStateAndPurge($chatId);
             }
             $this->bot->sendMessage($chatId, "❌ Đã huỷ đơn. Gõ số tiền (vd <code>100k</code>) để bắt đầu đơn mới.");
+            return;
+        }
+
+        // Click "Không giảm (0%)" ở bước hỏi % giảm giá lô
+        if ($cbData === 'multi_no_discount') {
+            if ($state && ($state['step'] ?? null) === 'awaiting_multi_discount') {
+                $this->finalizeMultiWithDiscount($chatId, $userId, $state['data'] ?? [], 0.0);
+            } else {
+                $this->bot->sendMessage($chatId, "ℹ️ Phiên đã hết — bấm 🛒 <b>Đơn nhiều DV</b> để tạo lại.");
+            }
             return;
         }
 

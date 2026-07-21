@@ -119,8 +119,27 @@ class PaymentService
                     ];
                 }
 
-                $totalExpected = (int) $orders->sum('amount');
+                // Giảm giá lô: mọi đơn trong lô mang cùng discount_percent (0 nếu không giảm).
+                $discountPercent = (float) ($orders->first()->discount_percent ?? 0);
+                $subtotal = (int) $orders->sum('amount');
+                $discountAmount = (int) round($subtotal * $discountPercent / 100);
+                $totalExpected = $subtotal - $discountAmount; // tổng khách PHẢI trả (đã giảm) = khớp tiền QR
                 $delta = $totalAmount - $totalExpected;
+
+                // Phân bổ paid_amount ĐÃ GIẢM cho từng đơn (Σ = totalExpected, khớp tuyệt đối).
+                // Đơn cuối gánh phần dư làm tròn. discount=0 → share = amount (giữ nguyên hành vi cũ).
+                $shares = [];
+                $assigned = 0;
+                $orderCountTotal = $orders->count();
+                $seq = 0;
+                foreach ($orders as $o) {
+                    $seq++;
+                    $share = $seq < $orderCountTotal
+                        ? (int) round($o->amount * (1 - $discountPercent / 100))
+                        : ($totalExpected - $assigned);
+                    $assigned += $share;
+                    $shares[$o->id] = $share;
+                }
 
                 $results = [];
                 $newlyPaidCount = 0; // số đơn ACTUALLY chuyển pending → paid lần này
@@ -140,7 +159,7 @@ class PaymentService
 
                     $order->update([
                         'paid_at' => now(),
-                        'paid_amount' => (int) $order->amount,
+                        'paid_amount' => $shares[$order->id] ?? (int) $order->amount,
                         'bank_transaction_id' => $perOrderTxId,
                         'bank_raw_payload' => $rawPayload, // chung — show toàn payload
                     ]);
@@ -159,6 +178,9 @@ class PaymentService
                 Log::info('PaymentService: markGroupPaid completed', [
                     'group_code' => $groupCode,
                     'total_amount' => $totalAmount,
+                    'subtotal' => $subtotal,
+                    'discount_percent' => $discountPercent,
+                    'discount_amount' => $discountAmount,
                     'total_expected' => $totalExpected,
                     'delta' => $delta,
                     'order_count' => count($results),
@@ -174,6 +196,9 @@ class PaymentService
                     'count' => count($results),
                     'newly_paid_count' => $newlyPaidCount,
                     'orders' => $results,
+                    'subtotal' => $subtotal,
+                    'discount_percent' => $discountPercent,
+                    'discount_amount' => $discountAmount,
                     'total_expected' => $totalExpected,
                     'delta' => $delta,
                 ];

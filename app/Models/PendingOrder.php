@@ -13,6 +13,7 @@ class PendingOrder extends Model
         'order_code',
         'group_code',
         'amount',
+        'discount_percent',
         'note',
         'status',
         'created_via',

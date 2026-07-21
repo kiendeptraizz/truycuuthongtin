@@ -253,6 +253,7 @@ trait BuildsTelegramMessages
             'quick_order_amount' => 'số tiền (đơn nhanh)',
             'quick_order_customer' => 'tên/mã khách hàng (đơn nhanh)',
             'awaiting_multi_count' => 'số đơn (lô đa dịch vụ)',
+            'awaiting_multi_discount' => '% giảm giá (lô)',
             'customer_name' => 'tên hoặc mã khách hàng',
             'duration' => 'thời hạn',
             'email' => 'email tài khoản',
