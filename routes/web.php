@@ -386,4 +386,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'two-factor', 'preve
         Route::put('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'updateSubcategory'])->name('subcategories.update');
         Route::delete('/{resource}/subcategories/{subcategory}', [ResourceController::class, 'destroySubcategory'])->name('subcategories.destroy');
     });
+
+    // ========================================================================
+    // 🏷 QUẢN LÝ CÔNG VIỆC (mã đánh dấu việc cần xử lý — dùng chung với bot)
+    // ========================================================================
+    Route::prefix('work-tasks')->name('work-tasks.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\WorkTaskController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Admin\WorkTaskController::class, 'store'])->name('store');
+        Route::patch('/{workTask}/toggle', [\App\Http\Controllers\Admin\WorkTaskController::class, 'toggle'])->name('toggle');
+        Route::patch('/{workTask}/note', [\App\Http\Controllers\Admin\WorkTaskController::class, 'updateNote'])->name('note');
+        Route::delete('/{workTask}', [\App\Http\Controllers\Admin\WorkTaskController::class, 'destroy'])->name('destroy');
+    });
 });

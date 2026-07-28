@@ -145,6 +145,10 @@
                     href="{{ route('admin.service-packages.index') }}">
                     <i class="fas fa-cube me-3"></i>Gói dịch vụ
                 </a>
+                <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.work-tasks.*') ? 'active bg-white bg-opacity-10' : '' }}"
+                    href="{{ route('admin.work-tasks.index') }}">
+                    <i class="fas fa-clipboard-check me-3"></i>Công việc
+                </a>
                 <hr class="text-white-50 my-1 mx-3">
                 <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.zalo.*') ? 'active bg-white bg-opacity-10' : '' }}"
                     href="{{ route('admin.zalo.dashboard') }}">
@@ -269,6 +273,12 @@
                         href="{{ route('admin.service-packages.index') }}">
                         <i class="fas fa-cube me-3"></i>
                         Gói dịch vụ
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.work-tasks.*') ? 'active' : '' }}"
+                        href="{{ route('admin.work-tasks.index') }}">
+                        <i class="fas fa-clipboard-check me-3"></i>
+                        Công việc
                     </a>
 
                     <hr class="text-white-50 mx-3">

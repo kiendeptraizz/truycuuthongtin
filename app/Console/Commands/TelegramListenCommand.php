@@ -62,6 +62,7 @@ class TelegramListenCommand extends Command
     private const BTN_EXPIRING = '⏰ Hết hạn';
     private const BTN_QUICK_ORDER = '⚡ Tạo đơn nhanh';
     private const BTN_KHO = '📦 Kho TK';
+    private const BTN_TASK = '🏷 Tạo mã CV';
     private const BTN_HELP = '❓ Hướng dẫn';
 
     public function handle(): int
@@ -248,6 +249,12 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // Dán mã CÔNG VIỆC CV-XXXXXX → hiện chi tiết + nút đánh dấu Xong / Mở lại.
+        if (preg_match('/^CV[-\s]?([A-Z0-9]{4,10})$/i', $text, $mCv)) {
+            $this->sendWorkTaskDetail($chatId, 'CV-' . strtoupper($mCv[1]));
+            return;
+        }
+
         // Cú pháp LÔ ĐƠN gõ tắt NHIỀU DÒNG (giống đơn chi tiết nhưng nhiều DV chung 1 KH):
         // dòng 1 đủ "<KH> <email> <hạn> <tiền> <lãi> [BH]", dòng 2+ gọn (bỏ KH). Bot hỏi
         // gói từng đơn rồi sinh 1 QR tổng + mã lô GR-XXX. Phải check TRƯỚC đơn lẻ vì input
@@ -327,6 +334,9 @@ class TelegramListenCommand extends Command
             case self::BTN_KHO:
                 $this->sendKhoMenu($chatId);
                 return true;
+            case self::BTN_TASK:
+                $this->createWorkTaskCode($chatId, $userId);
+                return true;
             case self::BTN_HELP:
                 $this->bot->sendMessage($chatId, $this->helpMessage(), $this->mainMenuMarkup());
                 return true;
@@ -393,6 +403,15 @@ class TelegramListenCommand extends Command
 
             case '/list':
                 $this->sendListPending($chatId);
+                break;
+
+            case '/cv':
+                // /cv → list việc chưa xong; /cv CV-XXX → chi tiết 1 mã
+                if ($arg !== '' && preg_match('/^CV[-\s]?([A-Z0-9]{4,10})$/i', trim($arg), $mCv)) {
+                    $this->sendWorkTaskDetail($chatId, 'CV-' . strtoupper($mCv[1]));
+                } else {
+                    $this->sendWorkTaskList($chatId);
+                }
                 break;
 
             case '/kho':
@@ -1746,6 +1765,21 @@ class TelegramListenCommand extends Command
             return;
         }
 
+        // WorkTask: xem danh sách việc chưa xong
+        if ($cbData === 'wt_list') {
+            $this->sendWorkTaskList($chatId);
+            return;
+        }
+        // WorkTask: đánh dấu hoàn thành / mở lại
+        if (preg_match('/^wt_done_(\d+)$/', $cbData, $m)) {
+            $this->handleWorkTaskToggle($chatId, (int) $m[1], true);
+            return;
+        }
+        if (preg_match('/^wt_reopen_(\d+)$/', $cbData, $m)) {
+            $this->handleWorkTaskToggle($chatId, (int) $m[1], false);
+            return;
+        }
+
         // Click "↩ Quay lại danh mục"
         if ($cbData === 'cats') {
             if (!$atServicePackageStep) {
@@ -2937,6 +2971,125 @@ class TelegramListenCommand extends Command
             // createSafe có retry UNIQUE customer_code (race khác — KUN code trùng).
             return \App\Models\Customer::createSafe(['name' => $name]);
         });
+    }
+
+    // ========================================================================
+    // 🏷 MÃ CÔNG VIỆC (WorkTask) — đánh dấu việc cần xử lý, dán vào chat Zalo
+    // ========================================================================
+
+    /**
+     * Bấm "🏷 Tạo mã CV" → sinh mã ngẫu nhiên NGAY (1 chạm) để copy dán Zalo. Mã hiện
+     * dạng <code> (tap để copy). Kèm nút xem danh sách việc chưa xong.
+     */
+    private function createWorkTaskCode(int|string $chatId, string $userId): void
+    {
+        try {
+            $task = \App\Models\WorkTask::create([
+                'code' => \App\Models\WorkTask::generateCode(),
+                'status' => \App\Models\WorkTask::STATUS_PENDING,
+                'created_via' => 'telegram',
+                'created_by' => (string) $chatId,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Telegram: createWorkTaskCode failed', ['error' => $e->getMessage()]);
+            $this->bot->sendMessage($chatId, "❌ Lỗi tạo mã công việc: " . $e->getMessage());
+            return;
+        }
+
+        $pending = \App\Models\WorkTask::pending()->count();
+        $this->bot->sendMessage(
+            $chatId,
+            "🏷 <b>Mã công việc mới:</b>\n\n<code>{$task->code}</code>\n\n"
+                . "📋 Copy mã trên rồi dán vào đoạn chat Zalo cần xử lý.\n"
+                . "Khi xong: dán lại mã vào bot, hoặc bấm <b>Việc chưa xong</b> để đánh dấu ✅.",
+            ['reply_markup' => json_encode(['inline_keyboard' => [[
+                ['text' => "📋 Việc chưa xong ({$pending})", 'callback_data' => 'wt_list'],
+            ]]])]
+        );
+    }
+
+    /**
+     * List các việc CHƯA xong — mỗi mã 1 nút "✅ Xong". Giới hạn 20 mã gần nhất.
+     */
+    private function sendWorkTaskList(int|string $chatId): void
+    {
+        $tasks = \App\Models\WorkTask::pending()->orderByDesc('created_at')->limit(20)->get();
+        if ($tasks->isEmpty()) {
+            $this->bot->sendMessage($chatId, "✅ Không có việc nào cần xử lý. Bấm 🏷 <b>Tạo mã CV</b> để tạo mới.");
+            return;
+        }
+
+        $lines = ["📋 <b>Việc chưa xử lý (" . $tasks->count() . "):</b>"];
+        $buttons = [];
+        foreach ($tasks as $t) {
+            $noteStr = $t->note ? ' — ' . e(mb_substr($t->note, 0, 40)) : '';
+            $lines[] = "• <code>{$t->code}</code>{$noteStr} <i>({$t->created_at->format('d/m H:i')})</i>";
+            $buttons[] = [['text' => "✅ Xong {$t->code}", 'callback_data' => "wt_done_{$t->id}"]];
+        }
+        if ($tasks->count() === 20) {
+            $lines[] = "\n<i>Hiện 20 việc gần nhất. Xem đầy đủ tại /admin/work-tasks.</i>";
+        }
+
+        $this->bot->sendMessage(
+            $chatId,
+            implode("\n", $lines),
+            ['reply_markup' => json_encode(['inline_keyboard' => $buttons])]
+        );
+    }
+
+    /**
+     * Dán mã CV-XXX vào bot → hiện chi tiết việc + nút đánh dấu Xong / Mở lại.
+     */
+    private function sendWorkTaskDetail(int|string $chatId, string $code): void
+    {
+        $code = strtoupper(trim($code));
+        $task = \App\Models\WorkTask::where('code', $code)->first();
+        if (!$task) {
+            $this->bot->sendMessage($chatId, "❌ Không tìm thấy mã công việc <code>" . e($code) . "</code>.");
+            return;
+        }
+
+        $statusLine = $task->isDone()
+            ? "✅ <b>Đã hoàn thành</b>" . ($task->completed_at ? " ({$task->completed_at->format('H:i d/m/Y')})" : '')
+            : "⏳ <b>Chưa xử lý</b>";
+        $lines = [
+            "🏷 <code>{$task->code}</code>",
+            $statusLine,
+            "🕐 Tạo: {$task->created_at->format('H:i d/m/Y')}",
+        ];
+        if ($task->note) {
+            $lines[] = "📝 " . e($task->note);
+        }
+
+        $btn = $task->isDone()
+            ? ['text' => '↩ Mở lại', 'callback_data' => "wt_reopen_{$task->id}"]
+            : ['text' => '✅ Đánh dấu hoàn thành', 'callback_data' => "wt_done_{$task->id}"];
+
+        $this->bot->sendMessage(
+            $chatId,
+            implode("\n", $lines),
+            ['reply_markup' => json_encode(['inline_keyboard' => [[$btn]]])]
+        );
+    }
+
+    /**
+     * Toggle WorkTask từ callback (done=true → hoàn thành; false → mở lại).
+     */
+    private function handleWorkTaskToggle(int|string $chatId, int $taskId, bool $done): void
+    {
+        $task = \App\Models\WorkTask::find($taskId);
+        if (!$task) {
+            $this->bot->sendMessage($chatId, "❌ Mã công việc không còn tồn tại.");
+            return;
+        }
+        if ($done) {
+            $task->markDone();
+            $remaining = \App\Models\WorkTask::pending()->count();
+            $this->bot->sendMessage($chatId, "✅ Đã đánh dấu <b>hoàn thành</b> <code>{$task->code}</code>. Còn <b>{$remaining}</b> việc chưa xong.");
+        } else {
+            $task->reopen();
+            $this->bot->sendMessage($chatId, "↩ Đã mở lại <code>{$task->code}</code> (chưa xong).");
+        }
     }
 
 }

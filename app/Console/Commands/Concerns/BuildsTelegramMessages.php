@@ -53,7 +53,8 @@ trait BuildsTelegramMessages
             [['text' => self::BTN_NEW_ORDER], ['text' => self::BTN_MULTI_ORDER]],
             [['text' => self::BTN_PENDING], ['text' => self::BTN_STATS]],
             [['text' => self::BTN_EXPIRING], ['text' => self::BTN_QUICK_ORDER]],
-            [['text' => self::BTN_KHO], ['text' => self::BTN_HELP]],
+            [['text' => self::BTN_KHO], ['text' => self::BTN_TASK]],
+            [['text' => self::BTN_HELP]],
         ];
         return ['reply_markup' => json_encode([
             'keyboard' => $keyboard,
@@ -200,6 +201,7 @@ trait BuildsTelegramMessages
             . "<code>b@gmail.com 6m 50k 5k full</code>\n"
             . "→ bot chỉ hỏi gói từng đơn rồi sinh 1 QR tổng. Hoặc bấm nút để nhập tay (hỏi tên KH 1 lần + từng đơn). Sinh mã lô <code>GR-XXX</code> + 1 QR tổng; Pay2S match GR → mark cả lô paid + activate tất cả services tự động.\n\n"
             . "📦 <b>Kho TK</b> — Lưu trữ TK mua vào (chưa bán) để không quên. Bot hỏi 4 bước: chọn category → email/username → password → ghi chú (có thể /skip). TK lưu vào DB + tự sync lên Google Sheet nếu đã cấu hình. Lệnh: <code>/kho list [keyword]</code> để xem nhanh kho.\n\n"
+            . "🏷 <b>Tạo mã CV</b> — Tạo mã đánh dấu việc cần xử lý (vd <code>CV-7K2M9Q</code>) để dán vào chat Zalo. Xem việc chưa xong: gõ <code>/cv</code>. Đánh dấu xong: bấm nút trong danh sách, hoặc dán lại mã vào bot. Quản lý đầy đủ tại <code>/admin/work-tasks</code>.\n\n"
             . "<b>Lệnh thủ công:</b>\n"
             . "/menu — hiện menu\n"
             . "/list — list 10 đơn pending mới nhất (toàn bộ)\n"
