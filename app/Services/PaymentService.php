@@ -271,7 +271,9 @@ class PaymentService
             return $cs->id;
         }
 
-        $now = $asOf ?? now();
+        // Kích hoạt tính từ NGÀY TẠO ĐƠN (hạn cố định đúng như QR gửi khách), KHÔNG lùi
+        // theo ngày khách CK. $asOf override nếu cần.
+        $now = ($asOf ?? $order->created_at)->copy();
         $expiresAt = $now->copy()->addDays((int) ($order->duration_days ?? $cs->duration_days ?? 0));
         $sourceLabel = $source === 'manual' ? 'admin xác nhận thủ công' : 'Pay2S';
 
@@ -279,7 +281,7 @@ class PaymentService
             'status' => 'active',
             'activated_at' => $now,
             'expires_at' => $expiresAt,
-            'internal_notes' => trim(($cs->internal_notes ?? '') . "\n\n💰 Thanh toán xác nhận qua {$sourceLabel} ({$now->format('d/m/Y H:i')})"),
+            'internal_notes' => trim(($cs->internal_notes ?? '') . "\n\n💰 Thanh toán xác nhận qua {$sourceLabel} (" . now()->format('d/m/Y H:i') . ") — hạn tính từ ngày tạo đơn " . $now->format('d/m/Y')),
         ]);
 
         if (!empty($order->profit_amount) && $order->profit_amount > 0 && !$cs->profit) {
@@ -304,11 +306,12 @@ class PaymentService
 
     private function createActiveCustomerService(PendingOrder $order, string $source, ?Carbon $asOf = null): ?int
     {
-        $now = $asOf ?? now();
+        // Kích hoạt tính từ NGÀY TẠO ĐƠN (hạn cố định đúng như QR), không lùi theo ngày CK.
+        $now = ($asOf ?? $order->created_at)->copy();
         $expiresAt = $now->copy()->addDays((int) $order->duration_days);
         $sourceLabel = $source === 'manual' ? 'admin xác nhận thủ công' : 'Pay2S webhook';
 
-        $internalNotes = "📋 Tự tạo từ đơn {$order->order_code} qua {$sourceLabel} ({$now->format('d/m/Y H:i')})";
+        $internalNotes = "📋 Tự tạo từ đơn {$order->order_code} qua {$sourceLabel} (thanh toán " . now()->format('d/m/Y H:i') . ", hạn tính từ ngày tạo đơn " . $now->format('d/m/Y') . ")";
         if (!empty($order->family_code)) {
             $internalNotes .= "\nMã nhóm-gia đình: {$order->family_code}";
         }
