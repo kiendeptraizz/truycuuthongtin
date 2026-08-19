@@ -883,15 +883,34 @@
         new bootstrap.Modal(document.getElementById('deleteModal')).show();
     }
 
-    // Copy lời nhắc gia hạn cho khách hàng
+    // Bien chu/so ASCII thanh ky tu Unicode in dam (hien dam duoc ca trong Zalo).
+    // Chu tieng Viet co dau + ky tu @ . / + ... giu nguyen (khong co ban dam Unicode).
+    function toBoldUnicode(str) {
+        let out = '';
+        for (const ch of str) {
+            const c = ch.codePointAt(0);
+            if (c >= 65 && c <= 90) {            // A-Z
+                out += String.fromCodePoint(0x1D5D4 + (c - 65));
+            } else if (c >= 97 && c <= 122) {    // a-z
+                out += String.fromCodePoint(0x1D5EE + (c - 97));
+            } else if (c >= 48 && c <= 57) {     // 0-9
+                out += String.fromCodePoint(0x1D7EC + (c - 48));
+            } else {
+                out += ch;
+            }
+        }
+        return out;
+    }
+
+    // Copy lời nhắc gia hạn cho khách hàng (in đậm email + ngày để nổi bật trong Zalo)
     function copyRenewReminder(btn) {
         const svc = (btn.dataset.svc || 'dịch vụ').trim();
         const email = (btn.dataset.email || '').trim();
         const expire = (btn.dataset.expire || '').trim();
         const verb = btn.dataset.expired === '1' ? 'đã hết hạn' : 'sẽ hết hạn';
 
-        const emailPart = email ? ` ở địa chỉ email ${email}` : '';
-        const expirePart = expire ? ` ${verb} vào ngày ${expire}` : ` ${verb}`;
+        const emailPart = email ? ` ở địa chỉ email ${toBoldUnicode(email)}` : '';
+        const expirePart = expire ? ` ${verb} vào ngày ${toBoldUnicode(expire)}` : ` ${verb}`;
         const msg = `Dạ, em chào anh/chị. Hiện tại gói dịch vụ ${svc}${emailPart} của mình${expirePart}. Anh/chị có muốn tiến hành gia hạn luôn để không bị gián đoạn sử dụng không ạ?`;
 
         copyTextWithToast(msg, 'Đã copy lời nhắc gia hạn!');
