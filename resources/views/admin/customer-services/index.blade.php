@@ -633,6 +633,16 @@
                                                 </div>
 
                                                 <div class="btn-group">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                        title="Copy lời nhắc gia hạn cho khách"
+                                                        data-svc="{{ $service->servicePackage?->name ?? 'dịch vụ' }}"
+                                                        data-email="{{ $service->login_email ?? '' }}"
+                                                        data-expire="{{ $service->expires_at ? $service->expires_at->format('d/m/Y') : '' }}"
+                                                        data-expired="{{ ($service->expires_at && $service->expires_at->isPast()) ? '1' : '0' }}"
+                                                        onclick="copyRenewReminder(this)">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+
                                                     @if($service->customer_id)
                                                     <a href="{{ route('admin.customers.assign-service', $service->customer_id) }}"
                                                         class="btn btn-sm btn-outline-success"
@@ -871,6 +881,54 @@
         currentDeleteUrl = deleteUrl;
         currentDeleteId = serviceId || null;
         new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    }
+
+    // Copy lời nhắc gia hạn cho khách hàng
+    function copyRenewReminder(btn) {
+        const svc = (btn.dataset.svc || 'dịch vụ').trim();
+        const email = (btn.dataset.email || '').trim();
+        const expire = (btn.dataset.expire || '').trim();
+        const verb = btn.dataset.expired === '1' ? 'đã hết hạn' : 'sẽ hết hạn';
+
+        const emailPart = email ? ` ở địa chỉ email ${email}` : '';
+        const expirePart = expire ? ` ${verb} vào ngày ${expire}` : ` ${verb}`;
+        const msg = `Dạ, em chào anh/chị. Hiện tại gói dịch vụ ${svc}${emailPart} của mình${expirePart}. Anh/chị có muốn tiến hành gia hạn luôn để không bị gián đoạn sử dụng không ạ?`;
+
+        copyTextWithToast(msg, 'Đã copy lời nhắc gia hạn!');
+    }
+
+    function copyTextWithToast(text, message) {
+        const showToast = () => {
+            const toast = document.createElement('div');
+            toast.className = 'position-fixed bottom-0 end-0 p-3';
+            toast.style.zIndex = '9999';
+            toast.innerHTML = `
+                <div class="toast show bg-success text-white" role="alert">
+                    <div class="toast-body">
+                        <i class="fas fa-check me-2"></i>${message || 'Đã copy!'}
+                    </div>
+                </div>`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2200);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(showToast).catch(() => fallbackCopy(text, showToast));
+        } else {
+            fallbackCopy(text, showToast);
+        }
+    }
+
+    function fallbackCopy(text, onDone) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); if (onDone) onDone(); } catch (e) {}
+        ta.remove();
     }
 
     async function executeDelete() {
