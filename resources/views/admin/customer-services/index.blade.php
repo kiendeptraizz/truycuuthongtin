@@ -902,7 +902,7 @@
         return out;
     }
 
-    // Copy lời nhắc gia hạn cho khách hàng (in đậm email + ngày để nổi bật trong Zalo)
+    // Copy lời nhắc gia hạn cho khách hàng (in đậm tên gói + email + ngày cho nổi bật trong Zalo)
     function copyRenewReminder(btn) {
         const svc = (btn.dataset.svc || 'dịch vụ').trim();
         const email = (btn.dataset.email || '').trim();
@@ -911,7 +911,10 @@
 
         const emailPart = email ? ` ở địa chỉ email ${toBoldUnicode(email)}` : '';
         const expirePart = expire ? ` ${verb} vào ngày ${toBoldUnicode(expire)}` : ` ${verb}`;
-        const msg = `Dạ, em chào anh/chị. Hiện tại gói dịch vụ ${svc}${emailPart} của mình${expirePart}. Anh/chị có muốn tiến hành gia hạn luôn để không bị gián đoạn sử dụng không ạ?`;
+        const msg =
+            'Dạ, em chào anh/chị\n' +
+            `Hiện tại gói dịch vụ ${toBoldUnicode(svc)}${emailPart} của mình${expirePart}.\n` +
+            `Anh/chị có muốn tiến hành ${toBoldUnicode('gia hạn')} luôn để không bị gián đoạn sử dụng không ạ?`;
 
         copyTextWithToast(msg, 'Đã copy lời nhắc gia hạn!');
     }
