@@ -1292,6 +1292,9 @@
                 <a href="mailto:support@truycuu.io.vn" class="footer-contact">
                     <i class="fas fa-envelope"></i> Email
                 </a>
+                <a href="{{ route('refund.create') }}" class="footer-contact">
+                    <i class="fas fa-hand-holding-usd"></i> Yêu cầu hoàn tiền
+                </a>
             </div>
             <div class="footer-text">
                 <div class="secure"><i class="fas fa-lock"></i> Thông tin được mã hoá an toàn</div>
