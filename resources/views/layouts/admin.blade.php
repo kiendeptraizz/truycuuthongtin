@@ -115,6 +115,13 @@
                         <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
                     @endif
                 </a>
+                <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.refund-requests.*') ? 'active bg-white bg-opacity-10' : '' }}"
+                    href="{{ route('admin.refund-requests.index') }}">
+                    <i class="fas fa-hand-holding-usd me-3"></i>Yêu cầu hoàn tiền
+                    @if(($refundPendingCount ?? 0) > 0)
+                        <span class="badge bg-danger ms-2">{{ $refundPendingCount }}</span>
+                    @endif
+                </a>
                 <a class="nav-link text-white py-2 px-3 {{ request()->routeIs('admin.customer-services.statistics') ? 'active bg-white bg-opacity-10' : '' }}"
                     href="{{ route('admin.customer-services.statistics') }}">
                     <i class="fas fa-chart-bar me-3"></i>Thống kê dịch vụ
@@ -223,6 +230,15 @@
                         Đơn chờ fill
                         @if(($pendingOrdersCount ?? 0) > 0)
                             <span class="badge bg-warning text-dark ms-2">{{ $pendingOrdersCount }}</span>
+                        @endif
+                    </a>
+
+                    <a class="nav-link {{ request()->routeIs('admin.refund-requests.*') ? 'active' : '' }}"
+                        href="{{ route('admin.refund-requests.index') }}">
+                        <i class="fas fa-hand-holding-usd me-3"></i>
+                        Yêu cầu hoàn tiền
+                        @if(($refundPendingCount ?? 0) > 0)
+                            <span class="badge bg-danger ms-2">{{ $refundPendingCount }}</span>
                         @endif
                     </a>
 

@@ -61,6 +61,12 @@ Route::post('/tra-cuu/search', [LookupController::class, 'search'])
     ->middleware('throttle:10,1') // 10 requests/phút - chống spam
     ->name('lookup.search');
 
+// Trang khách tự gửi yêu cầu hoàn tiền
+Route::get('/refund', [\App\Http\Controllers\RefundController::class, 'create'])->name('refund.create');
+Route::post('/refund', [\App\Http\Controllers\RefundController::class, 'store'])
+    ->middleware('throttle:6,1') // 6 requests/phút - chống spam
+    ->name('refund.store');
+
 // ============================================================================
 // ⚠️  CÁC ROUTE TEST/DEMO ĐÃ BỊ XÓA CHO PRODUCTION
 // Nếu cần test, hãy uncomment và thêm middleware auth
@@ -84,6 +90,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \
         ->name('customers.search-api');
     Route::post('customers-quick-create', [CustomerController::class, 'quickCreate'])
         ->name('customers.quick-create');
+
+    // Yêu cầu hoàn tiền (khách gửi từ trang công khai /refund)
+    Route::get('refund-requests', [\App\Http\Controllers\Admin\RefundRequestController::class, 'index'])
+        ->name('refund-requests.index');
+    Route::put('refund-requests/{refundRequest}', [\App\Http\Controllers\Admin\RefundRequestController::class, 'update'])
+        ->name('refund-requests.update');
+    Route::delete('refund-requests/{refundRequest}', [\App\Http\Controllers\Admin\RefundRequestController::class, 'destroy'])
+        ->name('refund-requests.destroy');
 
     // ========================================================================
     // 🛡️ QUẢN LÝ BACKUP

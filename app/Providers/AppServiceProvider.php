@@ -6,6 +6,7 @@ use App\Console\Commands\CompleteBackupCommand;
 use App\Console\Commands\DeleteAllCustomers;
 use App\Models\CustomerService;
 use App\Models\PendingOrder;
+use App\Models\RefundRequest;
 use App\Observers\CustomerServiceObserver;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Cache;
@@ -48,6 +49,14 @@ class AppServiceProvider extends ServiceProvider
                 fn () => PendingOrder::where('status', 'pending')->count()
             );
             $view->with('pendingOrdersCount', $count);
+
+            // Badge "Yêu cầu hoàn tiền" đang chờ xử lý
+            $refundPending = Cache::remember(
+                'admin.refund_pending_count',
+                60,
+                fn () => RefundRequest::where('status', 'pending')->count()
+            );
+            $view->with('refundPendingCount', $refundPending);
         });
 
         PendingOrder::saved(function (PendingOrder $order) {
@@ -56,6 +65,13 @@ class AppServiceProvider extends ServiceProvider
             }
         });
         PendingOrder::deleted(fn () => Cache::forget('admin.pending_orders_count'));
+
+        RefundRequest::saved(function (RefundRequest $req) {
+            if ($req->wasChanged('status') || $req->wasRecentlyCreated) {
+                Cache::forget('admin.refund_pending_count');
+            }
+        });
+        RefundRequest::deleted(fn () => Cache::forget('admin.refund_pending_count'));
 
         // Audit log mọi thay đổi của CustomerService — ghi vào customer_service_audits
         CustomerService::observe(CustomerServiceObserver::class);
