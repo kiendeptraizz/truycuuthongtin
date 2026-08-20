@@ -10,6 +10,7 @@ use App\Models\RefundRequest;
 use App\Observers\CustomerServiceObserver;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -50,12 +51,11 @@ class AppServiceProvider extends ServiceProvider
             );
             $view->with('pendingOrdersCount', $count);
 
-            // Badge "Yêu cầu hoàn tiền" đang chờ xử lý
-            $refundPending = Cache::remember(
-                'admin.refund_pending_count',
-                60,
-                fn () => RefundRequest::where('status', 'pending')->count()
-            );
+            // Badge "Yêu cầu hoàn tiền" đang chờ xử lý.
+            // Guard hasTable() để admin không vỡ nếu migration refund_requests chưa chạy.
+            $refundPending = Schema::hasTable('refund_requests')
+                ? Cache::remember('admin.refund_pending_count', 60, fn () => RefundRequest::where('status', 'pending')->count())
+                : 0;
             $view->with('refundPendingCount', $refundPending);
         });
 
