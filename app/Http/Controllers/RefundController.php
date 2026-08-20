@@ -23,28 +23,34 @@ class RefundController extends Controller
     public function store(Request $request, TelegramBotService $telegram)
     {
         $validated = $request->validate([
-            'customer_name' => 'required|string|max:255',
-            'order_code'    => 'required|string|max:64',
-            'bank_account'  => 'required|string|max:64',
-            'qr_image'      => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
+            'customer_name'  => 'required|string|max:255',
+            'order_code'     => 'required|string|max:64',
+            'bank_account'   => 'required|string|max:64',
+            'account_holder' => 'required|string|max:255',
+            'bank_name'      => 'required|string|max:100',
+            'qr_image'       => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
         ], [
-            'customer_name.required' => 'Vui lòng nhập tên khách hàng.',
-            'order_code.required'    => 'Vui lòng nhập mã đơn hàng cần hoàn tiền.',
-            'bank_account.required'  => 'Vui lòng nhập số tài khoản nhận hoàn tiền.',
-            'qr_image.required'      => 'Vui lòng gửi ảnh mã QR nhận tiền.',
-            'qr_image.image'         => 'File QR phải là hình ảnh.',
-            'qr_image.mimes'         => 'Ảnh QR chỉ chấp nhận JPG, PNG hoặc WEBP.',
-            'qr_image.max'           => 'Ảnh QR tối đa 5MB.',
+            'customer_name.required'  => 'Vui lòng nhập tên khách hàng.',
+            'order_code.required'     => 'Vui lòng nhập mã đơn hàng cần hoàn tiền.',
+            'bank_account.required'   => 'Vui lòng nhập số tài khoản nhận hoàn tiền.',
+            'account_holder.required' => 'Vui lòng nhập tên chủ tài khoản.',
+            'bank_name.required'      => 'Vui lòng chọn / nhập tên ngân hàng.',
+            'qr_image.required'       => 'Vui lòng gửi ảnh mã QR nhận tiền.',
+            'qr_image.image'          => 'File QR phải là hình ảnh.',
+            'qr_image.mimes'          => 'Ảnh QR chỉ chấp nhận JPG, PNG hoặc WEBP.',
+            'qr_image.max'            => 'Ảnh QR tối đa 5MB.',
         ]);
 
         $path = $request->file('qr_image')->store('refund_qr', 'public');
 
         $refund = RefundRequest::create([
-            'customer_name' => $validated['customer_name'],
-            'order_code'    => strtoupper(trim($validated['order_code'])),
-            'bank_account'  => trim($validated['bank_account']),
-            'qr_image_path' => $path,
-            'ip_address'    => $request->ip(),
+            'customer_name'  => $validated['customer_name'],
+            'order_code'     => strtoupper(trim($validated['order_code'])),
+            'bank_account'   => trim($validated['bank_account']),
+            'account_holder' => trim($validated['account_holder']),
+            'bank_name'      => trim($validated['bank_name']),
+            'qr_image_path'  => $path,
+            'ip_address'     => $request->ip(),
         ]);
 
         $this->notifyAdmins($telegram, $refund);
@@ -69,7 +75,9 @@ class RefundController extends Controller
                 . "🧾 Mã theo dõi: <b>{$refund->code}</b>\n"
                 . "👤 Khách: <b>" . e($refund->customer_name) . "</b>\n"
                 . "📦 Mã đơn: <code>" . e($refund->order_code) . "</code>\n"
-                . "🏦 Số TK: <b>" . e($refund->bank_account) . "</b>\n"
+                . "🏦 Ngân hàng: <b>" . e($refund->bank_name) . "</b>\n"
+                . "💳 Số TK: <b>" . e($refund->bank_account) . "</b>\n"
+                . "🧑 Chủ TK: <b>" . e($refund->account_holder) . "</b>\n"
                 . "🕒 " . $refund->created_at->format('H:i d/m/Y') . "\n\n"
                 . "➡️ Xử lý: " . rtrim(config('app.url'), '/') . "/admin/refund-requests";
 

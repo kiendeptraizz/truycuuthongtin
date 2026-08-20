@@ -62,7 +62,12 @@
                             </td>
                             <td><strong>{{ $req->customer_name }}</strong></td>
                             <td><code class="text-success">{{ $req->order_code }}</code></td>
-                            <td>{{ $req->bank_account }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ $req->bank_account }}</div>
+                                <small class="text-muted">
+                                    {{ $req->account_holder ?? '—' }}@if($req->bank_name) · {{ $req->bank_name }}@endif
+                                </small>
+                            </td>
                             <td class="text-center">
                                 @if($req->qr_url)
                                     <a href="{{ $req->qr_url }}" target="_blank" title="Xem ảnh QR">
@@ -91,6 +96,8 @@
                                     data-customer="{{ $req->customer_name }}"
                                     data-order="{{ $req->order_code }}"
                                     data-bank="{{ $req->bank_account }}"
+                                    data-holder="{{ $req->account_holder }}"
+                                    data-bankname="{{ $req->bank_name }}"
                                     data-qr="{{ $req->qr_url }}"
                                     data-status="{{ $req->status }}"
                                     data-note="{{ $req->admin_note }}"
@@ -134,7 +141,9 @@
                 <div class="row g-2 mb-3">
                     <div class="col-6"><small class="text-muted d-block">Khách hàng</small><strong id="pmCustomer"></strong></div>
                     <div class="col-6"><small class="text-muted d-block">Mã đơn</small><code id="pmOrder"></code></div>
-                    <div class="col-12"><small class="text-muted d-block">Số tài khoản</small><strong id="pmBank" style="font-size:1.05rem;letter-spacing:.5px;"></strong></div>
+                    <div class="col-6"><small class="text-muted d-block">Ngân hàng</small><strong id="pmBankName"></strong></div>
+                    <div class="col-6"><small class="text-muted d-block">Chủ tài khoản</small><strong id="pmHolder"></strong></div>
+                    <div class="col-12"><small class="text-muted d-block">Số tài khoản</small><strong id="pmBank" style="font-size:1.1rem;letter-spacing:.5px;"></strong></div>
                 </div>
                 <div class="text-center mb-3" id="pmQrWrap">
                     <small class="text-muted d-block mb-1">Ảnh QR nhận tiền</small>
@@ -174,6 +183,8 @@
             document.getElementById('pmCustomer').textContent = d.customer;
             document.getElementById('pmOrder').textContent = d.order;
             document.getElementById('pmBank').textContent = d.bank;
+            document.getElementById('pmBankName').textContent = d.bankname || '—';
+            document.getElementById('pmHolder').textContent = d.holder || '—';
             document.getElementById('pmStatus').value = d.status;
             document.getElementById('pmNote').value = d.note || '';
 

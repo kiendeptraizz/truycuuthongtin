@@ -202,6 +202,44 @@
                                inputmode="numeric">
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label">Tên chủ tài khoản <span class="req">*</span></label>
+                        <input type="text" name="account_holder" class="form-control"
+                               value="{{ old('account_holder') }}" placeholder="VD: NGUYEN VAN A" required>
+                        <div class="input-hint">Ghi đúng tên in trên tài khoản (in hoa, không dấu).</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Ngân hàng <span class="req">*</span></label>
+                        <input type="text" name="bank_name" class="form-control" list="bankList"
+                               value="{{ old('bank_name') }}" placeholder="Chọn hoặc gõ tên ngân hàng" required
+                               autocomplete="off">
+                        <datalist id="bankList">
+                            <option value="Vietcombank (VCB)"></option>
+                            <option value="Techcombank (TCB)"></option>
+                            <option value="BIDV"></option>
+                            <option value="VietinBank (CTG)"></option>
+                            <option value="MB Bank (MBB)"></option>
+                            <option value="ACB"></option>
+                            <option value="VPBank"></option>
+                            <option value="Agribank"></option>
+                            <option value="Sacombank (STB)"></option>
+                            <option value="TPBank (TPB)"></option>
+                            <option value="VIB"></option>
+                            <option value="MSB"></option>
+                            <option value="SHB"></option>
+                            <option value="HDBank"></option>
+                            <option value="OCB"></option>
+                            <option value="SeABank"></option>
+                            <option value="Eximbank"></option>
+                            <option value="LPBank (LienVietPostBank)"></option>
+                            <option value="Nam A Bank"></option>
+                            <option value="Cake by VPBank"></option>
+                            <option value="Timo"></option>
+                            <option value="Ví MoMo"></option>
+                        </datalist>
+                    </div>
+
                     <div class="mb-2">
                         <label class="form-label">Ảnh mã QR nhận tiền <span class="req">*</span></label>
                         <div class="qr-drop" id="qrDrop">

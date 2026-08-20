@@ -12,6 +12,8 @@ class RefundRequest extends Model
         'customer_name',
         'order_code',
         'bank_account',
+        'account_holder',
+        'bank_name',
         'qr_image_path',
         'status',
         'admin_note',
