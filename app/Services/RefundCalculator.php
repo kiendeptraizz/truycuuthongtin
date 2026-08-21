@@ -33,7 +33,11 @@ class RefundCalculator
      *   reason_label?: string,            // label tiếng Việt giải thích
      * }
      */
-    public function compute(CustomerService $cs): array
+    /**
+     * @param \Carbon\Carbon|null $asOf Mốc tính "đã dùng đến ngày nào" (vd ngày tài khoản lỗi).
+     *                                  Mặc định null → dùng hôm nay (giữ nguyên hành vi cũ).
+     */
+    public function compute(CustomerService $cs, ?\Carbon\Carbon $asOf = null): array
     {
         // Validate state
         if ($cs->refunded_at !== null) {
@@ -68,10 +72,16 @@ class RefundCalculator
             return ['ok' => false, 'reason' => 'no_expires_at'];
         }
 
-        $now = now();
+        // Mốc tính: ngày lỗi (nếu truyền) hoặc hôm nay.
+        $cutoff = $asOf ? $asOf->copy() : now();
         $activatedAt = $cs->activated_at->copy()->startOfDay();
         $expiresAt = $cs->expires_at->copy()->startOfDay();
-        $today = $now->copy()->startOfDay();
+        $today = $cutoff->copy()->startOfDay();
+
+        // Kẹp mốc không sớm hơn ngày kích hoạt (ngày lỗi trước KH → coi như chưa dùng).
+        if ($today->lt($activatedAt)) {
+            $today = $activatedAt->copy();
+        }
 
         // CASE 3: Đã hết hạn — không hoàn
         if ($today->gte($expiresAt)) {

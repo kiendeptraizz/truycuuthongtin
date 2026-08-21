@@ -90,6 +90,9 @@
                                 @endif
                             </td>
                             <td class="text-end">
+                                <a href="{{ route('admin.refund-requests.show', $req) }}" class="btn btn-sm btn-outline-info" title="Xem chi tiết">
+                                    <i class="fas fa-eye"></i>
+                                </a>
                                 <button type="button" class="btn btn-sm btn-outline-primary btn-process"
                                     data-update-url="{{ route('admin.refund-requests.update', $req) }}"
                                     data-code="{{ $req->code }}"

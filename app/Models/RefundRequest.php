@@ -18,6 +18,12 @@ class RefundRequest extends Model
         'status',
         'admin_note',
         'ip_address',
+        'error_date',
+        'computed_refund',
+    ];
+
+    protected $casts = [
+        'error_date' => 'date',
     ];
 
     protected static function booted(): void

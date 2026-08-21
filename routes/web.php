@@ -94,6 +94,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'prevent.caching', \
     // Yêu cầu hoàn tiền (khách gửi từ trang công khai /refund)
     Route::get('refund-requests', [\App\Http\Controllers\Admin\RefundRequestController::class, 'index'])
         ->name('refund-requests.index');
+    Route::get('refund-requests/{refundRequest}', [\App\Http\Controllers\Admin\RefundRequestController::class, 'show'])
+        ->name('refund-requests.show');
     Route::put('refund-requests/{refundRequest}', [\App\Http\Controllers\Admin\RefundRequestController::class, 'update'])
         ->name('refund-requests.update');
     Route::delete('refund-requests/{refundRequest}', [\App\Http\Controllers\Admin\RefundRequestController::class, 'destroy'])
