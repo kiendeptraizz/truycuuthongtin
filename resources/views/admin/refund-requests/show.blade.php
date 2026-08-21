@@ -83,10 +83,10 @@
                         {{-- Thông tin đơn khớp --}}
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
-                                <strong>{{ $service->servicePackage->name ?? 'Đơn nhanh' }}</strong>
+                                <strong>{{ $service->servicePackage?->name ?? 'Đơn nhanh' }}</strong>
                                 <div class="text-muted small">
                                     Đơn: <code>{{ $service->order_code }}</code>
-                                    · KH: {{ $service->customer->name ?? '—' }}
+                                    · KH: {{ $service->customer?->name ?? '—' }}
                                 </div>
                             </div>
                             <a href="{{ route('admin.customer-services.show', $service) }}" target="_blank"
